@@ -14,7 +14,8 @@ class RegisteredUserController extends Controller
 {
     public function create(): View
     {
-        return view('auth.register', [
+        return view('auth.gateway', [
+            'authMode' => 'register',
             'positions' => Position::query()->where('is_active', true)->orderBy('name')->get(),
         ]);
     }
