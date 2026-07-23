@@ -8,7 +8,6 @@
     <link rel="manifest" href="{{ asset('build/manifest.webmanifest') }}">
     <title>@yield('title', 'LRMS') · {{ config('app.name') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    @livewireStyles
 </head>
 <body class="min-h-screen bg-stone-50 text-stone-900 antialiased">
     <div class="min-h-screen">
@@ -102,6 +101,5 @@
             </div>
         </footer>
     </div>
-    @livewireScripts
 </body>
 </html>

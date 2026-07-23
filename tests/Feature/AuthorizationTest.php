@@ -7,6 +7,7 @@ use App\Models\Position;
 use App\Models\Staff;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Tests\TestCase;
 
@@ -58,5 +59,30 @@ class AuthorizationTest extends TestCase
         $user = User::factory()->pending()->create(['staff_id' => $staff->id]);
 
         $this->assertFalse(Gate::forUser($user)->allows('staff.view'));
+    }
+
+    public function test_repeated_permission_checks_reuse_the_loaded_permission_catalog(): void
+    {
+        $permission = Permission::factory()->create([
+            'name' => 'files.update',
+            'module' => 'files',
+            'action' => 'update',
+        ]);
+        $position = Position::factory()->create();
+        $position->permissions()->attach($permission);
+        $staff = Staff::factory()->create(['position_id' => $position->id]);
+        $user = User::factory()->create(['staff_id' => $staff->id]);
+        $queryCount = 0;
+
+        DB::listen(function () use (&$queryCount): void {
+            $queryCount++;
+        });
+
+        $this->assertTrue(Gate::forUser($user)->allows('files.update'));
+        $queriesAfterInitialCheck = $queryCount;
+        $this->assertFalse(Gate::forUser($user)->allows('files.archive'));
+        $this->assertTrue(Gate::forUser($user)->allows('files.update'));
+
+        $this->assertSame($queriesAfterInitialCheck, $queryCount);
     }
 }

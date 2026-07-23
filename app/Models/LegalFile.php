@@ -38,7 +38,16 @@ class LegalFile extends Model
 
     public static function nextIdentifier(): string
     {
-        $next = DB::transaction(function (): int {
+        return self::formatIdentifier(self::reserveIdentifierRange(1));
+    }
+
+    public static function reserveIdentifierRange(int $count): int
+    {
+        if ($count < 1) {
+            throw new \InvalidArgumentException('The identifier range must contain at least one value.');
+        }
+
+        return DB::transaction(function () use ($count): int {
             DB::table('system_sequences')->insertOrIgnore([
                 'name' => 'legal_file',
                 'next_value' => 1,
@@ -47,14 +56,17 @@ class LegalFile extends Model
             ]);
             $sequence = DB::table('system_sequences')->where('name', 'legal_file')->lockForUpdate()->first();
             DB::table('system_sequences')->where('name', 'legal_file')->update([
-                'next_value' => $sequence->next_value + 1,
+                'next_value' => $sequence->next_value + $count,
                 'updated_at' => now(),
             ]);
 
             return (int) $sequence->next_value;
         });
+    }
 
-        return 'FILE'.str_pad((string) $next, 6, '0', STR_PAD_LEFT);
+    public static function formatIdentifier(int $value): string
+    {
+        return 'FILE'.str_pad((string) $value, 6, '0', STR_PAD_LEFT);
     }
 
     public function scopeActive(Builder $query): Builder

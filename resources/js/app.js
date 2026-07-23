@@ -1,9 +1,8 @@
-import { Html5Qrcode } from 'html5-qrcode';
 import { registerSW } from 'virtual:pwa-register';
 
 registerSW({ immediate: false });
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const toggle = document.querySelector('.nav-toggle');
     const navigation = document.querySelector('.primary-nav');
 
@@ -21,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    const { Html5Qrcode } = await import('html5-qrcode');
     const scanner = new Html5Qrcode('qr-reader');
     let activeTarget = null;
     let running = false;

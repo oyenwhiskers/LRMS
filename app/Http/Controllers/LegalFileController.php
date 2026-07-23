@@ -24,14 +24,35 @@ class LegalFileController extends Controller
         abort_unless($request->user()->can('files.view'), 403);
         $query = LegalFile::query()->with(['currentHolder', 'shelf.cabinet.room'])->active();
         if ($search = trim((string) $request->input('search'))) {
-            $query->where(function ($q) use ($search): void {
-                $q->where('reference_number', 'like', "%{$search}%")
-                    ->orWhere('loan_reference', 'like', "%{$search}%")
-                    ->orWhere('purchaser', 'like', "%{$search}%")
-                    ->orWhere('vendor', 'like', "%{$search}%")
-                    ->orWhere('property', 'like', "%{$search}%")
-                    ->orWhereHas('currentHolder', fn ($holder) => $holder->where('full_name', 'like', "%{$search}%"));
-            });
+            $escapedSearch = addcslashes($search, '\\%_');
+            $containsSearch = "%{$escapedSearch}%";
+
+            if (DB::connection()->getDriverName() === 'mysql' && mb_strlen($search) >= 3) {
+                $query->where(function ($q) use ($search, $escapedSearch, $containsSearch): void {
+                    $q->where('reference_number', 'like', "{$escapedSearch}%")
+                        ->orWhere('loan_reference', 'like', "{$escapedSearch}%")
+                        ->orWhereFullText(
+                            ['reference_number', 'loan_reference', 'purchaser', 'vendor', 'property'],
+                            $search,
+                        )
+                        ->orWhereHas(
+                            'currentHolder',
+                            fn ($holder) => $holder->where('full_name', 'like', $containsSearch),
+                        );
+                });
+            } else {
+                $query->where(function ($q) use ($containsSearch): void {
+                    $q->where('reference_number', 'like', $containsSearch)
+                        ->orWhere('loan_reference', 'like', $containsSearch)
+                        ->orWhere('purchaser', 'like', $containsSearch)
+                        ->orWhere('vendor', 'like', $containsSearch)
+                        ->orWhere('property', 'like', $containsSearch)
+                        ->orWhereHas(
+                            'currentHolder',
+                            fn ($holder) => $holder->where('full_name', 'like', $containsSearch),
+                        );
+                });
+            }
         }
         if ($status = $request->input('status')) {
             $query->where('status', $status);
@@ -60,9 +81,17 @@ class LegalFileController extends Controller
     public function show(Request $request, LegalFile $file): View
     {
         abort_unless($request->user()->can('files.view'), 403);
-        $file->load(['shelf.cabinet.room', 'currentHolder', 'personInCharge', 'movements.employee', 'movements.previousHolder', 'movements.processor']);
+        $file->load(['shelf.cabinet.room', 'currentHolder', 'personInCharge']);
+        $movements = $file->movements()
+            ->with([
+                'employee:id,full_name',
+                'previousHolder:id,full_name',
+                'processor:id,name',
+            ])
+            ->paginate(30)
+            ->withQueryString();
 
-        return view('files.show', compact('file'));
+        return view('files.show', compact('file', 'movements'));
     }
 
     public function edit(Request $request, LegalFile $file): View

@@ -27,7 +27,8 @@
 </div>
 <section class="mt-8 border border-stone-200 bg-white p-6"><div class="flex items-center justify-between"><h2 class="text-xl font-semibold">Movement history</h2>@can('exports.movements')<a class="text-sm font-semibold text-amber-800" href="{{ route('exports.movements') }}">Export history</a>@endcan</div>
     <div class="mt-5 overflow-x-auto"><table class="data-table"><thead><tr><th>When</th><th>Movement</th><th>Employee / returner</th><th>Previous holder</th><th>Processed by</th><th>Notes</th></tr></thead><tbody>
-    @forelse($file->movements as $movement)<tr><td>{{ $movement->occurred_at?->format('d M Y, H:i') }}</td><td>{{ ucfirst($movement->type) }}</td><td>{{ $movement->employee?->full_name ?? '—' }}</td><td>{{ $movement->previousHolder?->full_name ?? '—' }}</td><td>{{ $movement->processor?->name }}</td><td>{{ $movement->notes ?: '—' }}</td></tr>@empty<tr><td colspan="6" class="text-center text-stone-500">No movement recorded.</td></tr>@endforelse
+    @forelse($movements as $movement)<tr><td>{{ $movement->occurred_at?->format('d M Y, H:i') }}</td><td>{{ ucfirst($movement->type) }}</td><td>{{ $movement->employee?->full_name ?? '—' }}</td><td>{{ $movement->previousHolder?->full_name ?? '—' }}</td><td>{{ $movement->processor?->name }}</td><td>{{ $movement->notes ?: '—' }}</td></tr>@empty<tr><td colspan="6" class="text-center text-stone-500">No movement recorded.</td></tr>@endforelse
     </tbody></table></div>
+    <div class="mt-6">{{ $movements->links() }}</div>
 </section>
 @endsection

@@ -84,8 +84,17 @@ class User extends Authenticatable
             return true;
         }
 
-        return $this->isApproved()
-            && $this->staff?->position?->is_active
-            && $this->staff->position->permissions()->where('name', $permission)->exists();
+        if (! $this->isApproved()) {
+            return false;
+        }
+
+        $position = $this->staff?->position;
+        if (! $position?->is_active) {
+            return false;
+        }
+
+        $position->loadMissing('permissions');
+
+        return $position->permissions->contains('name', $permission);
     }
 }

@@ -108,6 +108,31 @@ class LrmsWorkflowTest extends TestCase
         $this->assertSame(['missing', 'found'], FileMovement::orderBy('id')->pluck('type')->all());
     }
 
+    public function test_file_detail_paginates_large_movement_histories(): void
+    {
+        [$admin, $shelf, $employee] = $this->records();
+        $file = LegalFile::create($this->fileData($shelf, 'CON/2026/010', $admin));
+
+        foreach (range(1, 35) as $offset) {
+            FileMovement::create([
+                'legal_file_id' => $file->id,
+                'type' => 'audit',
+                'employee_id' => $employee->id,
+                'processed_by' => $admin->id,
+                'shelf_id' => $shelf->id,
+                'previous_status' => LegalFile::STATUS_AVAILABLE,
+                'new_status' => LegalFile::STATUS_AVAILABLE,
+                'occurred_at' => now()->subMinutes($offset),
+            ]);
+        }
+
+        $this->actingAs($admin)
+            ->get(route('files.show', $file))
+            ->assertOk()
+            ->assertViewHas('movements', fn ($movements) => $movements->count() === 30
+                && $movements->total() === 35);
+    }
+
     public function test_invalid_batch_and_inactive_employee_cannot_partially_borrow_files(): void
     {
         [$admin, $shelf, $employee] = $this->records();

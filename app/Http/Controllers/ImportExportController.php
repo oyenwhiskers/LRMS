@@ -14,7 +14,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -70,23 +72,35 @@ class ImportExportController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($rows, $request): void {
-                foreach ($rows as $row) {
-                    $shelf = Shelf::where('code', $row['shelf_code'])
-                        ->whereHas('cabinet', fn ($q) => $q->where('code', $row['cabinet_code'])
-                            ->whereHas('room', fn ($room) => $room->where('code', $row['room_code'])))->firstOrFail();
-                    LegalFile::create([
+            $locations = $this->locationMap();
+            $firstIdentifier = LegalFile::reserveIdentifierRange(count($rows));
+            $now = now();
+            $records = collect($rows)->values()->map(
+                function (array $row, int $index) use ($locations, $firstIdentifier, $now, $request): array {
+                    $shelfId = $locations->get($this->locationKey($row));
+
+                    return [
+                        'file_identifier' => LegalFile::formatIdentifier($firstIdentifier + $index),
+                        'qr_identifier' => (string) Str::uuid(),
                         'reference_number' => $row['reference_number'],
                         'loan_reference' => $row['loan_reference'] ?: null,
                         'purchaser' => $row['purchaser'],
                         'vendor' => $row['vendor'] ?: null,
                         'property' => $row['property'],
                         'matter_type' => $row['matter_type'] ?: null,
-                        'shelf_id' => $shelf->id,
+                        'shelf_id' => $shelfId,
                         'created_by' => $request->user()->id,
                         'updated_by' => $request->user()->id,
-                    ]);
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
                 }
+            );
+
+            DB::transaction(function () use ($records): void {
+                $records->chunk(500)->each(
+                    fn (Collection $chunk) => DB::table('legal_files')->insert($chunk->all())
+                );
             });
             $run->update(['status' => 'completed', 'imported_rows' => count($rows)]);
         } catch (\Throwable $exception) {
@@ -115,31 +129,109 @@ class ImportExportController extends Controller
     public function files(Request $request): BinaryFileResponse
     {
         abort_unless($request->user()->can('exports.files'), 403);
-        $rows = LegalFile::with(['shelf.cabinet.room', 'currentHolder'])->get()->map(fn ($file) => [
-            $file->file_identifier, $file->reference_number, $file->loan_reference, $file->purchaser,
-            $file->vendor, $file->property, $file->status, $file->currentHolder?->full_name,
-            $file->shelf?->cabinet?->room?->code, $file->shelf?->cabinet?->code, $file->shelf?->code,
-        ]);
 
-        return Excel::download($this->export($rows, [
-            'File ID', 'Reference Number', 'Loan Reference', 'Purchaser', 'Vendor', 'Property',
-            'Status', 'Current Holder', 'Room', 'Cabinet', 'Shelf',
-        ]), 'lrms-files-'.now()->format('Ymd').'.xlsx');
+        return Excel::download(new class implements FromQuery, WithHeadings, WithMapping
+        {
+            public function query()
+            {
+                return LegalFile::query()
+                    ->leftJoin('shelves', 'legal_files.shelf_id', '=', 'shelves.id')
+                    ->leftJoin('cabinets', 'shelves.cabinet_id', '=', 'cabinets.id')
+                    ->leftJoin('rooms', 'cabinets.room_id', '=', 'rooms.id')
+                    ->leftJoin('staff as current_holders', 'legal_files.current_holder_id', '=', 'current_holders.id')
+                    ->select([
+                        'legal_files.file_identifier',
+                        'legal_files.reference_number',
+                        'legal_files.loan_reference',
+                        'legal_files.purchaser',
+                        'legal_files.vendor',
+                        'legal_files.property',
+                        'legal_files.status',
+                        'current_holders.full_name as current_holder_name',
+                        'rooms.code as room_code',
+                        'cabinets.code as cabinet_code',
+                        'shelves.code as shelf_code',
+                    ])
+                    ->orderBy('legal_files.id');
+            }
+
+            public function map($file): array
+            {
+                return [
+                    $file->file_identifier,
+                    $file->reference_number,
+                    $file->loan_reference,
+                    $file->purchaser,
+                    $file->vendor,
+                    $file->property,
+                    $file->status,
+                    $file->current_holder_name,
+                    $file->room_code,
+                    $file->cabinet_code,
+                    $file->shelf_code,
+                ];
+            }
+
+            public function headings(): array
+            {
+                return [
+                    'File ID', 'Reference Number', 'Loan Reference', 'Purchaser', 'Vendor',
+                    'Property', 'Status', 'Current Holder', 'Room', 'Cabinet', 'Shelf',
+                ];
+            }
+        }, 'lrms-files-'.now()->format('Ymd').'.xlsx');
     }
 
     public function movements(Request $request): BinaryFileResponse
     {
         abort_unless($request->user()->can('exports.movements'), 403);
-        $rows = FileMovement::with(['legalFile', 'employee', 'previousHolder', 'processor'])->latest('occurred_at')->get()->map(fn ($movement) => [
-            $movement->legalFile?->reference_number, $movement->type, $movement->previous_status,
-            $movement->new_status, $movement->previousHolder?->full_name, $movement->employee?->full_name,
-            $movement->processor?->name, $movement->occurred_at?->toDateTimeString(), $movement->notes,
-        ]);
 
-        return Excel::download($this->export($rows, [
-            'Reference Number', 'Movement', 'Previous Status', 'New Status', 'Previous Holder',
-            'Employee/Returner', 'Processed By', 'Occurred At', 'Notes',
-        ]), 'lrms-movements-'.now()->format('Ymd').'.xlsx');
+        return Excel::download(new class implements FromQuery, WithHeadings, WithMapping
+        {
+            public function query()
+            {
+                return FileMovement::query()
+                    ->leftJoin('legal_files', 'file_movements.legal_file_id', '=', 'legal_files.id')
+                    ->leftJoin('staff as employees', 'file_movements.employee_id', '=', 'employees.id')
+                    ->leftJoin('staff as previous_holders', 'file_movements.previous_holder_id', '=', 'previous_holders.id')
+                    ->leftJoin('users as processors', 'file_movements.processed_by', '=', 'processors.id')
+                    ->select([
+                        'legal_files.reference_number',
+                        'file_movements.type',
+                        'file_movements.previous_status',
+                        'file_movements.new_status',
+                        'previous_holders.full_name as previous_holder_name',
+                        'employees.full_name as employee_name',
+                        'processors.name as processor_name',
+                        'file_movements.occurred_at',
+                        'file_movements.notes',
+                    ])
+                    ->orderByDesc('file_movements.occurred_at');
+            }
+
+            public function map($movement): array
+            {
+                return [
+                    $movement->reference_number,
+                    $movement->type,
+                    $movement->previous_status,
+                    $movement->new_status,
+                    $movement->previous_holder_name,
+                    $movement->employee_name,
+                    $movement->processor_name,
+                    $movement->occurred_at?->toDateTimeString(),
+                    $movement->notes,
+                ];
+            }
+
+            public function headings(): array
+            {
+                return [
+                    'Reference Number', 'Movement', 'Previous Status', 'New Status',
+                    'Previous Holder', 'Employee/Returner', 'Processed By', 'Occurred At', 'Notes',
+                ];
+            }
+        }, 'lrms-movements-'.now()->format('Ymd').'.xlsx');
     }
 
     public function errors(Request $request, ImportRun $run): StreamedResponse
@@ -181,6 +273,13 @@ class ImportExportController extends Controller
             return array_map(fn ($column) => 'Missing required column: '.Str::headline($column).'.', $missingColumns);
         }
 
+        $references = collect($rows)->pluck('reference_number')->filter()->unique()->values();
+        $existingReferences = LegalFile::query()
+            ->whereIn('reference_number', $references)
+            ->pluck('reference_number')
+            ->flip();
+        $locations = $this->locationMap();
+
         foreach ($rows as $index => $row) {
             $line = $index + 2;
             if (empty($row['reference_number']) || empty($row['purchaser']) || empty($row['property'])) {
@@ -188,13 +287,10 @@ class ImportExportController extends Controller
 
                 continue;
             }
-            if (LegalFile::where('reference_number', $row['reference_number'])->exists()) {
+            if ($existingReferences->has($row['reference_number'])) {
                 $errors[] = "Row {$line}: reference number already exists.";
             }
-            $location = Shelf::where('code', $row['shelf_code'] ?? '')
-                ->whereHas('cabinet', fn ($q) => $q->where('code', $row['cabinet_code'] ?? '')
-                    ->whereHas('room', fn ($room) => $room->where('code', $row['room_code'] ?? '')))->exists();
-            if (! $location) {
+            if (! $locations->has($this->locationKey($row))) {
                 $errors[] = "Row {$line}: storage location was not found.";
             }
         }
@@ -209,6 +305,31 @@ class ImportExportController extends Controller
     private function headings(): array
     {
         return ['Reference Number', 'Loan Reference', 'Purchaser', 'Vendor', 'Property', 'Matter Type', 'Room Code', 'Cabinet Code', 'Shelf Code'];
+    }
+
+    private function locationMap(): Collection
+    {
+        return Shelf::query()
+            ->join('cabinets', 'shelves.cabinet_id', '=', 'cabinets.id')
+            ->join('rooms', 'cabinets.room_id', '=', 'rooms.id')
+            ->get([
+                'shelves.id',
+                'shelves.code as shelf_code',
+                'cabinets.code as cabinet_code',
+                'rooms.code as room_code',
+            ])
+            ->mapWithKeys(fn (Shelf $shelf) => [
+                $this->locationKey($shelf->getAttributes()) => $shelf->id,
+            ]);
+    }
+
+    private function locationKey(array $row): string
+    {
+        return implode('|', [
+            mb_strtoupper(trim((string) ($row['room_code'] ?? ''))),
+            mb_strtoupper(trim((string) ($row['cabinet_code'] ?? ''))),
+            mb_strtoupper(trim((string) ($row['shelf_code'] ?? ''))),
+        ]);
     }
 
     private function export(Collection $rows, array $headings): object
