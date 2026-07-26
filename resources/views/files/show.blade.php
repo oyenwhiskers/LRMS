@@ -5,7 +5,7 @@
 @section('content')
 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
     <div><p class="eyebrow text-amber-700">{{ $file->file_identifier }}</p><h1 class="mt-1 text-3xl font-semibold">{{ $file->reference_number }}</h1><p class="mt-2 text-stone-600">{{ $file->purchaser }}</p></div>
-    <div class="flex flex-wrap gap-2">@can('files.update')<a class="btn-secondary" href="{{ route('files.edit', $file) }}">Edit</a>@endcan @can('labels.print')<a class="btn-primary" href="{{ route('files.label', $file) }}">Print label</a>@endcan</div>
+    <div class="flex flex-wrap gap-2">@can('files.update')<a class="btn-secondary" href="{{ route('files.edit', $file) }}">Edit</a>@endcan @can('labels.print')<button class="btn-primary" type="button" data-modal-open="file-label-{{ $file->id }}">Print label</button>@endcan</div>
 </div>
 <div class="mt-8 grid gap-6 lg:grid-cols-3">
     <section class="border border-stone-200 bg-white p-6 lg:col-span-2"><h2 class="text-xl font-semibold">File information</h2>
@@ -31,4 +31,19 @@
     </tbody></table></div>
     <div class="mt-6">{{ $movements->links() }}</div>
 </section>
+@can('labels.print')
+<div class="modal-overlay hidden" data-modal="file-label-{{ $file->id }}" aria-hidden="true">
+    <div class="modal-panel max-w-4xl" role="dialog" aria-modal="true" aria-labelledby="file-label-title-{{ $file->id }}">
+        <div class="modal-header">
+            <div><p class="eyebrow text-amber-700">File QR</p><h2 id="file-label-title-{{ $file->id }}" class="mt-1 text-2xl font-semibold">File identity label</h2></div>
+            <button class="modal-close" type="button" data-modal-close aria-label="Close modal">Close</button>
+        </div>
+        @include('files.partials.label-card')
+        <div class="mt-5 flex flex-wrap justify-end gap-3">
+            <a class="btn-secondary" href="{{ route('files.label.pdf', $file) }}">Download PDF</a>
+            <a class="btn-primary" href="{{ route('files.label', $file) }}" target="_blank" rel="noopener">Print view</a>
+        </div>
+    </div>
+</div>
+@endcan
 @endsection

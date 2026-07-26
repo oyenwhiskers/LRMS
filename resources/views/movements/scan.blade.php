@@ -9,13 +9,13 @@
 
     <form class="mt-8 space-y-6" method="POST" action="{{ $type === 'borrow' ? route('movements.borrow.store') : route('movements.return.store') }}">@csrf
         <section class="scan-card">
-            <div class="scan-number">1</div><div class="flex-1"><label class="form-label" for="employee_qr">{{ $type === 'borrow' ? 'Borrower' : 'Actual returner' }} employee QR</label>
-                <div class="flex flex-col gap-3 sm:flex-row"><input id="employee_qr" class="form-input flex-1 font-mono" name="employee_qr" value="{{ old('employee_qr') }}" required autocomplete="off" autofocus><button class="scan-button" type="button" data-scan-target="employee_qr">Scan employee</button></div>
+            <div class="scan-number">1</div><div class="scan-card__content"><label class="form-label" for="employee_qr">{{ $type === 'borrow' ? 'Borrower' : 'Actual returner' }} employee QR</label>
+                <div class="scan-field-group"><input id="employee_qr" class="form-input scan-input flex-1 font-mono" name="employee_qr" value="{{ old('employee_qr') }}" required autocomplete="off" autofocus><button class="scan-button" type="button" data-scan-target="employee_qr">Scan employee</button></div>
             </div>
         </section>
         <section class="scan-card">
-            <div class="scan-number">2</div><div class="flex-1"><label class="form-label" for="file_qrs">File QR {{ $type === 'borrow' ? 'codes' : 'code(s)' }}</label>
-                <div class="flex flex-col gap-3 sm:flex-row"><textarea id="file_qrs" class="form-input min-h-32 flex-1 font-mono" name="file_qrs" required placeholder="Each scan appears on a new line">{{ old('file_qrs') }}</textarea><button class="scan-button" type="button" data-scan-target="file_qrs">Scan file</button></div>
+            <div class="scan-number">2</div><div class="scan-card__content"><label class="form-label" for="file_qrs">File QR {{ $type === 'borrow' ? 'codes' : 'code(s)' }}</label>
+                <div class="scan-field-group"><textarea id="file_qrs" class="form-input scan-input scan-input--textarea flex-1 font-mono" name="file_qrs" required placeholder="Each scan appears on a new line">{{ old('file_qrs') }}</textarea><button class="scan-button scan-button--stacked" type="button" data-scan-target="file_qrs">Scan file</button></div>
                 <p class="form-help">Camera, USB and Bluetooth QR scanners are supported. Duplicate scans are ignored.</p>
             </div>
         </section>

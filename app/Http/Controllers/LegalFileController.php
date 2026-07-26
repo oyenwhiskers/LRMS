@@ -90,8 +90,9 @@ class LegalFileController extends Controller
             ])
             ->paginate(30)
             ->withQueryString();
+        $qr = $request->user()->can('labels.print') ? $this->qr($file) : null;
 
-        return view('files.show', compact('file', 'movements'));
+        return view('files.show', compact('file', 'movements', 'qr'));
     }
 
     public function edit(Request $request, LegalFile $file): View

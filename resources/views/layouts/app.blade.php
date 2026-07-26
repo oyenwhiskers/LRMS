@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#111111">
-    <link rel="manifest" href="{{ asset('build/manifest.webmanifest') }}">
     <title>@yield('title', 'LRMS') · {{ config('app.name') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -173,7 +172,7 @@
                 @yield('hero')
             @endif
 
-            <main class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+            <main class="site-main flex-1 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
                 @if(session('success'))
                     <div class="mb-6 border-l-4 border-emerald-600 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">{{ session('success') }}</div>
                 @endif

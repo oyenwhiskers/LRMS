@@ -17,8 +17,14 @@ class StaffController extends Controller
     {
         abort_unless($request->user()->can('staff.view'), 403);
         $staff = Staff::query()->with(['position', 'user'])->orderBy('full_name')->paginate(20);
+        $staff->getCollection()->transform(function (Staff $member) {
+            $member->qr_data_uri = $this->qrDataUri($member);
 
-        return view('staff.index', compact('staff'));
+            return $member;
+        });
+        $positions = Position::orderBy('name')->get();
+
+        return view('staff.index', compact('staff', 'positions'));
     }
 
     public function create(Request $request): View
@@ -65,7 +71,7 @@ class StaffController extends Controller
     public function qr(Request $request, Staff $staff): View
     {
         abort_unless($request->user()->can('staff.qr_print'), 403);
-        $qr = (new SvgWriter)->write(new QrCode(data: $staff->qr_identifier))->getDataUri();
+        $qr = $this->qrDataUri($staff);
 
         return view('staff.qr', compact('staff', 'qr'));
     }
@@ -93,5 +99,10 @@ class StaffController extends Controller
             'position_id' => ['nullable', 'exists:positions,id'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
+    }
+
+    private function qrDataUri(Staff $staff): string
+    {
+        return (new SvgWriter)->write(new QrCode(data: $staff->qr_identifier))->getDataUri();
     }
 }

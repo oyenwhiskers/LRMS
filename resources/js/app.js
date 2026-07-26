@@ -1,6 +1,28 @@
-import { registerSW } from 'virtual:pwa-register';
+const cleanupLegacyPwa = async () => {
+    if (!('serviceWorker' in navigator) || !('caches' in window)) {
+        return;
+    }
 
-registerSW({ immediate: false });
+    const cleanupKey = 'lrms-pwa-cleanup-v1';
+
+    if (window.localStorage.getItem(cleanupKey) === 'done') {
+        return;
+    }
+
+    try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+
+        const cacheKeys = await caches.keys();
+        await Promise.all(cacheKeys.map((cacheKey) => caches.delete(cacheKey)));
+
+        window.localStorage.setItem(cleanupKey, 'done');
+    } catch {
+        // Leave the marker unset so cleanup can retry on the next page load.
+    }
+};
+
+void cleanupLegacyPwa();
 
 document.addEventListener('DOMContentLoaded', async () => {
     const toggle = document.querySelector('.nav-toggle');
@@ -135,6 +157,186 @@ document.addEventListener('DOMContentLoaded', async () => {
             button.setAttribute('aria-pressed', String(! showing));
             button.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
         });
+    });
+
+    document.querySelectorAll('[data-approval-form]').forEach((form) => {
+        const overrideToggle = form.querySelector('[data-override-toggle]');
+        const overridePanel = form.querySelector('[data-override-panel]');
+        const positionIdInput = form.querySelector('[data-position-id]');
+        const positionSelect = form.querySelector('[data-position-select]');
+        const rejectToggle = form.querySelector('[data-reject-toggle]');
+        const rejectPanel = form.querySelector('[data-reject-panel]');
+        const rejectCancel = form.querySelector('[data-reject-cancel]');
+        const rejectionReason = form.querySelector('[name="rejection_reason"]');
+
+        const syncPositionId = () => {
+            if (!positionIdInput || !positionSelect) {
+                return;
+            }
+
+            positionIdInput.value = positionSelect.value;
+        };
+
+        const setOverrideState = (expanded) => {
+            if (!overrideToggle || !overridePanel || !positionIdInput || !positionSelect) {
+                return;
+            }
+
+            overrideToggle.checked = expanded;
+            overridePanel.classList.toggle('hidden', !expanded);
+
+            if (!expanded) {
+                const defaultValue = positionIdInput.dataset.defaultPosition || positionSelect.value;
+                positionSelect.value = defaultValue;
+            }
+
+            syncPositionId();
+        };
+
+        const setRejectState = (expanded) => {
+            if (!rejectToggle || !rejectPanel) {
+                return;
+            }
+
+            rejectToggle.setAttribute('aria-expanded', String(expanded));
+            rejectPanel.classList.toggle('hidden', !expanded);
+
+            if (!expanded && rejectionReason) {
+                rejectionReason.value = '';
+            }
+        };
+
+        overrideToggle?.addEventListener('change', () => {
+            setOverrideState(overrideToggle.checked);
+        });
+
+        positionSelect?.addEventListener('change', syncPositionId);
+
+        rejectToggle?.addEventListener('click', () => {
+            setRejectState(true);
+            rejectionReason?.focus();
+        });
+
+        rejectCancel?.addEventListener('click', () => {
+            setRejectState(false);
+        });
+
+        syncPositionId();
+    });
+
+    document.querySelectorAll('[data-inline-edit]').forEach((form) => {
+        const editTrigger = form.querySelector('[data-inline-edit-trigger]');
+        const actionGroup = form.querySelector('[data-inline-edit-actions]');
+        const cancelTrigger = form.querySelector('[data-inline-cancel]');
+        const displays = form.querySelectorAll('[data-inline-display]');
+        const inputs = form.querySelectorAll('[data-inline-input]');
+
+        if (!editTrigger || !actionGroup || !inputs.length) {
+            return;
+        }
+
+        const resetValues = () => {
+            inputs.forEach((input) => {
+                if (input.dataset.initialValue === undefined) {
+                    input.dataset.initialValue = input.value;
+                }
+
+                input.value = input.dataset.initialValue;
+            });
+        };
+
+        const setEditing = (editing) => {
+            displays.forEach((display) => {
+                display.classList.toggle('hidden', editing);
+            });
+
+            inputs.forEach((input) => {
+                input.classList.toggle('hidden', !editing);
+            });
+
+            editTrigger.classList.toggle('hidden', editing);
+            actionGroup.classList.toggle('hidden', !editing);
+            actionGroup.classList.toggle('flex', editing);
+
+            if (!editing) {
+                resetValues();
+            }
+        };
+
+        resetValues();
+        setEditing(false);
+
+        editTrigger.addEventListener('click', () => {
+            setEditing(true);
+            inputs[0]?.focus();
+        });
+
+        cancelTrigger?.addEventListener('click', () => {
+            setEditing(false);
+        });
+    });
+
+    let activeModal = null;
+
+    const closeModal = (modal) => {
+        if (! modal) {
+            return;
+        }
+
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+
+        if (activeModal === modal) {
+            document.body.classList.remove('overflow-hidden');
+            activeModal = null;
+        }
+    };
+
+    const openModal = (modal) => {
+        if (! modal) {
+            return;
+        }
+
+        if (activeModal && activeModal !== modal) {
+            closeModal(activeModal);
+        }
+
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('overflow-hidden');
+        activeModal = modal;
+        modal.querySelector('input, select, textarea, button, a')?.focus();
+    };
+
+    document.querySelectorAll('[data-modal-open]').forEach((trigger) => {
+        trigger.addEventListener('click', () => {
+            openModal(document.querySelector(`[data-modal="${trigger.dataset.modalOpen}"]`));
+        });
+    });
+
+    document.querySelectorAll('[data-modal]').forEach((modal) => {
+        if (! modal.classList.contains('hidden')) {
+            activeModal = modal;
+            document.body.classList.add('overflow-hidden');
+        }
+
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal(modal);
+            }
+        });
+
+        modal.querySelectorAll('[data-modal-close]').forEach((trigger) => {
+            trigger.addEventListener('click', () => {
+                closeModal(modal);
+            });
+        });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && activeModal) {
+            closeModal(activeModal);
+        }
     });
 
     const gateway = document.querySelector('[data-auth-gateway]');
