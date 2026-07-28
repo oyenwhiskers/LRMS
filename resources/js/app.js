@@ -25,72 +25,160 @@ const cleanupLegacyPwa = async () => {
 void cleanupLegacyPwa();
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const toggle = document.querySelector('.nav-toggle');
-    const navigation = document.querySelector('.primary-nav');
+    const sidebarShell = document.querySelector('[data-sidebar-shell]');
+    const sidebar = document.querySelector('[data-app-sidebar]');
+    const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+    const sidebarOverlay = document.querySelector('[data-sidebar-overlay]');
+    const sidebarCollapse = document.querySelector('[data-sidebar-collapse]');
 
-    if (toggle && navigation) {
-        toggle.addEventListener('click', () => {
-            const expanded = toggle.getAttribute('aria-expanded') === 'true';
+    if (sidebarShell && sidebar) {
+        const desktopMedia = window.matchMedia('(min-width: 1024px)');
+        const tabletMedia = window.matchMedia('(min-width: 768px) and (max-width: 1279px)');
+        const collapseStorageKey = 'lrms-sidebar-collapsed';
+        const floatingTooltip = document.createElement('div');
+        let activeTooltipTarget = null;
 
-            toggle.setAttribute('aria-expanded', String(! expanded));
-            navigation.classList.toggle('is-open');
-        });
-    }
+        floatingTooltip.className = 'sidebar-floating-tooltip';
+        document.body.appendChild(floatingTooltip);
 
-    const primaryLinks = document.querySelector('[data-primary-links]');
-    const navIndicator = document.querySelector('[data-nav-indicator]');
+        const hideTooltip = () => {
+            activeTooltipTarget = null;
+            floatingTooltip.classList.remove('is-visible');
+        };
 
-    if (primaryLinks && navIndicator && window.matchMedia('(min-width: 768px)').matches) {
-        const activeItem = primaryLinks.querySelector('[aria-current="page"]');
-        const storageKey = 'lrms-nav-indicator';
+        const positionTooltip = (target) => {
+            const rect = target.getBoundingClientRect();
+            const tooltipRect = floatingTooltip.getBoundingClientRect();
+            const maxLeft = window.innerWidth - tooltipRect.width - 8;
+            const left = Math.min(rect.right + 14, maxLeft);
+            const top = Math.min(
+                Math.max(8, rect.top + (rect.height / 2) - (tooltipRect.height / 2)),
+                window.innerHeight - tooltipRect.height - 8,
+            );
 
-        const moveIndicator = (element, { animate = true } = {}) => {
-            if (! element) {
-                navIndicator.style.opacity = '0';
+            floatingTooltip.style.left = `${left}px`;
+            floatingTooltip.style.top = `${top}px`;
+        };
+
+        const showTooltip = (target) => {
+            if (!sidebarShell.classList.contains('is-collapsed') || !desktopMedia.matches) {
+                hideTooltip();
                 return;
             }
 
-            const linksRect = primaryLinks.getBoundingClientRect();
-            const itemRect = element.getBoundingClientRect();
-            const width = Math.max(itemRect.width + 8, 24);
-            const left = itemRect.left - linksRect.left + (itemRect.width - width) / 2;
+            const tooltipText = target.getAttribute('data-tooltip');
 
-            if (! animate) {
-                navIndicator.style.transition = 'none';
+            if (!tooltipText) {
+                hideTooltip();
+                return;
             }
 
-            navIndicator.style.width = `${width}px`;
-            navIndicator.style.left = `${left}px`;
-            navIndicator.classList.add('is-ready');
-
-            if (! animate) {
-                // Force reflow so the next move can animate.
-                void navIndicator.offsetWidth;
-                navIndicator.style.transition = '';
-            }
-
-            sessionStorage.setItem(storageKey, JSON.stringify({ left, width }));
+            activeTooltipTarget = target;
+            floatingTooltip.textContent = tooltipText;
+            floatingTooltip.classList.add('is-visible');
+            positionTooltip(target);
         };
 
-        const previous = sessionStorage.getItem(storageKey);
+        const getStoredPreference = () => {
+            const value = window.localStorage.getItem(collapseStorageKey);
 
-        if (previous && activeItem) {
-            try {
-                const { left, width } = JSON.parse(previous);
-                navIndicator.style.transition = 'none';
-                navIndicator.style.width = `${width}px`;
-                navIndicator.style.left = `${left}px`;
-                navIndicator.classList.add('is-ready');
-                void navIndicator.offsetWidth;
-                navIndicator.style.transition = '';
-            } catch {
-                // Ignore invalid stored values.
+            return value === null ? null : value === 'true';
+        };
+
+        const setDrawerState = (open) => {
+            sidebarShell.classList.toggle('is-mobile-open', open);
+            sidebarToggle?.setAttribute('aria-expanded', String(open));
+            sidebarOverlay?.classList.toggle('hidden', !open);
+            document.body.style.overflow = open ? 'hidden' : '';
+        };
+
+        const setCollapsedState = (collapsed, { persist = true } = {}) => {
+            sidebarShell.classList.toggle('is-collapsed', collapsed && desktopMedia.matches);
+            sidebarCollapse?.setAttribute('aria-pressed', String(collapsed && desktopMedia.matches));
+            sidebarCollapse?.setAttribute('data-tooltip', collapsed && desktopMedia.matches ? 'Expand sidebar' : 'Collapse sidebar');
+            hideTooltip();
+
+            if (persist) {
+                window.localStorage.setItem(collapseStorageKey, String(collapsed));
             }
-        }
+        };
 
-        requestAnimationFrame(() => moveIndicator(activeItem, { animate: Boolean(previous) }));
+        const syncSidebarState = () => {
+            const stored = getStoredPreference();
 
-        window.addEventListener('resize', () => moveIndicator(activeItem, { animate: false }));
+            if (!desktopMedia.matches) {
+                sidebarShell.classList.remove('is-collapsed');
+                sidebarCollapse?.setAttribute('aria-pressed', 'false');
+                setDrawerState(false);
+                return;
+            }
+
+            const shouldCollapse = stored ?? tabletMedia.matches;
+            setCollapsedState(shouldCollapse, { persist: stored !== null });
+        };
+
+        sidebarToggle?.addEventListener('click', () => {
+            const isOpen = sidebarShell.classList.contains('is-mobile-open');
+            setDrawerState(!isOpen);
+        });
+
+        sidebarOverlay?.addEventListener('click', () => {
+            setDrawerState(false);
+        });
+
+        sidebarCollapse?.addEventListener('click', () => {
+            const nextState = !sidebarShell.classList.contains('is-collapsed');
+            setCollapsedState(nextState);
+        });
+
+        sidebar.querySelectorAll('[data-sidebar-link], [data-sidebar-group-panel] a').forEach((link) => {
+            link.addEventListener('click', () => {
+                if (!desktopMedia.matches) {
+                    setDrawerState(false);
+                }
+            });
+        });
+
+        sidebar.querySelectorAll('[data-tooltip]').forEach((target) => {
+            target.addEventListener('mouseenter', () => {
+                showTooltip(target);
+            });
+
+            target.addEventListener('focus', () => {
+                showTooltip(target);
+            });
+
+            target.addEventListener('mouseleave', hideTooltip);
+            target.addEventListener('blur', hideTooltip);
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                setDrawerState(false);
+                hideTooltip();
+            }
+        });
+
+        window.addEventListener('scroll', () => {
+            if (activeTooltipTarget) {
+                positionTooltip(activeTooltipTarget);
+            }
+        }, true);
+
+        window.addEventListener('resize', () => {
+            if (activeTooltipTarget) {
+                if (!sidebarShell.classList.contains('is-collapsed') || !desktopMedia.matches) {
+                    hideTooltip();
+                    return;
+                }
+
+                positionTooltip(activeTooltipTarget);
+            }
+        });
+
+        desktopMedia.addEventListener('change', syncSidebarState);
+        tabletMedia.addEventListener('change', syncSidebarState);
+        syncSidebarState();
     }
 
     document.querySelectorAll('[data-dropdown]').forEach((dropdown) => {

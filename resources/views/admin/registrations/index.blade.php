@@ -3,31 +3,33 @@
 @section('title', 'Registration approvals')
 
 @section('content')
-<div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+<div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div>
         <p class="eyebrow text-amber-700">Administration</p>
         <h1 class="mt-1 text-3xl font-semibold">Registration approvals</h1>
-        <p class="mt-1 text-sm text-stone-600">Review and process account requests from the staff registry.</p>
+        <p class="mt-2 max-w-2xl text-sm text-stone-600">Review and process account requests from the staff registry.</p>
     </div>
-    <div class="flex items-center gap-3">
-        <span class="status-badge status-pending">{{ number_format($pendingCount) }} pending requests</span>
+    <div class="flex flex-wrap items-center gap-3 lg:justify-end">
+        <span class="approval-summary-chip">{{ number_format($pendingCount) }} pending requests</span>
         <span class="text-xs uppercase tracking-[0.14em] text-stone-500">{{ number_format($registrations->total()) }} shown</span>
     </div>
 </div>
 
-<form class="mb-6 grid gap-3 border border-stone-200 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_180px_180px_auto]" method="GET">
-    <input class="form-input" type="search" name="search" value="{{ request('search') }}" placeholder="Search staff name or staff number">
-    <select class="form-input" name="status">
+<form class="approval-toolbar mb-6" method="GET">
+    <div class="approval-toolbar__search">
+        <input class="form-input approval-toolbar__control" type="search" name="search" value="{{ request('search') }}" placeholder="Search staff name or staff number">
+    </div>
+    <select class="form-input approval-toolbar__control" name="status">
         <option value="">All statuses</option>
         @foreach([App\Models\User::STATUS_PENDING, App\Models\User::STATUS_APPROVED, App\Models\User::STATUS_REJECTED] as $status)
             <option value="{{ $status }}" @selected(request('status') === $status)>{{ ucfirst($status) }}</option>
         @endforeach
     </select>
-    <select class="form-input" name="sort">
+    <select class="form-input approval-toolbar__control" name="sort">
         <option value="latest" @selected(request('sort', 'latest') === 'latest')>Newest first</option>
         <option value="oldest" @selected(request('sort') === 'oldest')>Oldest first</option>
     </select>
-    <button class="btn-primary" type="submit">Apply</button>
+    <button class="btn-primary approval-toolbar__submit" type="submit">Apply</button>
 </form>
 
 <div class="space-y-4">
@@ -40,91 +42,102 @@
             $showOverride = $isActiveForm && old('position_id') && (int) old('position_id') !== (int) $registration->requested_position_id;
             $showReject = $isActiveForm && old('decision') === 'reject';
         @endphp
-        <article class="border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
-            <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2.5">
-                        <h2 class="text-lg font-semibold leading-tight">{{ $registration->name }}</h2>
-                        <span class="status-badge status-{{ $registration->status }}">{{ ucfirst($registration->status) }}</span>
+        <article class="approval-card">
+            <div class="approval-card__layout {{ $isPending ? '' : 'approval-card__layout--history' }}">
+                <div class="approval-card__content {{ $isPending ? '' : 'approval-card__content--history' }}">
+                    <div class="approval-card__header">
+                        <div class="min-w-0">
+                            <h2 class="approval-card__name">{{ $registration->name }}</h2>
+                            <p class="approval-card__meta">{{ $requestedPosition }}</p>
+                        </div>
+                        <span class="approval-card__status status-badge status-{{ $registration->status }}">{{ ucfirst($registration->status) }}</span>
                     </div>
-                    <dl class="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 xl:max-w-3xl xl:grid-cols-4">
-                        <div>
-                            <dt class="form-help">Staff number</dt>
-                            <dd class="font-medium">{{ $registration->staff?->staff_number ?? 'Unavailable' }}</dd>
+
+                    <dl class="approval-card__summary {{ $isPending ? '' : 'approval-card__summary--history' }}">
+                        <div class="approval-card__summary-item">
+                            <dt class="approval-card__label">Staff number</dt>
+                            <dd class="approval-card__value">{{ $registration->staff?->staff_number ?? 'Unavailable' }}</dd>
                         </div>
-                        <div>
-                            <dt class="form-help">Requested position</dt>
-                            <dd class="font-medium">{{ $requestedPosition }}</dd>
+                        <div class="approval-card__summary-item">
+                            <dt class="approval-card__label">Email</dt>
+                            <dd class="approval-card__value approval-card__value--break">{{ $registration->staff?->email ?? 'No email on record' }}</dd>
                         </div>
-                        <div>
-                            <dt class="form-help">Submitted</dt>
-                            <dd class="font-medium">{{ $registration->created_at->format('d M Y, H:i') }}</dd>
-                        </div>
-                        <div>
-                            <dt class="form-help">Staff record</dt>
-                            <dd class="font-medium">{{ $registration->staff?->email ?? 'No email on record' }}</dd>
+                        <div class="approval-card__summary-item">
+                            <dt class="approval-card__label">Submitted</dt>
+                            <dd class="approval-card__value">{{ $registration->created_at->format('d M Y, H:i') }}</dd>
                         </div>
                     </dl>
+
                     @if($registration->status === App\Models\User::STATUS_REJECTED)
-                        <p class="mt-3 border-l-2 border-red-300 pl-3 text-sm text-stone-600">{{ $registration->rejection_reason }}</p>
+                        <div class="approval-card__note">
+                            <p class="approval-card__note-label">Rejection reason</p>
+                            <p class="approval-card__note-copy">{{ $registration->rejection_reason }}</p>
+                        </div>
                     @elseif($registration->reviewed_at)
-                        <p class="mt-3 text-xs text-stone-500">Reviewed {{ $registration->reviewed_at->diffForHumans() }} by {{ $registration->reviewer?->name ?? 'an administrator' }}.</p>
+                        <div class="approval-card__note approval-card__note--neutral">
+                            <p class="approval-card__note-label">Approval note</p>
+                            <p class="approval-card__note-copy">Reviewed {{ $registration->reviewed_at->diffForHumans() }} by {{ $registration->reviewer?->name ?? 'an administrator' }}.</p>
+                        </div>
                     @endif
                 </div>
 
                 @if($isPending)
-                    <form method="POST" action="{{ route('admin.registrations.update', $registration) }}" class="w-full border-t border-stone-200 pt-4 xl:max-w-md xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0" data-approval-form>
+                    <form method="POST" action="{{ route('admin.registrations.update', $registration) }}" class="approval-card__actions" data-approval-form>
                         @csrf
                         @method('PATCH')
                         <input type="hidden" name="registration_id" value="{{ $registration->id }}">
                         <input type="hidden" name="position_id" value="{{ $currentPositionId }}" data-position-id data-default-position="{{ $registration->requested_position_id }}">
 
-                        <div class="space-y-3">
+                        <div class="approval-card__action-panel">
                             <div>
-                                <p class="form-help">Requested position</p>
-                                <p class="mt-1 font-medium text-stone-900">{{ $requestedPosition }}</p>
-                            </div>
+                                <div class="space-y-3">
+                                    <div>
+                                        <p class="approval-card__label">Position assignment</p>
+                                        <p class="approval-card__value mt-1">{{ $requestedPosition }}</p>
+                                    </div>
 
-                            <label class="inline-flex items-center gap-2 text-sm text-stone-600">
-                                <input
-                                    class="rounded border-stone-300 text-amber-700 focus:ring-amber-600"
-                                    type="checkbox"
-                                    value="1"
-                                    data-override-toggle
-                                    @checked($showOverride)
-                                >
-                                Override requested position
-                            </label>
+                                    <label class="approval-card__toggle">
+                                        <input
+                                            class="rounded border-stone-300 text-amber-700 focus:ring-amber-600"
+                                            type="checkbox"
+                                            value="1"
+                                            data-override-toggle
+                                            @checked($showOverride)
+                                        >
+                                        <span>Override position</span>
+                                    </label>
 
-                            <div class="{{ $showOverride ? '' : 'hidden' }}" data-override-panel>
-                                <label class="form-label" for="position-{{ $registration->id }}">Confirmed position</label>
-                                <select class="form-input" id="position-{{ $registration->id }}" data-position-select>
-                                    @foreach($positions as $position)
-                                        <option value="{{ $position->id }}" @selected($currentPositionId === $position->id)>{{ $position->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            @can('registrations.approve')
-                                <button class="btn-primary min-w-28" name="decision" value="approve" type="submit">Approve</button>
-                            @endcan
-                            @can('registrations.reject')
-                                <button class="btn-secondary min-w-28" type="button" data-reject-toggle aria-expanded="{{ $showReject ? 'true' : 'false' }}">Reject</button>
-                            @endcan
-                        </div>
-
-                        @can('registrations.reject')
-                            <div class="mt-3 {{ $showReject ? '' : 'hidden' }}" data-reject-panel>
-                                <label class="form-label" for="reason-{{ $registration->id }}">Rejection reason</label>
-                                <textarea class="form-input min-h-24" id="reason-{{ $registration->id }}" name="rejection_reason" placeholder="Required when rejecting">{{ old('rejection_reason') }}</textarea>
-                                <div class="mt-3 flex flex-wrap gap-2">
-                                    <button class="btn-danger min-w-28" name="decision" value="reject" type="submit">Confirm reject</button>
-                                    <button class="btn-secondary min-w-28" type="button" data-reject-cancel>Cancel</button>
+                                    <div class="{{ $showOverride ? '' : 'hidden' }}" data-override-panel>
+                                        <label class="form-label" for="position-{{ $registration->id }}">Confirmed position</label>
+                                        <select class="form-input" id="position-{{ $registration->id }}" data-position-select>
+                                            @foreach($positions as $position)
+                                                <option value="{{ $position->id }}" @selected($currentPositionId === $position->id)>{{ $position->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
-                        @endcan
+
+                            <div class="approval-card__button-row">
+                                @can('registrations.approve')
+                                    <button class="btn-primary approval-card__button" name="decision" value="approve" type="submit">Approve</button>
+                                @endcan
+                                @can('registrations.reject')
+                                    <button class="btn-secondary approval-card__button" type="button" data-reject-toggle aria-expanded="{{ $showReject ? 'true' : 'false' }}">Reject</button>
+                                @endcan
+                            </div>
+
+                            @can('registrations.reject')
+                                <div class="approval-card__reject {{ $showReject ? '' : 'hidden' }}" data-reject-panel>
+                                    <label class="form-label" for="reason-{{ $registration->id }}">Rejection reason</label>
+                                    <textarea class="form-input min-h-24" id="reason-{{ $registration->id }}" name="rejection_reason" placeholder="Required when rejecting">{{ old('rejection_reason') }}</textarea>
+                                    <div class="approval-card__button-row mt-3">
+                                        <button class="btn-danger approval-card__button" name="decision" value="reject" type="submit">Confirm reject</button>
+                                        <button class="btn-secondary approval-card__button" type="button" data-reject-cancel>Cancel</button>
+                                    </div>
+                                </div>
+                            @endcan
+                        </div>
                     </form>
                 @endif
             </div>
