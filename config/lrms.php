@@ -6,4 +6,8 @@ return [
         'email' => env('LRMS_ADMIN_EMAIL'),
         'password' => env('LRMS_ADMIN_PASSWORD'),
     ],
+
+    'storage' => [
+        'room_name' => env('LRMS_STORAGE_ROOM_NAME', 'Main File Room'),
+    ],
 ];

@@ -28,6 +28,8 @@ npm run build
 php artisan serve
 ```
 
+The default seeder creates Conveyancing racks B, C and D with columns A–X and six rows each; rack E with A–I (5 rows), J–U (8 rows), and V–Z1 (7 rows); rack F with A–F (5 rows), G–I (7 rows), J–Q (8 rows), R–T (7 rows), and U–Z3 (8 rows); and rack G with A–I (8 rows). To populate a disposable database with the old sample records, run `php artisan db:seed --class=LrmsDemoSeeder` explicitly; that seeder clears existing case and storage data.
+
 Configure `LRMS_ADMIN_NAME`, `LRMS_ADMIN_EMAIL` and `LRMS_ADMIN_PASSWORD` before running the production seeder. Never commit `.env`.
 
 ## Test and quality commands

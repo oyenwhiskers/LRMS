@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\PositionRequest;
 use App\Models\Permission;
 use App\Models\Position;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
@@ -16,15 +18,39 @@ class PositionController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): View
+    public function index(Request $request): View|JsonResponse
     {
         Gate::authorize('viewAny', Position::class);
 
+        $isFeed = $request->boolean('feed');
+        $perPage = 10;
+        $query = Position::query()->withCount(['permissions', 'staff']);
+
+        if ($search = trim((string) $request->input('search'))) {
+            $contains = '%'.addcslashes($search, '\\%_').'%';
+            $query->where(function ($builder) use ($contains): void {
+                $builder->where('name', 'like', $contains)
+                    ->orWhere('slug', 'like', $contains);
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('is_active', $request->input('status') === 'active');
+        }
+
+        $positions = $query->orderBy('name')->paginate($perPage)->withQueryString();
+
+        if ($isFeed) {
+            return response()->json([
+                'html' => view('admin.positions.partials.mobile-position-cards', [
+                    'positions' => $positions,
+                ])->render(),
+                'next_page' => $positions->hasMorePages() ? $positions->currentPage() + 1 : null,
+            ]);
+        }
+
         return view('admin.positions.index', [
-            'positions' => Position::query()
-                ->withCount(['permissions', 'staff'])
-                ->orderBy('name')
-                ->paginate(15),
+            'positions' => $positions,
         ]);
     }
 

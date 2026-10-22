@@ -19,7 +19,6 @@ class AuthorizationTest extends TestCase
     {
         $admin = User::factory()->admin()->create();
 
-        $this->assertTrue(Gate::forUser($admin)->allows('files.archive'));
         $this->assertTrue(Gate::forUser($admin)->allows('positions.view'));
 
         $this->actingAs($admin)->get(route('dashboard'))->assertOk();
@@ -39,8 +38,6 @@ class AuthorizationTest extends TestCase
         $user = User::factory()->create(['staff_id' => $staff->id]);
 
         $this->assertTrue(Gate::forUser($user)->allows('files.update'));
-        $this->assertFalse(Gate::forUser($user)->allows('files.archive'));
-
         $position->update(['is_active' => false]);
 
         $this->assertFalse(Gate::forUser($user->fresh())->allows('files.update'));
@@ -80,7 +77,6 @@ class AuthorizationTest extends TestCase
 
         $this->assertTrue(Gate::forUser($user)->allows('files.update'));
         $queriesAfterInitialCheck = $queryCount;
-        $this->assertFalse(Gate::forUser($user)->allows('files.archive'));
         $this->assertTrue(Gate::forUser($user)->allows('files.update'));
 
         $this->assertSame($queriesAfterInitialCheck, $queryCount);

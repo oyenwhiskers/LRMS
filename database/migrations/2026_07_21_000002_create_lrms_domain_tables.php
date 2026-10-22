@@ -14,7 +14,7 @@ return new class extends Migration
             $table->uuid('qr_identifier')->unique()->nullable()->after('phone');
         });
 
-        Schema::create('rooms', function (Blueprint $table) {
+        Schema::create('racks', function (Blueprint $table) {
             $table->id();
             $table->string('code')->unique();
             $table->string('name');
@@ -22,24 +22,14 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('cabinets', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('room_id')->constrained()->restrictOnDelete();
-            $table->string('code');
-            $table->string('name');
-            $table->boolean('is_active')->default(true)->index();
-            $table->timestamps();
-            $table->unique(['room_id', 'code']);
-        });
-
         Schema::create('shelves', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('cabinet_id')->constrained()->restrictOnDelete();
+            $table->foreignId('rack_id')->constrained()->restrictOnDelete();
             $table->string('code');
             $table->string('name');
             $table->boolean('is_active')->default(true)->index();
             $table->timestamps();
-            $table->unique(['cabinet_id', 'code']);
+            $table->unique(['rack_id', 'code']);
         });
 
         Schema::create('system_sequences', function (Blueprint $table) {
@@ -53,7 +43,6 @@ return new class extends Migration
             $table->string('file_identifier')->unique();
             $table->uuid('qr_identifier')->unique();
             $table->string('reference_number')->unique();
-            $table->string('loan_reference')->nullable()->index();
             $table->string('purchaser')->index();
             $table->string('vendor')->nullable()->index();
             $table->text('property');
@@ -119,8 +108,7 @@ return new class extends Migration
         Schema::dropIfExists('legal_files');
         Schema::dropIfExists('system_sequences');
         Schema::dropIfExists('shelves');
-        Schema::dropIfExists('cabinets');
-        Schema::dropIfExists('rooms');
+        Schema::dropIfExists('racks');
 
         Schema::table('staff', function (Blueprint $table) {
             $table->dropUnique(['qr_identifier']);

@@ -32,6 +32,13 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="m5 10-3 3 3 3"/>
         </svg>
         @break
+    @case('inbox')
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v12a2 2 0 0 1-2 2h-3l-2 3-2-3H6a2 2 0 0 1-2-2V4Z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h8"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="m12 7 3 3-3 3"/>
+        </svg>
+        @break
     @case('history')
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
@@ -65,6 +72,30 @@
             <rect x="3" y="4" width="18" height="4" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
             <path stroke-linecap="round" stroke-linejoin="round" d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/>
             <path stroke-linecap="round" stroke-linejoin="round" d="M10 12h4"/>
+        </svg>
+        @break
+    @case('calendar')
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 2v4"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 2v4"/>
+            <rect x="3" y="5" width="18" height="16" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 14h3"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 18h8"/>
+        </svg>
+        @break
+    @case('lock')
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <rect width="18" height="11" x="3" y="11" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        @break
+    @case('id')
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <rect width="20" height="14" x="2" y="5" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="8.5" cy="12" r="2"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 10h4"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 14h3"/>
         </svg>
         @break
 @endswitch

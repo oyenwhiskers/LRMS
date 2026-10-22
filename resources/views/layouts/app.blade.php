@@ -2,11 +2,31 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#111111">
     <title>@yield('title', 'LRMS') · {{ config('app.name') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <script>
+        // RecordPlus left a Workbox SW on this origin that hijacks navigations to its SPA.
+        (async function purgeForeignServiceWorker() {
+            if (!('serviceWorker' in navigator)) return;
+            const hadController = Boolean(navigator.serviceWorker.controller);
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map((reg) => reg.unregister()));
+            if (window.caches) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map((key) => caches.delete(key)));
+            }
+            if (hadController || regs.length) {
+                const key = 'lrms_sw_purged';
+                if (!sessionStorage.getItem(key)) {
+                    sessionStorage.setItem(key, '1');
+                    location.reload();
+                }
+            }
+        })();
+    </script>
 </head>
 <body class="min-h-screen bg-stone-50 text-stone-900 antialiased">
     <div class="flex min-h-screen flex-col">
@@ -18,70 +38,99 @@
             @php
                 $user = auth()->user();
                 $showSidebarShell = $user?->isApproved();
+                $isListLayout = $showSidebarShell && $__env->hasSection('list_layout');
                 $roleLabel = $user?->isAdmin()
                     ? 'Administrator'
                     : ($user?->staff?->position?->name ?? ucfirst((string) $user?->status));
 
                 $navigation = $user ? [
                     [
-                        'label' => 'Dashboard',
+                        'label' => 'Home',
+                        'section' => 'Overview',
                         'route' => route('dashboard'),
                         'icon' => 'dashboard',
-                        'permission' => 'dashboard.view',
                         'active' => ['dashboard'],
                     ],
                     [
                         'label' => 'Approvals',
+                        'section' => 'Overview',
                         'route' => route('admin.registrations.index'),
                         'icon' => 'approvals',
                         'permission' => 'registrations.view',
                         'active' => ['admin.registrations.*'],
                     ],
                     [
-                        'label' => 'File Registry',
+                        'label' => 'Case Register',
+                        'section' => 'Cases',
                         'route' => route('files.index'),
                         'icon' => 'files',
                         'permission' => 'files.view',
                         'active' => ['files.*'],
                     ],
                     [
-                        'label' => 'Borrow',
-                        'route' => route('movements.borrow'),
-                        'icon' => 'borrow',
-                        'permission' => 'movements.borrow',
-                        'active' => ['movements.borrow', 'movements.borrow.*'],
-                    ],
-                    [
-                        'label' => 'Return',
-                        'route' => route('movements.return'),
-                        'icon' => 'return',
-                        'permission' => 'movements.return',
-                        'active' => ['movements.return', 'movements.return.*'],
+                        'label' => 'Completion',
+                        'section' => 'Cases',
+                        'route' => route('completions.index'),
+                        'icon' => 'approvals',
+                        'permission' => 'completions.review',
+                        'active' => ['completions.*'],
                     ],
                     [
                         'label' => 'History',
+                        'section' => 'Cases',
                         'route' => route('movements.history'),
                         'icon' => 'history',
                         'permission' => 'movements.history',
                         'active' => ['movements.history'],
                     ],
                     [
-                        'label' => 'Staff',
-                        'route' => route('staff.index'),
-                        'icon' => 'staff',
-                        'permission' => 'staff.view',
-                        'active' => ['staff.*'],
+                        'label' => 'Borrow File',
+                        'section' => 'File Room',
+                        'route' => route('movements.borrow'),
+                        'icon' => 'borrow',
+                        'permission' => 'movements.borrow',
+                        'active' => ['movements.borrow', 'movements.borrow.*'],
+                    ],
+                    [
+                        'label' => 'Return File',
+                        'section' => 'File Room',
+                        'route' => route('movements.return'),
+                        'icon' => 'return',
+                        'permission' => 'movements.pic_return_receive',
+                        'active' => ['movements.return', 'movements.return.*'],
+                    ],
+                    [
+                        'label' => 'Store File',
+                        'section' => 'File Room',
+                        'route' => route('movements.pic-intake'),
+                        'icon' => 'inbox',
+                        'permission' => 'movements.pic_intake',
+                        'active' => ['movements.pic-intake', 'movements.pic-intake.*'],
                     ],
                     [
                         'label' => 'Settings',
                         'icon' => 'settings',
                         'children' => [
                             [
+                                'label' => 'Staff',
+                                'route' => route('staff.index'),
+                                'icon' => 'staff',
+                                'permission' => 'staff.view',
+                                'active' => ['staff.*'],
+                            ],
+                            [
                                 'label' => 'Positions',
                                 'route' => route('admin.positions.index'),
                                 'icon' => 'briefcase',
                                 'permission_check' => fn () => $user->can('viewAny', App\Models\Position::class),
                                 'active' => ['admin.positions.*'],
+                            ],
+                            [
+                                'label' => 'Case Categories',
+                                'route' => route('categories.index'),
+                                'icon' => 'files',
+                                'permission' => 'categories.view',
+                                'active' => ['categories.*'],
                             ],
                             [
                                 'label' => 'Storage',
@@ -103,34 +152,31 @@
                         'roleLabel' => $roleLabel,
                     ])
 
-                    <div class="app-content-shell">
-                        <header class="page-chrome" data-page-chrome>
-                            <button
-                                type="button"
-                                class="page-chrome-toggle"
-                                data-sidebar-toggle
-                                aria-controls="app-sidebar"
-                                aria-expanded="false"
-                            >
-                                <span class="sr-only">Toggle navigation</span>
-                                <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h16"/>
-                                </svg>
-                            </button>
-
-                            <div class="min-w-0">
-                                <p class="page-chrome-eyebrow">Tsang &amp; Co.</p>
-                                <h2 class="page-chrome-title">@yield('title', 'LRMS')</h2>
-                            </div>
+                    <div @class(['app-content-shell', 'app-content-shell--list' => $isListLayout ?? false])>
+                        <header class="page-chrome lg:hidden" data-page-chrome>
+                            @if ($__env->hasSection('back'))
+                                <a class="page-chrome-back" href="@yield('back')" aria-label="Back">
+                                    <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                </a>
+                            @else
+                                <span class="page-chrome-side" aria-hidden="true"></span>
+                            @endif
+                            <h2 class="page-chrome-title">@yield('title', 'LRMS')</h2>
+                            <span class="page-chrome-side" aria-hidden="true"></span>
                         </header>
 
-                        <main class="site-main flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+                        <main @class([
+                            'site-main flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8',
+                            'site-main--list' => $isListLayout ?? false,
+                        ])>
                             @if(session('success'))
-                                <div class="mb-6 border-l-4 border-emerald-600 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">{{ session('success') }}</div>
+                                <div class="flash-banner flash-banner--success mb-4 shrink-0 border-l-4 border-emerald-600 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" data-flash role="status">{{ session('success') }}</div>
                             @endif
 
                             @if($errors->any())
-                                <div class="mb-6 border-l-4 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">
+                                <div class="mb-4 shrink-0 border-l-4 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">
                                     <p class="font-semibold">Please correct the following:</p>
                                     <ul class="mt-1 list-disc space-y-1 pl-5">
                                         @foreach($errors->all() as $error)
@@ -143,6 +189,7 @@
                             @yield('content')
                         </main>
 
+                        @include('layouts.partials.mobile-tabbar')
                     </div>
                 </div>
             @else
@@ -173,7 +220,7 @@
 
                 <main class="site-main flex-1 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
                     @if(session('success'))
-                        <div class="mb-6 border-l-4 border-emerald-600 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">{{ session('success') }}</div>
+                        <div class="flash-banner flash-banner--success mb-6 border-l-4 border-emerald-600 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" data-flash role="status">{{ session('success') }}</div>
                     @endif
 
                     @if($errors->any())

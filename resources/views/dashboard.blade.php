@@ -5,13 +5,12 @@
 @section('content')
 @php
     $greeting = now()->hour < 12 ? 'morning' : (now()->hour < 18 ? 'afternoon' : 'evening');
+    $chartPayload = json_encode($registrationChart, JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_TAG | JSON_HEX_QUOT);
 @endphp
 
 <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
     <div>
-        <h1 class="font-display text-3xl font-semibold text-stone-900 sm:text-4xl">
-            Good {{ $greeting }}, {{ auth()->user()->name }}
-        </h1>
+        <h1 class="text-3xl font-semibold tracking-[-0.03em] text-stone-900 sm:text-4xl">Good {{ $greeting }},<br>{{ auth()->user()->name }}</h1>
         <p class="mt-2 text-sm text-stone-500">{{ now()->format('l, d F Y') }}</p>
     </div>
 </div>
@@ -24,188 +23,339 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35m1.35-5.15a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/>
             </svg>
         </span>
-        <input
-            id="dashboard-search"
-            class="dashboard-search-input"
-            type="search"
-            name="search"
-            value="{{ request('search') }}"
-            placeholder="Search by Reference Number, Purchaser, Vendor, Property or Current Holder..."
-            autocomplete="off"
-        >
+        <input id="dashboard-search" class="dashboard-search-input" type="search" name="search" value="{{ request('search') }}" placeholder="Search by reference number, purchaser, vendor, property or current holder..." autocomplete="off">
     </form>
 @endcan
 
 <section class="mt-10">
-    <p class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Today's activity</p>
+    <div class="flex items-center justify-between gap-3">
+        <div><p class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Case Registration</p><h2 class="mt-1 text-2xl font-semibold text-stone-900">Registration summary</h2></div>
+        <div class="dashboard-export">
+            <button type="button" class="btn-secondary lg:hidden" data-modal-open="export-registration">Export</button>
+            <div class="hidden lg:block" data-dropdown>
+                <button type="button" class="btn-secondary" data-dropdown-trigger aria-expanded="false" aria-haspopup="true">Export</button>
+                <div class="dashboard-export__popover hidden" data-dropdown-menu>
+                    @include('dashboard.partials.export-form', [
+                        'action' => route('exports.dashboard', 'registration-summary'),
+                        'scopeLabel' => 'Include',
+                        'scopes' => [
+                            'all' => 'All metrics',
+                            'today' => 'Today only',
+                            'week' => 'This week only',
+                            'month' => 'This month only',
+                            'year' => 'This year only',
+                        ],
+                    ])
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="today-activity mt-4">
-        @can('movements.history')
-            <a class="today-metric" href="{{ route('movements.history') }}">
-        @else
-            <div class="today-metric today-metric--static">
-        @endcan
-            <span class="today-metric-icon today-metric-icon--borrowed" aria-hidden="true">
-                <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
-                </svg>
-            </span>
-            <span>
-                <span class="today-metric-value text-emerald-700">{{ $today['borrowed'] }}</span>
-                <span class="today-metric-label">Borrowed today</span>
-                <span class="today-metric-help">Files checked out</span>
-            </span>
-        @can('movements.history')
-            </a>
-        @else
-            </div>
-        @endcan
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-amber-700">{{ $registry['registered_today'] }}</span><span class="today-metric-label">Cases registered today</span><span class="today-metric-help">Added to LRMS</span></span></div>
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-stone-900">{{ $registry['registered_week'] }}</span><span class="today-metric-label">Cases registered this week</span><span class="today-metric-help">Current week</span></span></div>
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-sky-700">{{ $registry['registered_month'] }}</span><span class="today-metric-label">Cases registered this month</span><span class="today-metric-help">{{ now()->format('F Y') }}</span></span></div>
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-emerald-700">{{ $registry['registered_year'] }}</span><span class="today-metric-label">Cases registered this year</span><span class="today-metric-help">{{ now()->format('Y') }}</span></span></div>
+    </div>
 
-        @can('movements.history')
-            <a class="today-metric" href="{{ route('movements.history') }}">
-        @else
-            <div class="today-metric today-metric--static">
-        @endcan
-            <span class="today-metric-icon today-metric-icon--returned" aria-hidden="true">
-                <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"/>
-                </svg>
-            </span>
-            <span>
-                <span class="today-metric-value text-sky-700">{{ $today['returned'] }}</span>
-                <span class="today-metric-label">Returned today</span>
-                <span class="today-metric-help">Files returned</span>
-            </span>
-        @can('movements.history')
-            </a>
-        @else
+    <div class="mt-6 overflow-hidden border border-stone-200 bg-white" data-category-registry>
+        <div class="flex flex-col gap-3 border-b border-stone-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <h3 class="text-lg font-semibold text-stone-900">By case category</h3>
+            @if($categoryRegistry->isNotEmpty())
+                <label class="sr-only" for="category-registry-search">Search categories</label>
+                <input
+                    id="category-registry-search"
+                    class="form-input w-full sm:max-w-xs"
+                    type="search"
+                    placeholder="Search category code or name"
+                    autocomplete="off"
+                    data-category-registry-search
+                >
+            @endif
+        </div>
+        <div
+            @class([
+                'dashboard-category-table',
+                'dashboard-category-table--framed',
+                'dashboard-category-table--scroll' => $categoryRegistry->count() > 5,
+                'dashboard-category-table--empty' => $categoryRegistry->isEmpty(),
+            ])
+            data-category-registry-scroll
+            data-category-scroll-threshold="5"
+        >
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th class="text-right">Today</th>
+                        <th class="text-right">This week</th>
+                        <th class="text-right">This month</th>
+                    </tr>
+                </thead>
+                @if($categoryRegistry->isNotEmpty())
+                    <tbody>
+                        @foreach($categoryRegistry as $row)
+                            <tr data-category-registry-row data-category-search="{{ strtolower($row['code'].' '.$row['name']) }}">
+                                <td>
+                                    <strong>{{ $row['code'] }}</strong>
+                                    <small>{{ $row['name'] }}</small>
+                                </td>
+                                <td class="text-right">{{ $row['today'] }}</td>
+                                <td class="text-right">{{ $row['week'] }}</td>
+                                <td class="text-right">{{ $row['month'] }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                @endif
+            </table>
+            <div
+                @class(['dashboard-category-table__empty', 'hidden' => $categoryRegistry->isNotEmpty()])
+                data-category-registry-empty
+                role="status"
+            >
+                @include('layouts.partials.table-empty', [
+                    'icon' => 'briefcase',
+                    'title' => $categoryRegistry->isEmpty()
+                        ? 'No category registrations in these periods yet'
+                        : 'No categories match this search',
+                    'message' => $categoryRegistry->isEmpty()
+                        ? 'New registrations will appear here by case category.'
+                        : 'Try another category code or name.',
+                ])
             </div>
-        @endcan
+        </div>
+        @if($categoryRegistry->isNotEmpty())
+            <div class="border-t border-stone-200 px-5 py-3 text-sm text-stone-500" data-category-registry-footer>
+                Showing {{ $categoryRegistry->count() }} {{ Str::plural('category', $categoryRegistry->count()) }} with activity
+            </div>
+        @endif
+    </div>
+</section>
 
-        @can('files.view')
-            <a class="today-metric" href="{{ route('files.index') }}">
-        @else
-            <div class="today-metric today-metric--static">
-        @endcan
-            <span class="today-metric-icon today-metric-icon--registered" aria-hidden="true">
-                <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
-                </svg>
-            </span>
-            <span>
-                <span class="today-metric-value text-amber-700">{{ $today['registered'] }}</span>
-                <span class="today-metric-label">New files today</span>
-                <span class="today-metric-help">Files registered</span>
-            </span>
-        @can('files.view')
-            </a>
-        @else
+<section class="mt-8">
+    <div class="flex items-center justify-between gap-3">
+        <div><p class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Current File Status</p><h2 class="mt-1 text-2xl font-semibold text-stone-900">Live custody view</h2></div>
+        <div class="dashboard-export">
+            <button type="button" class="btn-secondary lg:hidden" data-modal-open="export-custody">Export</button>
+            <div class="hidden lg:block" data-dropdown>
+                <button type="button" class="btn-secondary" data-dropdown-trigger aria-expanded="false" aria-haspopup="true">Export</button>
+                <div class="dashboard-export__popover hidden" data-dropdown-menu>
+                    @include('dashboard.partials.export-form', [
+                        'action' => route('exports.dashboard', 'custody-view'),
+                        'scopeLabel' => 'Status scope',
+                        'scopes' => [
+                            'all' => 'All statuses',
+                            'registered' => 'Active registered',
+                            'pending' => 'Pending review',
+                            'completed' => 'Ready for storage',
+                            'stored' => 'Currently stored',
+                            'borrowed' => 'Currently borrowed',
+                            'missing' => 'Missing',
+                        ],
+                    ])
+                </div>
             </div>
-        @endcan
+        </div>
+    </div>
+    <div class="today-activity mt-4">
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-stone-800">{{ $statusSummary['active_registered'] }}</span><span class="today-metric-label">Active registered</span><span class="today-metric-help">Still with handlers</span></span></div>
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-amber-700">{{ $statusSummary['pending_review'] }}</span><span class="today-metric-label">Pending review</span><span class="today-metric-help">Awaiting boss approval</span></span></div>
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-sky-700">{{ $statusSummary['ready_for_storage'] }}</span><span class="today-metric-label">Ready for storage</span><span class="today-metric-help">Completed, not shelved</span></span></div>
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-emerald-700">{{ $statusSummary['currently_stored'] }}</span><span class="today-metric-label">Currently stored</span><span class="today-metric-help">Inside file room</span></span></div>
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-amber-800">{{ $statusSummary['currently_borrowed'] }}</span><span class="today-metric-label">Currently borrowed</span><span class="today-metric-help">Out with staff</span></span></div>
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-red-700">{{ $statusSummary['missing'] }}</span><span class="today-metric-label">Missing</span><span class="today-metric-help">Needs attention</span></span></div>
+    </div>
+</section>
 
-        @can('files.view')
-            <a class="today-metric" href="{{ route('files.index', ['status' => 'borrowed']) }}">
-        @else
-            <div class="today-metric today-metric--static">
-        @endcan
-            <span class="today-metric-icon today-metric-icon--still-out" aria-hidden="true">
-                <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            </span>
-            <span>
-                <span class="today-metric-value text-rose-700">{{ $today['still_out'] }}</span>
-                <span class="today-metric-label">Still out</span>
-                <span class="today-metric-help">Not yet returned</span>
-            </span>
-        @can('files.view')
-            </a>
-        @else
+<section class="mt-8">
+        <div class="border border-stone-200 bg-white p-4 sm:p-6" data-dashboard-chart-panel>
+            <div class="dashboard-chart-header">
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Trend</p>
+                    <h2 class="mt-1 text-xl font-semibold text-stone-900" data-chart-title>{{ $registrationChart['title'] }}</h2>
+                </div>
+                <div class="flex w-full flex-wrap items-start justify-end gap-3 lg:w-auto">
+                    <form method="GET" action="{{ route('dashboard') }}" @class(['dashboard-chart-filters', 'has-month' => $registrationChart['mode'] === 'month']) data-chart-filter-form>
+                        <div class="dashboard-chart-filters__field">
+                            <label class="form-label" for="chart">View</label>
+                            <select id="chart" class="form-input" name="chart" data-chart-mode-select>
+                                <option value="30d" @selected($registrationChart['mode'] === '30d')>Last 30 days</option>
+                                <option value="year" @selected($registrationChart['mode'] === 'year')>This year</option>
+                                <option value="month" @selected($registrationChart['mode'] === 'month')>Specific month</option>
+                            </select>
+                        </div>
+                        <div class="dashboard-chart-filters__field" data-chart-month-field @class(['hidden' => $registrationChart['mode'] !== 'month'])>
+                            <label class="form-label" for="month">Month</label>
+                            <select id="month" class="form-input" name="month" data-chart-month-select>
+                                @foreach($chartMonthOptions as $option)
+                                    <option value="{{ $option['value'] }}" @selected($registrationChart['selected_month'] === $option['value'])>{{ $option['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </form>
+                </div>
+        </div>
+        <p class="mt-2 text-xs uppercase tracking-[0.14em] text-stone-500" data-chart-period>{{ $registrationChart['period_label'] }}</p>
+        <div class="mt-4 sm:mt-6">
+            <div
+                class="dashboard-chart"
+                data-dashboard-chart
+                data-chart='{{ $chartPayload }}'
+            >
+                <div class="dashboard-chart__surface">
+                    <svg class="dashboard-chart__svg" viewBox="0 0 360 200" role="img" aria-label="{{ $registrationChart['title'] }}"></svg>
+                    <div class="dashboard-chart__tooltip" data-dashboard-chart-tooltip hidden>
+                        <p class="dashboard-chart__tooltip-label" data-dashboard-chart-tooltip-label></p>
+                        <p class="dashboard-chart__tooltip-value" data-dashboard-chart-tooltip-value></p>
+                    </div>
+                </div>
+                <div class="dashboard-chart__axis" data-dashboard-chart-axis></div>
             </div>
-        @endcan
+        </div>
+    </div>
+</section>
+
+<section class="mt-10">
+    <div class="flex items-center justify-between gap-3">
+        <div><p class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Daily Movement</p><h2 class="mt-1 text-2xl font-semibold text-stone-900">Today&apos;s file activity</h2></div>
+    </div>
+    <div class="today-activity mt-4 sm:grid-cols-2">
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-emerald-700">{{ $movementSummary['borrowed_today'] }}</span><span class="today-metric-label">Borrowed today</span><span class="today-metric-help">Checked out</span></span></div>
+        <div class="today-metric today-metric--static"><span><span class="today-metric-value text-sky-700">{{ $movementSummary['returned_today'] }}</span><span class="today-metric-label">Returned today</span><span class="today-metric-help">Received back</span></span></div>
     </div>
 </section>
 
 <section class="mt-10">
     <p class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Recent file activity</p>
-    <div class="mt-4 overflow-hidden border border-stone-200 bg-white">
+
+    {{-- Desktop table --}}
+    <div class="mt-4 hidden overflow-hidden border border-stone-200 bg-white lg:block">
         <div class="overflow-x-auto">
             <table class="data-table">
                 <thead>
                     <tr>
                         <th>Time</th>
                         <th>Reference No.</th>
-                        <th>File type</th>
-                        <th>Vendor</th>
-                        <th>Current holder</th>
+                        <th>Movement</th>
+                        <th>Actor</th>
+                        <th>Receiver</th>
                         <th>Status</th>
-                        <th class="w-16"><span class="sr-only">Action</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($activities as $activity)
                         @php
                             $file = $activity->legalFile;
-                            $holder = $activity->type === 'borrow'
-                                ? ($file?->currentHolder ?? $activity->employee)
-                                : ($activity->type === 'return' ? $activity->employee : $file?->currentHolder);
-                            $statusClass = match ($activity->type) {
-                                'borrow' => 'activity-status--borrowed',
-                                'return' => 'activity-status--returned',
-                                'missing' => 'activity-status--missing',
-                                'found' => 'activity-status--found',
-                                default => 'activity-status--default',
-                            };
-                            $statusLabel = match ($activity->type) {
-                                'borrow' => 'Borrowed',
-                                'return' => 'Returned',
-                                'missing' => 'Missing',
-                                'found' => 'Found',
-                                default => ucfirst($activity->type),
-                            };
+                            $fileUrl = $file ? route('files.show', $file) : null;
                         @endphp
-                        <tr>
+                        <tr
+                            @if($fileUrl)
+                                class="table-row-link"
+                                data-row-href="{{ $fileUrl }}"
+                                tabindex="0"
+                                role="link"
+                                aria-label="Open file {{ $file->reference_number }}"
+                            @endif
+                        >
                             <td class="whitespace-nowrap text-stone-600">{{ $activity->occurred_at?->format('h:i A') ?? '—' }}</td>
-                            <td>
-                                @if($file)
-                                    <a class="font-semibold text-amber-900 hover:text-amber-700" href="{{ route('files.show', $file) }}">{{ $file->reference_number }}</a>
-                                @else
-                                    —
-                                @endif
-                            </td>
-                            <td>{{ $file?->matter_type ?: '—' }}</td>
-                            <td>{{ $file?->vendor ?: '—' }}</td>
-                            <td>
-                                @if($holder)
-                                    <span class="font-semibold text-stone-900">{{ $holder->full_name }}</span>
-                                    @if($holder->position?->name)
-                                        <small>{{ $holder->position->name }}</small>
-                                    @endif
-                                @else
-                                    —
-                                @endif
-                            </td>
-                            <td>
-                                <span class="status-badge {{ $statusClass }}">{{ $statusLabel }}</span>
-                            </td>
-                            <td>
-                                @if($file)
-                                    <a class="inline-flex size-9 items-center justify-center text-stone-500 transition hover:text-amber-800" href="{{ route('files.show', $file) }}" aria-label="View {{ $file->reference_number }}">
-                                        <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/>
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        </svg>
-                                    </a>
-                                @endif
-                            </td>
+                            <td>@if($file)<strong>{{ $file->reference_number }}</strong>@else — @endif</td>
+                            <td>{{ str($activity->type)->headline() }}</td>
+                            <td>{{ $activity->employee?->full_name ?? '—' }}</td>
+                            <td>{{ $activity->receiver?->full_name ?? '—' }}</td>
+                            <td><span class="status-badge status-{{ $file?->statusTone() ?? 'pending' }}">{{ $file?->statusLabel() ?? 'Unknown' }}</span></td>
                         </tr>
                     @empty
-                        <tr>
-                            <td colspan="7" class="py-10 text-center text-stone-500">No file activity yet.</td>
-                        </tr>
+                        <tr><td colspan="6" class="py-10 text-center text-stone-500">No file activity yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
     </div>
+
+    {{-- Mobile cards --}}
+    <div class="mt-4 lg:hidden">
+        @if($activities->isNotEmpty())
+            <div class="mobile-list">
+                @foreach($activities as $activity)
+                    @php
+                        $file = $activity->legalFile;
+                        $fileUrl = $file ? route('files.show', $file) : null;
+                        $movement = str($activity->type)->headline();
+                        $time = $activity->occurred_at?->format('h:i A') ?? '—';
+                        $actor = $activity->employee?->full_name;
+                        $receiver = $activity->receiver?->full_name;
+                        $detailParts = array_values(array_filter([
+                            $actor,
+                            $receiver && $actor ? '→ '.$receiver : $receiver,
+                        ]));
+                    @endphp
+                    @include('layouts.partials.mobile-list-card', [
+                        'title' => $file?->reference_number ?? '—',
+                        'meta' => $time.' · '.$movement,
+                        'detail' => $detailParts ? implode(' ', $detailParts) : null,
+                        'badge' => $file?->statusLabel() ?? 'Unknown',
+                        'badgeTone' => $file?->statusTone() ?? 'pending',
+                        'href' => $fileUrl,
+                        'ariaLabel' => $file ? 'Open file '.$file->reference_number : 'Activity without file',
+                    ])
+                @endforeach
+            </div>
+        @else
+            <div class="border border-stone-200 bg-white px-4 py-10 text-center text-sm text-stone-500">
+                No file activity yet.
+            </div>
+        @endif
+    </div>
 </section>
+
+<div class="modal-overlay hidden" data-modal="export-registration" aria-hidden="true">
+    <div class="modal-panel max-w-lg" role="dialog" aria-modal="true" aria-labelledby="export-registration-title">
+        <div class="modal-header">
+            <div>
+                <p class="eyebrow text-amber-700">Case Registration</p>
+                <h2 id="export-registration-title" class="mt-1 text-2xl font-semibold">Export registration summary</h2>
+            </div>
+            <button class="modal-close" type="button" data-modal-close aria-label="Close modal">Close</button>
+        </div>
+        <div class="mt-5">
+            @include('dashboard.partials.export-form', [
+                'action' => route('exports.dashboard', 'registration-summary'),
+                'scopeLabel' => 'Include',
+                'scopes' => [
+                    'all' => 'All metrics',
+                    'today' => 'Today only',
+                    'week' => 'This week only',
+                    'month' => 'This month only',
+                    'year' => 'This year only',
+                ],
+            ])
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay hidden" data-modal="export-custody" aria-hidden="true">
+    <div class="modal-panel max-w-lg" role="dialog" aria-modal="true" aria-labelledby="export-custody-title">
+        <div class="modal-header">
+            <div>
+                <p class="eyebrow text-amber-700">Current File Status</p>
+                <h2 id="export-custody-title" class="mt-1 text-2xl font-semibold">Export custody view</h2>
+            </div>
+            <button class="modal-close" type="button" data-modal-close aria-label="Close modal">Close</button>
+        </div>
+        <div class="mt-5">
+            @include('dashboard.partials.export-form', [
+                'action' => route('exports.dashboard', 'custody-view'),
+                'scopeLabel' => 'Status scope',
+                'scopes' => [
+                    'all' => 'All statuses',
+                    'registered' => 'Active registered',
+                    'pending' => 'Pending review',
+                    'completed' => 'Ready for storage',
+                    'stored' => 'Currently stored',
+                    'borrowed' => 'Currently borrowed',
+                    'missing' => 'Missing',
+                ],
+            ])
+        </div>
+    </div>
+</div>
 @endsection

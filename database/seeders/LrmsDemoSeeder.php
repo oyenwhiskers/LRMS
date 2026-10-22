@@ -2,12 +2,13 @@
 
 namespace Database\Seeders;
 
+use App\Models\CaseCategory;
 use App\Models\FileMovement;
 use App\Models\ImportRun;
 use App\Models\LegalFile;
 use App\Models\MovementBatch;
 use App\Models\Position;
-use App\Models\Room;
+use App\Models\Rack;
 use App\Models\Shelf;
 use App\Models\Staff;
 use App\Models\User;
@@ -33,6 +34,9 @@ class LrmsDemoSeeder extends Seeder
     /** @var array<string, User> */
     private array $users = [];
 
+    /** @var array<string, CaseCategory> */
+    private array $categories = [];
+
     /** @var array<string, Shelf> */
     private array $shelves = [];
 
@@ -42,12 +46,16 @@ class LrmsDemoSeeder extends Seeder
     /** @var array<int, string> */
     private array $activeReferences = [];
 
+    /** @var array<int, string> */
+    private array $storedReferences = [];
+
     public function run(): void
     {
-        $this->today = Carbon::create(2026, 7, 24, 10, 0, 0, config('app.timezone'));
+        $this->today = Carbon::create(2026, 9, 12, 10, 0, 0, config('app.timezone'));
 
         $this->resetDemoData();
         $this->seedPositions();
+        $this->seedCategories();
         $this->seedStaffAndUsers();
         $this->seedStorage();
         $this->seedFiles();
@@ -62,17 +70,39 @@ class LrmsDemoSeeder extends Seeder
         DB::table('import_runs')->truncate();
         DB::table('file_movements')->truncate();
         DB::table('movement_batches')->truncate();
+        DB::table('legal_file_links')->truncate();
         DB::table('legal_files')->truncate();
         DB::table('system_sequences')->truncate();
         DB::table('shelves')->truncate();
-        DB::table('cabinets')->truncate();
-        DB::table('rooms')->truncate();
+        DB::table('racks')->truncate();
+        DB::table('case_categories')->truncate();
         DB::table('users')->where('role', User::ROLE_USER)->delete();
         DB::table('staff')->truncate();
         DB::table('permission_position')->truncate();
         DB::table('positions')->truncate();
 
         Schema::enableForeignKeyConstraints();
+    }
+
+    private function seedCategories(): void
+    {
+        $definitions = [
+            ['code' => 'CON', 'name' => 'Conveyancing'],
+            ['code' => 'LOA', 'name' => 'Loan Documentation'],
+            ['code' => 'TEN', 'name' => 'Tenancy'],
+            ['code' => 'COM', 'name' => 'Commercial'],
+            ['code' => 'EST', 'name' => 'Estate / Probate'],
+            ['code' => 'LIT', 'name' => 'Litigation'],
+            ['code' => 'WIL', 'name' => 'Will'],
+        ];
+
+        foreach ($definitions as $definition) {
+            $this->categories[$definition['code']] = CaseCategory::query()->create([
+                'code' => $definition['code'],
+                'name' => $definition['name'],
+                'is_active' => true,
+            ]);
+        }
     }
 
     private function seedPositions(): void
@@ -85,8 +115,9 @@ class LrmsDemoSeeder extends Seeder
                 'is_active' => true,
                 'permissions' => [
                     'dashboard.view', 'staff.view', 'staff.create', 'staff.update', 'staff.deactivate', 'staff.qr_print',
-                    'storage.view', 'storage.manage', 'files.view', 'files.create', 'files.update', 'files.archive',
-                    'labels.print', 'movements.borrow', 'movements.return', 'movements.history', 'missing.manage',
+                    'storage.view', 'storage.manage', 'categories.view', 'categories.manage', 'files.view', 'files.create', 'files.update', 'files.delete',
+                    'completions.request', 'completions.review',
+                    'labels.print', 'movements.borrow', 'movements.pic_intake', 'movements.pic_return_receive', 'movements.history', 'missing.manage',
                     'imports.view', 'imports.create', 'exports.files', 'exports.movements', 'audit.view',
                 ],
             ],
@@ -96,8 +127,8 @@ class LrmsDemoSeeder extends Seeder
                 'description' => 'Handles subsale, loan and perfection matters for residential and commercial property.',
                 'is_active' => true,
                 'permissions' => [
-                    'dashboard.view', 'files.view', 'files.create', 'files.update', 'labels.print',
-                    'movements.borrow', 'movements.return', 'movements.history',
+                    'dashboard.view', 'files.view', 'files.create', 'files.update', 'completions.request', 'labels.print',
+                    'movements.borrow', 'movements.history',
                 ],
             ],
             [
@@ -107,7 +138,7 @@ class LrmsDemoSeeder extends Seeder
                 'is_active' => true,
                 'permissions' => [
                     'dashboard.view', 'files.view', 'files.create', 'labels.print',
-                    'movements.borrow', 'movements.return', 'movements.history',
+                    'movements.borrow', 'movements.history',
                 ],
             ],
             [
@@ -116,7 +147,7 @@ class LrmsDemoSeeder extends Seeder
                 'description' => 'Supports corporate transactions, shareholder documentation and board approvals.',
                 'is_active' => true,
                 'permissions' => [
-                    'dashboard.view', 'files.view', 'files.create', 'files.update', 'labels.print', 'movements.history',
+                    'dashboard.view', 'files.view', 'files.create', 'files.update', 'completions.request', 'labels.print', 'movements.history',
                 ],
             ],
             [
@@ -125,7 +156,7 @@ class LrmsDemoSeeder extends Seeder
                 'description' => 'Coordinates litigation bundles, court papers and service copies.',
                 'is_active' => true,
                 'permissions' => [
-                    'dashboard.view', 'files.view', 'labels.print', 'movements.borrow', 'movements.return', 'movements.history',
+                    'dashboard.view', 'files.view', 'labels.print', 'movements.borrow', 'movements.history',
                 ],
             ],
             [
@@ -143,7 +174,7 @@ class LrmsDemoSeeder extends Seeder
                 'description' => 'Manages front-desk intake, registry dispatch and daily file requests.',
                 'is_active' => true,
                 'permissions' => [
-                    'dashboard.view', 'files.view', 'labels.print', 'movements.borrow', 'movements.return',
+                    'dashboard.view', 'files.view', 'labels.print',
                 ],
             ],
             [
@@ -152,7 +183,7 @@ class LrmsDemoSeeder extends Seeder
                 'description' => 'Reviews transactional documents and attends to supervised file work.',
                 'is_active' => true,
                 'permissions' => [
-                    'dashboard.view', 'files.view', 'movements.borrow', 'movements.return', 'movements.history',
+                    'dashboard.view', 'files.view', 'movements.borrow', 'movements.history',
                 ],
             ],
             [
@@ -161,8 +192,8 @@ class LrmsDemoSeeder extends Seeder
                 'description' => 'Performs daily filing, shelving, retrieval and discrepancy checks.',
                 'is_active' => true,
                 'permissions' => [
-                    'dashboard.view', 'staff.view', 'staff.qr_print', 'storage.view', 'files.view',
-                    'labels.print', 'movements.borrow', 'movements.return', 'movements.history', 'missing.manage',
+                    'dashboard.view', 'staff.view', 'staff.qr_print', 'storage.view', 'categories.view', 'files.view',
+                    'labels.print', 'movements.borrow', 'movements.pic_intake', 'movements.pic_return_receive', 'movements.history', 'missing.manage',
                 ],
             ],
             [
@@ -171,7 +202,7 @@ class LrmsDemoSeeder extends Seeder
                 'description' => 'Supports registry runs, courier dispatches and off-site storage requests.',
                 'is_active' => true,
                 'permissions' => [
-                    'dashboard.view', 'files.view', 'movements.borrow', 'movements.return',
+                    'dashboard.view', 'files.view', 'movements.borrow',
                 ],
             ],
             [
@@ -411,66 +442,35 @@ class LrmsDemoSeeder extends Seeder
     private function seedStorage(): void
     {
         $definitions = [
-            'RG-A' => [
-                'name' => 'Main Registry',
-                'cabinets' => [
-                    'A1' => ['name' => 'Residential Conveyancing Bay', 'shelves' => ['S1' => 'Shelf Alpha', 'S2' => 'Shelf Bravo', 'S3' => 'Shelf Charlie']],
-                    'A2' => ['name' => 'Loan Documentation Bay', 'shelves' => ['S1' => 'Shelf Delta', 'S2' => 'Shelf Echo', 'S3' => 'Shelf Foxtrot']],
-                    'A3' => ['name' => 'Perfection Matters Bay', 'shelves' => ['S1' => 'Shelf Golf', 'S2' => 'Shelf Hotel', 'S3' => 'Shelf India']],
-                ],
-            ],
-            'RG-B' => [
-                'name' => 'Strong Room',
-                'cabinets' => [
-                    'B1' => ['name' => 'Title Deed Vault', 'shelves' => ['S1' => 'Shelf Jade', 'S2' => 'Shelf Kappa', 'S3' => 'Shelf Lima']],
-                    'B2' => ['name' => 'Commercial Matters Vault', 'shelves' => ['S1' => 'Shelf Meranti', 'S2' => 'Shelf Nusa', 'S3' => 'Shelf Omega']],
-                    'B3' => ['name' => 'Probate & Estate Vault', 'shelves' => ['S1' => 'Shelf Pertiwi', 'S2' => 'Shelf Quartz', 'S3' => 'Shelf Rimba']],
-                ],
-            ],
-            'RG-C' => [
-                'name' => 'Closed Files Annex',
-                'cabinets' => [
-                    'C1' => ['name' => 'Archived Residential Files', 'shelves' => ['S1' => 'Shelf Selatan', 'S2' => 'Shelf Timur', 'S3' => 'Shelf Utara']],
-                    'C2' => ['name' => 'Archived Corporate Files', 'shelves' => ['S1' => 'Shelf Vanda', 'S2' => 'Shelf Wira', 'S3' => 'Shelf Xenia']],
-                    'C3' => ['name' => 'Off-Site Transfer Staging', 'shelves' => ['S1' => 'Shelf Yakin', 'S2' => 'Shelf Zamrud', 'S3' => 'Shelf Angsana']],
-                ],
-            ],
-            'JB-V' => [
-                'name' => 'Johor Bahru Deeds Vault',
-                'cabinets' => [
-                    'J1' => ['name' => 'Johor Residential Holdings', 'shelves' => ['S1' => 'Shelf Bakawali', 'S2' => 'Shelf Cempaka', 'S3' => 'Shelf Dahlia']],
-                    'J2' => ['name' => 'Southern Commercial Holdings', 'shelves' => ['S1' => 'Shelf Enggang', 'S2' => 'Shelf Fajar', 'S3' => 'Shelf Gemilang']],
-                ],
-            ],
+            'A1' => ['name' => 'Residential Conveyancing Bay', 'shelves' => ['S1' => 'Shelf Alpha', 'S2' => 'Shelf Bravo', 'S3' => 'Shelf Charlie']],
+            'A2' => ['name' => 'Loan Documentation Bay', 'shelves' => ['S1' => 'Shelf Delta', 'S2' => 'Shelf Echo', 'S3' => 'Shelf Foxtrot']],
+            'A3' => ['name' => 'Perfection Matters Bay', 'shelves' => ['S1' => 'Shelf Golf', 'S2' => 'Shelf Hotel', 'S3' => 'Shelf India']],
+            'B1' => ['name' => 'Title Deed Vault', 'shelves' => ['S1' => 'Shelf Jade', 'S2' => 'Shelf Kappa', 'S3' => 'Shelf Lima']],
+            'B2' => ['name' => 'Commercial Matters Vault', 'shelves' => ['S1' => 'Shelf Meranti', 'S2' => 'Shelf Nusa', 'S3' => 'Shelf Omega']],
+            'B3' => ['name' => 'Probate & Estate Vault', 'shelves' => ['S1' => 'Shelf Pertiwi', 'S2' => 'Shelf Quartz', 'S3' => 'Shelf Rimba']],
+            'C1' => ['name' => 'Archived Residential Files', 'shelves' => ['S1' => 'Shelf Selatan', 'S2' => 'Shelf Timur', 'S3' => 'Shelf Utara']],
+            'C2' => ['name' => 'Archived Corporate Files', 'shelves' => ['S1' => 'Shelf Vanda', 'S2' => 'Shelf Wira', 'S3' => 'Shelf Xenia']],
+            'C3' => ['name' => 'Off-Site Transfer Staging', 'shelves' => ['S1' => 'Shelf Yakin', 'S2' => 'Shelf Zamrud', 'S3' => 'Shelf Angsana']],
+            'J1' => ['name' => 'Johor Residential Holdings', 'shelves' => ['S1' => 'Shelf Bakawali', 'S2' => 'Shelf Cempaka', 'S3' => 'Shelf Dahlia']],
+            'J2' => ['name' => 'Southern Commercial Holdings', 'shelves' => ['S1' => 'Shelf Enggang', 'S2' => 'Shelf Fajar', 'S3' => 'Shelf Gemilang']],
         ];
 
-        foreach ($definitions as $roomCode => $roomDefinition) {
-            $room = Room::query()->create([
-                'code' => $roomCode,
-                'name' => $roomDefinition['name'],
+        foreach ($definitions as $rackCode => $rackDefinition) {
+            $rack = Rack::query()->create([
+                'code' => $rackCode,
+                'name' => $rackDefinition['name'],
                 'is_active' => true,
             ]);
 
-            foreach ($roomDefinition['cabinets'] as $cabinetCode => $cabinetDefinition) {
-                $cabinetId = DB::table('cabinets')->insertGetId([
-                    'room_id' => $room->id,
-                    'code' => $cabinetCode,
-                    'name' => $cabinetDefinition['name'],
+            foreach ($rackDefinition['shelves'] as $shelfCode => $shelfName) {
+                $shelf = Shelf::query()->create([
+                    'rack_id' => $rack->id,
+                    'code' => $shelfCode,
+                    'name' => $shelfName,
                     'is_active' => true,
-                    'created_at' => $this->today,
-                    'updated_at' => $this->today,
                 ]);
 
-                foreach ($cabinetDefinition['shelves'] as $shelfCode => $shelfName) {
-                    $shelf = Shelf::query()->create([
-                        'cabinet_id' => $cabinetId,
-                        'code' => $shelfCode,
-                        'name' => $shelfName,
-                        'is_active' => true,
-                    ]);
-
-                    $this->shelves["{$roomCode}|{$cabinetCode}|{$shelfCode}"] = $shelf;
-                }
+                $this->shelves["{$rackCode}|{$shelfCode}"] = $shelf;
             }
         }
     }
@@ -478,14 +478,14 @@ class LrmsDemoSeeder extends Seeder
     private function seedFiles(): void
     {
         $matterBlueprints = [
-            ['prefix' => 'CON', 'matter' => 'Subsale SPA', 'with_loan' => true],
-            ['prefix' => 'CON', 'matter' => 'Loan Documentation', 'with_loan' => true],
-            ['prefix' => 'CON', 'matter' => 'Perfection of Transfer', 'with_loan' => false],
-            ['prefix' => 'CON', 'matter' => 'Perfection of Charge', 'with_loan' => true],
-            ['prefix' => 'CON', 'matter' => 'Discharge of Charge', 'with_loan' => true],
-            ['prefix' => 'TEN', 'matter' => 'Tenancy Agreement', 'with_loan' => false],
-            ['prefix' => 'COM', 'matter' => 'Commercial Lease', 'with_loan' => false],
-            ['prefix' => 'EST', 'matter' => 'Probate & Transmission', 'with_loan' => false],
+            ['prefix' => 'CON', 'matter' => 'Subsale SPA'],
+            ['prefix' => 'LOA', 'matter' => 'Loan Documentation'],
+            ['prefix' => 'CON', 'matter' => 'Perfection of Transfer'],
+            ['prefix' => 'LOA', 'matter' => 'Perfection of Charge'],
+            ['prefix' => 'CON', 'matter' => 'Discharge of Charge'],
+            ['prefix' => 'TEN', 'matter' => 'Tenancy Agreement'],
+            ['prefix' => 'COM', 'matter' => 'Commercial Lease'],
+            ['prefix' => 'EST', 'matter' => 'Probate & Transmission'],
         ];
 
         $individualPurchasers = [
@@ -541,6 +541,8 @@ class LrmsDemoSeeder extends Seeder
             'TC17008', 'TC18022', 'TC18041', 'TC19006', 'TC20024', 'TC21018',
             'TC21031', 'TC22016', 'TC23005', 'TC23040', 'TC24003', 'TC24026',
         ];
+        $registrar = $this->users['aisyah.karim@tsangco.com.my'];
+        $reviewer = $this->users['faridah.othman@tsangco.com.my'];
 
         for ($index = 1; $index <= 138; $index++) {
             $blueprint = $matterBlueprints[($index - 1) % count($matterBlueprints)];
@@ -548,9 +550,11 @@ class LrmsDemoSeeder extends Seeder
             $purchaserPool = $isCorporate ? $corporatePurchasers : $individualPurchasers;
             $development = $developments[($index - 1) % count($developments)];
             $shelfKey = $activeShelfKeys[($index - 1) % count($activeShelfKeys)];
-            $referenceNumber = sprintf('%s/2026/%04d', $blueprint['prefix'], $index);
-            $createdAt = $index > 133
-                ? $this->today->copy()->setTime(9 + ($index % 4), ($index * 7) % 60)
+            $category = $this->categories[$blueprint['prefix']];
+            $sequenceNumber = $category->reserveNextNumber();
+            $referenceNumber = $category->formatReference($sequenceNumber, 2026);
+            $createdAt = $index > 128
+                ? $this->today->copy()->subDays(138 - $index)->setTime(9 + ($index % 4), ($index * 7) % 60)
                 : Carbon::create(2026, 2, 3, 9, 0, 0, config('app.timezone'))->addDays($index);
 
             $property = $this->propertyDescription($index, $development[0], $development[1], $blueprint['matter']);
@@ -558,17 +562,23 @@ class LrmsDemoSeeder extends Seeder
             $file->file_identifier = LegalFile::nextIdentifier();
             $file->qr_identifier = (string) Str::uuid();
             $file->reference_number = $referenceNumber;
-            $file->loan_reference = $blueprint['with_loan'] ? $this->loanReference($index) : null;
             $file->purchaser = $purchaserPool[($index - 1) % count($purchaserPool)];
             $file->vendor = $vendors[($index + 2) % count($vendors)];
             $file->property = $property;
-            $file->matter_type = $blueprint['matter'];
-            $file->important_date = $createdAt->copy()->addDays(30 + ($index % 45))->toDateString();
+            $file->case_category_id = $category->id;
+            $file->case_type = match ($blueprint['prefix']) {
+                'LOA' => LegalFile::TYPE_LOAN,
+                'LIT' => LegalFile::TYPE_LITIGATION,
+                default => LegalFile::TYPE_SNP,
+            };
+            $file->matter_type = $category->name;
+            $file->start_date = $createdAt->toDateString();
+            $file->end_date = $createdAt->copy()->addDays(30 + ($index % 45))->toDateString();
             $file->person_in_charge_id = $this->staff[$personInChargeNumbers[($index - 1) % count($personInChargeNumbers)]]->id;
-            $file->shelf_id = $this->shelves[$shelfKey]->id;
-            $file->status = LegalFile::STATUS_AVAILABLE;
-            $file->created_by = $this->users['aisyah.karim@tsangco.com.my']->id;
-            $file->updated_by = $this->users['aisyah.karim@tsangco.com.my']->id;
+            $file->shelf_id = null;
+            $file->status = LegalFile::STATUS_REGISTERED;
+            $file->created_by = $registrar->id;
+            $file->updated_by = $registrar->id;
             $file->save();
 
             DB::table('legal_files')->where('id', $file->id)->update([
@@ -579,37 +589,78 @@ class LrmsDemoSeeder extends Seeder
             $file->refresh();
             $this->files[$referenceNumber] = $file;
             $this->activeReferences[] = $referenceNumber;
+
+            $this->recordLifecycleEvent(
+                $file,
+                'registered',
+                null,
+                LegalFile::STATUS_REGISTERED,
+                $registrar,
+                $createdAt,
+                'Case registered in LRMS.',
+            );
+
+            // 1-10 remain Registered (awaiting completion).
+            if ($index <= 10) {
+                continue;
+            }
+
+            $requestedAt = $createdAt->copy()->addDays(4 + ($index % 3))->setTime(11, 15);
+            $this->recordLifecycleEvent(
+                $file,
+                'completion_requested',
+                LegalFile::STATUS_REGISTERED,
+                LegalFile::STATUS_PENDING,
+                $registrar,
+                $requestedAt,
+                'Matter finished. Submitted for boss review.',
+            );
+            $this->updateFileState($file, LegalFile::STATUS_PENDING, null, $registrar, $requestedAt);
+
+            // 11-16 remain Pending (Completion queue).
+            if ($index <= 16) {
+                continue;
+            }
+
+            $approvedAt = $requestedAt->copy()->addDays(1 + ($index % 2))->setTime(15, 40);
+            $this->recordLifecycleEvent(
+                $file,
+                'completion_approved',
+                LegalFile::STATUS_PENDING,
+                LegalFile::STATUS_COMPLETED,
+                $reviewer,
+                $approvedAt,
+                'Physical file checked and completion approved.',
+            );
+            $this->updateFileState($file, LegalFile::STATUS_COMPLETED, null, $reviewer, $approvedAt);
+
+            // 17-22 remain Completed (Store File queue).
+            if ($index <= 22) {
+                continue;
+            }
+
+            $storedAt = $approvedAt->copy()->addHours(18 + ($index % 6));
+            $this->storeFile($file, $this->shelves[$shelfKey], $this->staff['TC20035'], $registrar, $storedAt);
+            $this->storedReferences[] = $referenceNumber;
         }
 
-        for ($index = 139; $index <= 150; $index++) {
-            $blueprint = $matterBlueprints[($index - 1) % count($matterBlueprints)];
-            $development = $developments[($index - 1) % count($developments)];
-            $shelfKey = $activeShelfKeys[($index - 1) % count($activeShelfKeys)];
-            $createdAt = Carbon::create(2025, 9, 8, 10, 0, 0, config('app.timezone'))->addDays($index);
-            $archivedAt = $createdAt->copy()->addMonths(7)->addDays(($index % 18) + 10);
+        $this->seedRelatedFileLinks();
+    }
 
-            $file = new LegalFile;
-            $file->file_identifier = LegalFile::nextIdentifier();
-            $file->qr_identifier = (string) Str::uuid();
-            $file->reference_number = sprintf('%s/2025/%04d', $blueprint['prefix'], $index - 120);
-            $file->loan_reference = $blueprint['with_loan'] ? $this->loanReference($index) : null;
-            $file->purchaser = $individualPurchasers[($index - 1) % count($individualPurchasers)];
-            $file->vendor = $vendors[($index + 5) % count($vendors)];
-            $file->property = $this->propertyDescription($index, $development[0], $development[1], $blueprint['matter']);
-            $file->matter_type = $blueprint['matter'];
-            $file->important_date = $createdAt->copy()->addDays(45)->toDateString();
-            $file->person_in_charge_id = $this->staff['TC17008']->id;
-            $file->shelf_id = $this->shelves[$shelfKey]->id;
-            $file->status = LegalFile::STATUS_AVAILABLE;
-            $file->archived_at = $archivedAt;
-            $file->created_by = $this->users['aisyah.karim@tsangco.com.my']->id;
-            $file->updated_by = $this->users['aisyah.karim@tsangco.com.my']->id;
-            $file->save();
+    private function seedRelatedFileLinks(): void
+    {
+        $pairs = [
+            [$this->storedReferences[0] ?? null, $this->storedReferences[1] ?? null],
+            [$this->storedReferences[2] ?? null, $this->storedReferences[3] ?? null],
+            [$this->activeReferences[0] ?? null, $this->activeReferences[1] ?? null],
+        ];
 
-            DB::table('legal_files')->where('id', $file->id)->update([
-                'created_at' => $createdAt,
-                'updated_at' => $archivedAt,
-            ]);
+        foreach ($pairs as [$primaryRef, $relatedRef]) {
+            if (! $primaryRef || ! $relatedRef || $primaryRef === $relatedRef) {
+                continue;
+            }
+
+            $this->files[$primaryRef]->syncRelatedFiles([$this->files[$relatedRef]->id]);
         }
     }
 
@@ -636,30 +687,39 @@ class LrmsDemoSeeder extends Seeder
             $this->staff['TC22049'],
         ];
 
-        $references = $this->activeReferences;
+        $receivers = [
+            $this->staff['TC20035'],
+            $this->staff['TC22007'],
+            $this->staff['TC23029'],
+            $this->staff['TC24038'],
+        ];
+
+        $references = $this->storedReferences;
 
         foreach (array_chunk(array_slice($references, 0, 30), 3) as $chunkIndex => $chunk) {
             $borrowedAt = Carbon::create(2026, 3, 3, 10, 15, 0, config('app.timezone'))->addDays($chunkIndex * 4);
             $returnedAt = $borrowedAt->copy()->addDays(7 + ($chunkIndex % 3));
             $employee = $borrowers[$chunkIndex % count($borrowers)];
             $processor = $processors[$chunkIndex % count($processors)];
+            $pic = $receivers[$chunkIndex % count($receivers)];
 
-            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, "Borrowed for stamping bundle preparation and client signing appointment.");
-            $this->returnFiles($chunk, $employee, $processor, $returnedAt, "Returned after execution set and duplicate copies were filed.");
+            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, 'Borrowed for stamping bundle preparation and client signing appointment.');
+            $this->returnFiles($chunk, $employee, $pic, $processor, $returnedAt, 'Returned after execution set and duplicate copies were filed.');
         }
 
         foreach (array_chunk(array_slice($references, 30, 20), 4) as $chunkIndex => $chunk) {
             $employee = $borrowers[($chunkIndex + 2) % count($borrowers)];
             $processor = $processors[($chunkIndex + 1) % count($processors)];
+            $pic = $receivers[($chunkIndex + 1) % count($receivers)];
             $firstBorrow = Carbon::create(2026, 4, 18, 9, 20, 0, config('app.timezone'))->addDays($chunkIndex * 5);
             $firstReturn = $firstBorrow->copy()->addDays(6);
             $secondBorrow = $firstReturn->copy()->addDays(10);
             $secondReturn = $secondBorrow->copy()->addDays(5 + ($chunkIndex % 2));
 
-            $this->borrowFiles($chunk, $employee, $processor, $firstBorrow, "Retrieved for financier execution and solicitor certification.");
-            $this->returnFiles($chunk, $employee, $processor, $firstReturn, "Refiled after first drawdown documents were completed.");
-            $this->borrowFiles($chunk, $employee, $processor, $secondBorrow, "Borrowed again for perfection follow-up and undertaking review.");
-            $this->returnFiles($chunk, $employee, $processor, $secondReturn, "Returned after status update letter and lodged forms were copied.");
+            $this->borrowFiles($chunk, $employee, $processor, $firstBorrow, 'Retrieved for financier execution and solicitor certification.');
+            $this->returnFiles($chunk, $employee, $pic, $processor, $firstReturn, 'Refiled after first drawdown documents were completed.');
+            $this->borrowFiles($chunk, $employee, $processor, $secondBorrow, 'Borrowed again for perfection follow-up and undertaking review.');
+            $this->returnFiles($chunk, $employee, $pic, $processor, $secondReturn, 'Returned after status update letter and lodged forms were copied.');
         }
 
         foreach (array_chunk(array_slice($references, 50, 10), 2) as $chunkIndex => $chunk) {
@@ -667,26 +727,27 @@ class LrmsDemoSeeder extends Seeder
             $processor = $processors[$chunkIndex % count($processors)];
             $borrowedAt = Carbon::create(2026, 5, 9, 11, 10, 0, config('app.timezone'))->addDays($chunkIndex * 6);
 
-            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, "Borrowed pending long-form completion, bank undertakings and redemption statements.");
+            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, 'Borrowed pending long-form completion, bank undertakings and redemption statements.');
         }
 
         foreach (array_chunk(array_slice($references, 60, 8), 2) as $chunkIndex => $chunk) {
             $employee = $borrowers[($chunkIndex + 1) % count($borrowers)];
             $processor = $processors[($chunkIndex + 2) % count($processors)];
-            $borrowedAt = Carbon::create(2026, 7, 5, 14, 5, 0, config('app.timezone'))->addDays($chunkIndex * 2);
+            $borrowedAt = Carbon::create(2026, 8, 5, 14, 5, 0, config('app.timezone'))->addDays($chunkIndex * 2);
 
-            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, "Borrowed for imminent completion meeting and disbursement verification.");
+            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, 'Borrowed for imminent completion meeting and disbursement verification.');
         }
 
         foreach (array_chunk(array_slice($references, 68, 6), 2) as $chunkIndex => $chunk) {
             $employee = $borrowers[($chunkIndex + 6) % count($borrowers)];
             $processor = $processors[$chunkIndex % count($processors)];
+            $pic = $receivers[$chunkIndex % count($receivers)];
             $borrowedAt = Carbon::create(2026, 6, 20, 9, 40, 0, config('app.timezone'))->addDays($chunkIndex * 3);
             $returnedAt = $borrowedAt->copy()->addDays(4);
-            $missingAt = $returnedAt->copy()->addDays(18);
+            $missingAt = $returnedAt->copy()->addHours(18);
 
-            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, "Borrowed for redemption and requisition reply review.");
-            $this->returnFiles($chunk, $employee, $processor, $returnedAt, "Returned to shelf after follow-up with land office bundle.");
+            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, 'Borrowed for redemption and requisition reply review.');
+            $this->returnFiles($chunk, $employee, $pic, $processor, $returnedAt, 'Returned to shelf after follow-up with land office bundle.');
 
             foreach ($chunk as $referenceNumber) {
                 $this->markMissing(
@@ -701,10 +762,18 @@ class LrmsDemoSeeder extends Seeder
         foreach (array_chunk(array_slice($references, 74, 4), 2) as $chunkIndex => $chunk) {
             $employee = $borrowers[($chunkIndex + 3) % count($borrowers)];
             $processor = $processors[($chunkIndex + 1) % count($processors)];
+            $pic = $receivers[($chunkIndex + 2) % count($receivers)];
             $borrowedAt = $this->today->copy()->subDay()->setTime(15, 20 + ($chunkIndex * 7));
 
-            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, "Taken out for final client execution before same-day return.");
-            $this->returnFiles($chunk, $employee, $processor, $this->today->copy()->setTime(9, 15 + ($chunkIndex * 12)), "Returned this morning after client acknowledgment and indexing.");
+            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, 'Taken out for final client execution before same-day return.');
+            $this->returnFiles(
+                $chunk,
+                $employee,
+                $pic,
+                $processor,
+                $this->today->copy()->setTime(9, 15 + ($chunkIndex * 12)),
+                'Returned this morning after client acknowledgment and indexing.',
+            );
         }
 
         foreach (array_chunk(array_slice($references, 78, 6), 2) as $chunkIndex => $chunk) {
@@ -715,18 +784,19 @@ class LrmsDemoSeeder extends Seeder
                 $employee,
                 $processor,
                 $this->today->copy()->setTime(10 + $chunkIndex, 10 + ($chunkIndex * 8)),
-                "Borrowed today for urgent signing, completion payment advice and bank presentation.",
+                'Borrowed today for urgent signing, completion payment advice and bank presentation.',
             );
         }
 
         foreach (array_chunk(array_slice($references, 84, 18), 3) as $chunkIndex => $chunk) {
             $employee = $borrowers[($chunkIndex + 5) % count($borrowers)];
             $processor = $processors[($chunkIndex + 2) % count($processors)];
+            $pic = $receivers[($chunkIndex + 3) % count($receivers)];
             $borrowedAt = Carbon::create(2026, 5, 28, 9, 0, 0, config('app.timezone'))->addDays($chunkIndex * 3);
             $returnedAt = $borrowedAt->copy()->addDays(2 + ($chunkIndex % 4));
 
-            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, "Borrowed for certified true copy extraction, execution and requisition handling.");
-            $this->returnFiles($chunk, $employee, $processor, $returnedAt, "Returned after pending correspondences were uploaded and paper copies were stamped.");
+            $this->borrowFiles($chunk, $employee, $processor, $borrowedAt, 'Borrowed for certified true copy extraction, execution and requisition handling.');
+            $this->returnFiles($chunk, $employee, $pic, $processor, $returnedAt, 'Returned after pending correspondences were uploaded and paper copies were stamped.');
         }
 
         foreach (array_slice($references, 102, 4) as $index => $referenceNumber) {
@@ -737,6 +807,97 @@ class LrmsDemoSeeder extends Seeder
             $this->markMissing($referenceNumber, $processor, $missingAt, 'Could not be located during weekly shelf check before registry audit.');
             $this->markFound($referenceNumber, $processor, $foundAt, 'Recovered from the meeting room return tray and re-shelved.');
         }
+    }
+
+    private function recordLifecycleEvent(
+        LegalFile $file,
+        string $type,
+        ?string $previousStatus,
+        string $newStatus,
+        User $processor,
+        Carbon $occurredAt,
+        ?string $notes = null,
+        ?int $shelfId = null,
+        ?string $batchId = null,
+        ?int $employeeId = null,
+        ?int $receiverId = null,
+    ): void {
+        $movement = FileMovement::query()->create([
+            'batch_id' => $batchId,
+            'legal_file_id' => $file->id,
+            'type' => $type,
+            'employee_id' => $employeeId,
+            'receiver_id' => $receiverId,
+            'previous_holder_id' => null,
+            'processed_by' => $processor->id,
+            'shelf_id' => $shelfId,
+            'previous_status' => $previousStatus,
+            'new_status' => $newStatus,
+            'notes' => $notes,
+            'occurred_at' => $occurredAt,
+        ]);
+
+        DB::table('file_movements')->where('id', $movement->id)->update([
+            'occurred_at' => $occurredAt,
+            'created_at' => $occurredAt,
+            'updated_at' => $occurredAt,
+        ]);
+    }
+
+    private function updateFileState(
+        LegalFile $file,
+        string $status,
+        ?int $shelfId,
+        User $processor,
+        Carbon $occurredAt,
+    ): void {
+        DB::table('legal_files')->where('id', $file->id)->update([
+            'status' => $status,
+            'shelf_id' => $shelfId,
+            'current_holder_id' => null,
+            'updated_by' => $processor->id,
+            'updated_at' => $occurredAt,
+        ]);
+
+        $file->status = $status;
+        $file->shelf_id = $shelfId;
+        $file->current_holder_id = null;
+    }
+
+    private function storeFile(
+        LegalFile $file,
+        Shelf $shelf,
+        Staff $operator,
+        User $processor,
+        Carbon $occurredAt,
+    ): void {
+        $batch = new MovementBatch;
+        $batch->id = (string) Str::uuid();
+        $batch->type = 'pic_intake';
+        $batch->employee_id = $operator->id;
+        $batch->processed_by = $processor->id;
+        $batch->processed_at = $occurredAt;
+        $batch->save();
+
+        DB::table('movement_batches')->where('id', $batch->id)->update([
+            'created_at' => $occurredAt,
+            'updated_at' => $occurredAt,
+            'processed_at' => $occurredAt,
+        ]);
+
+        $this->recordLifecycleEvent(
+            $file,
+            'stored',
+            LegalFile::STATUS_COMPLETED,
+            LegalFile::STATUS_STORED,
+            $processor,
+            $occurredAt,
+            'Stored to assigned shelf after completion approval.',
+            $shelf->id,
+            $batch->id,
+        );
+
+        $this->updateFileState($file, LegalFile::STATUS_STORED, $shelf->id, $processor, $occurredAt);
     }
 
     private function borrowFiles(array $referenceNumbers, Staff $employee, User $processor, Carbon $occurredAt, ?string $notes = null): void
@@ -790,12 +951,18 @@ class LrmsDemoSeeder extends Seeder
         }
     }
 
-    private function returnFiles(array $referenceNumbers, Staff $employee, User $processor, Carbon $occurredAt, ?string $notes = null): void
-    {
+    private function returnFiles(
+        array $referenceNumbers,
+        Staff $returner,
+        Staff $pic,
+        User $processor,
+        Carbon $occurredAt,
+        ?string $notes = null,
+    ): void {
         $batch = new MovementBatch;
         $batch->id = (string) Str::uuid();
         $batch->type = 'return';
-        $batch->employee_id = $employee->id;
+        $batch->employee_id = $pic->id;
         $batch->processed_by = $processor->id;
         $batch->processed_at = $occurredAt;
         $batch->save();
@@ -813,12 +980,13 @@ class LrmsDemoSeeder extends Seeder
                 'batch_id' => $batch->id,
                 'legal_file_id' => $file->id,
                 'type' => 'return',
-                'employee_id' => $employee->id,
+                'employee_id' => $returner->id,
+                'receiver_id' => $pic->id,
                 'previous_holder_id' => $file->current_holder_id,
                 'processed_by' => $processor->id,
                 'shelf_id' => $file->shelf_id,
                 'previous_status' => $file->status,
-                'new_status' => LegalFile::STATUS_AVAILABLE,
+                'new_status' => LegalFile::STATUS_STORED,
                 'notes' => $notes,
                 'occurred_at' => $occurredAt,
             ]);
@@ -830,13 +998,13 @@ class LrmsDemoSeeder extends Seeder
             ]);
 
             DB::table('legal_files')->where('id', $file->id)->update([
-                'status' => LegalFile::STATUS_AVAILABLE,
+                'status' => LegalFile::STATUS_STORED,
                 'current_holder_id' => null,
                 'updated_by' => $processor->id,
                 'updated_at' => $occurredAt,
             ]);
 
-            $file->status = LegalFile::STATUS_AVAILABLE;
+            $file->status = LegalFile::STATUS_STORED;
             $file->current_holder_id = null;
         }
     }
@@ -887,7 +1055,7 @@ class LrmsDemoSeeder extends Seeder
             'processed_by' => $processor->id,
             'shelf_id' => $file->shelf_id,
             'previous_status' => $file->status,
-            'new_status' => LegalFile::STATUS_AVAILABLE,
+            'new_status' => LegalFile::STATUS_STORED,
             'notes' => $notes,
             'occurred_at' => $occurredAt,
         ]);
@@ -899,13 +1067,13 @@ class LrmsDemoSeeder extends Seeder
         ]);
 
         DB::table('legal_files')->where('id', $file->id)->update([
-            'status' => LegalFile::STATUS_AVAILABLE,
+            'status' => LegalFile::STATUS_STORED,
             'current_holder_id' => null,
             'updated_by' => $processor->id,
             'updated_at' => $occurredAt,
         ]);
 
-        $file->status = LegalFile::STATUS_AVAILABLE;
+        $file->status = LegalFile::STATUS_STORED;
         $file->current_holder_id = null;
     }
 
@@ -916,22 +1084,20 @@ class LrmsDemoSeeder extends Seeder
             ['title-deed-vault-balance-20260321.xlsx', 'completed', 42, 42, 0, null, 'faridah.othman@tsangco.com.my', Carbon::create(2026, 3, 21, 16, 20, 0, config('app.timezone'))],
             ['old-conveyancing-index-april.csv', 'failed', 27, 0, 4, [
                 'Row 7: reference number already exists.',
-                'Row 13: storage location was not found.',
                 'Duplicate reference number in workbook: CON/2026/0048.',
                 'Row 19: purchaser and property are required.',
             ], 'aisyah.karim@tsangco.com.my', Carbon::create(2026, 4, 5, 10, 10, 0, config('app.timezone'))],
             ['southern-branch-file-reconciliation.xlsx', 'completed', 58, 58, 0, null, 'kelvin.low@tsangco.com.my', Carbon::create(2026, 4, 19, 15, 5, 0, config('app.timezone'))],
             ['loan-redemption-backlog-may.xlsx', 'completed', 33, 33, 0, null, 'aisyah.karim@tsangco.com.my', Carbon::create(2026, 5, 11, 9, 45, 0, config('app.timezone'))],
             ['probate-transfer-checklist.csv', 'failed', 19, 0, 3, [
-                'Row 4: storage location was not found.',
                 'Row 9: reference number already exists.',
-                'Missing required column: Room Code.',
+                'Missing required column: Case Category.',
             ], 'faridah.othman@tsangco.com.my', Carbon::create(2026, 5, 27, 14, 25, 0, config('app.timezone'))],
             ['commercial-lease-docket-june.xlsx', 'completed', 24, 24, 0, null, 'kelvin.low@tsangco.com.my', Carbon::create(2026, 6, 4, 10, 30, 0, config('app.timezone'))],
             ['jb-vault-catchup-20260618.xlsx', 'completed', 31, 31, 0, null, 'aisyah.karim@tsangco.com.my', Carbon::create(2026, 6, 18, 17, 10, 0, config('app.timezone'))],
             ['registry-cleanup-round-two.xlsx', 'completed', 15, 15, 0, null, 'kelvin.low@tsangco.com.my', Carbon::create(2026, 7, 2, 11, 40, 0, config('app.timezone'))],
             ['developer-panel-missing-columns.csv', 'failed', 11, 0, 2, [
-                'Missing required column: Shelf Code.',
+                'Missing required column: Rack Code.',
                 'The workbook contains no data rows.',
             ], 'aisyah.karim@tsangco.com.my', Carbon::create(2026, 7, 14, 8, 55, 0, config('app.timezone'))],
             ['commercial-tenant-index-20260329.xlsx', 'completed', 18, 18, 0, null, 'kelvin.low@tsangco.com.my', Carbon::create(2026, 3, 29, 13, 15, 0, config('app.timezone'))],
@@ -944,6 +1110,7 @@ class LrmsDemoSeeder extends Seeder
             ['johor-vault-rent-roll-20260630.xlsx', 'completed', 17, 17, 0, null, 'kelvin.low@tsangco.com.my', Carbon::create(2026, 6, 30, 15, 20, 0, config('app.timezone'))],
             ['registry-priority-batch-20260710.xlsx', 'completed', 29, 29, 0, null, 'aisyah.karim@tsangco.com.my', Carbon::create(2026, 7, 10, 9, 25, 0, config('app.timezone'))],
             ['active-file-register-july-review.xlsx', 'completed', 22, 22, 0, null, 'faridah.othman@tsangco.com.my', Carbon::create(2026, 7, 23, 16, 45, 0, config('app.timezone'))],
+            ['september-completion-queue.xlsx', 'completed', 12, 12, 0, null, 'aisyah.karim@tsangco.com.my', Carbon::create(2026, 9, 8, 11, 20, 0, config('app.timezone'))],
         ];
 
         foreach ($runs as [$filename, $status, $total, $imported, $failed, $errors, $creatorEmail, $createdAt]) {
@@ -962,18 +1129,6 @@ class LrmsDemoSeeder extends Seeder
                 'updated_at' => $createdAt,
             ]);
         }
-    }
-
-    private function loanReference(int $index): string
-    {
-        $banks = ['MBB', 'CIMB', 'PBB', 'RHB', 'HLB', 'UOB', 'AMB', 'OCBC'];
-
-        return sprintf(
-            '%s/HL/%s/%04d',
-            $banks[($index - 1) % count($banks)],
-            Carbon::create(2026, 1, 1)->addDays($index)->format('ym'),
-            1100 + $index,
-        );
     }
 
     private function propertyDescription(int $index, string $development, string $address, string $matterType): string

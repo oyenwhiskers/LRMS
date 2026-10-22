@@ -57,6 +57,7 @@
 
             <div class="app-sidebar__profile-menu hidden" data-dropdown-menu role="menu">
                 <p class="app-sidebar__profile-menu-meta">{{ $user->email }}</p>
+                <a class="app-sidebar__profile-menu-item" href="{{ route('account.password.edit') }}" role="menuitem">Change password</a>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
                     <button class="app-sidebar__profile-menu-item" type="submit" role="menuitem">Sign out</button>

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ReviewRegistrationRequest;
 use App\Models\Position;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Http\Request;
@@ -14,10 +15,12 @@ use Illuminate\View\View;
 
 class RegistrationApprovalController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request): View|JsonResponse
     {
         Gate::authorize('registrations.view');
 
+        $isFeed = $request->boolean('feed');
+        $perPage = $isFeed ? 10 : 15;
         $query = User::query()
             ->where('role', User::ROLE_USER)
             ->with(['staff', 'requestedPosition', 'reviewer']);
@@ -37,9 +40,25 @@ class RegistrationApprovalController extends Controller
         $sort = $request->input('sort') === 'oldest' ? 'oldest' : 'latest';
         $query->orderBy('created_at', $sort === 'oldest' ? 'asc' : 'desc');
 
+        $registrations = $query->paginate($perPage)->withQueryString();
+        $positions = Position::query()->where('is_active', true)->orderBy('name')->get();
+
+        if ($isFeed) {
+            return response()->json([
+                'html' => view('admin.registrations.partials.registration-cards', [
+                    'registrations' => $registrations,
+                ])->render(),
+                'modals' => view('admin.registrations.partials.registration-modals', [
+                    'registrations' => $registrations,
+                    'positions' => $positions,
+                ])->render(),
+                'next_page' => $registrations->hasMorePages() ? $registrations->currentPage() + 1 : null,
+            ]);
+        }
+
         return view('admin.registrations.index', [
-            'registrations' => $query->paginate(15)->withQueryString(),
-            'positions' => Position::query()->where('is_active', true)->orderBy('name')->get(),
+            'registrations' => $registrations,
+            'positions' => $positions,
             'pendingCount' => User::query()
                 ->where('role', User::ROLE_USER)
                 ->where('status', User::STATUS_PENDING)

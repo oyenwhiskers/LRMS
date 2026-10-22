@@ -17,7 +17,7 @@ return new class extends Migration
         if (DB::connection()->getDriverName() === 'mysql') {
             DB::statement(
                 'ALTER TABLE legal_files ADD FULLTEXT legal_files_search_fulltext '.
-                '(reference_number, loan_reference, purchaser, vendor, property)'
+                '(reference_number, purchaser, vendor, property)'
             );
         }
     }

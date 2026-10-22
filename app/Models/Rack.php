@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Room extends Model
+class Rack extends Model
 {
     protected $fillable = ['code', 'name', 'is_active'];
 
@@ -14,8 +14,8 @@ class Room extends Model
         return ['is_active' => 'boolean'];
     }
 
-    public function cabinets(): HasMany
+    public function shelves(): HasMany
     {
-        return $this->hasMany(Cabinet::class);
+        return $this->hasMany(Shelf::class);
     }
 }

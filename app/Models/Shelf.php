@@ -5,19 +5,40 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Shelf extends Model
 {
-    protected $fillable = ['cabinet_id', 'code', 'name', 'is_active'];
+    public const QR_PREFIX = 'LRMS:SHELF:1:';
+
+    protected $fillable = ['rack_id', 'code', 'name', 'is_active'];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Shelf $shelf): void {
+            $shelf->qr_identifier ??= (string) Str::uuid();
+        });
+
+        static::updating(function (Shelf $shelf): void {
+            if ($shelf->isDirty('qr_identifier')) {
+                throw new \DomainException('Shelf QR identifiers cannot be changed.');
+            }
+        });
+    }
+
+    public function qrPayload(): string
+    {
+        return self::QR_PREFIX.$this->qr_identifier;
+    }
 
     protected function casts(): array
     {
         return ['is_active' => 'boolean'];
     }
 
-    public function cabinet(): BelongsTo
+    public function rack(): BelongsTo
     {
-        return $this->belongsTo(Cabinet::class);
+        return $this->belongsTo(Rack::class);
     }
 
     public function legalFiles(): HasMany
@@ -27,7 +48,14 @@ class Shelf extends Model
 
     public function getFullLocationAttribute(): string
     {
-        return collect([$this->cabinet?->room?->name, $this->cabinet?->name, $this->name])
-            ->filter()->join(' / ');
+        $rack = $this->rack;
+
+        if (! $rack) {
+            return '';
+        }
+
+        $shelfLabel = $this->name ?: $this->code;
+
+        return "{$rack->code} / {$shelfLabel}";
     }
 }

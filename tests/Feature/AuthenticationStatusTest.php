@@ -65,6 +65,17 @@ class AuthenticationStatusTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_approved_account_without_dashboard_permission_sees_welcome_home(): void
+    {
+        $user = User::factory()->create(['password' => 'password']);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Staff identity')
+            ->assertSee('What you can do');
+    }
+
     public function test_invalid_credentials_are_rejected(): void
     {
         $user = User::factory()->create();

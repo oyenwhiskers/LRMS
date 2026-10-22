@@ -1,202 +1,149 @@
 @extends('layouts.app')
 
 @section('title', 'Storage Locations')
+@section('list_layout')
+@endsection
 
 @section('content')
-<div>
-    <p class="eyebrow text-amber-700">Master data</p>
-    <h1 class="mt-1 text-3xl font-semibold">Storage locations</h1>
-    <p class="mt-2 text-sm text-stone-500">Manage the room, cabinet, and shelf hierarchy used to store and return physical files accurately.</p>
+<div class="list-page">
+    <div class="list-page__header hidden items-end justify-between gap-4 lg:flex">
+        <div>
+            <p class="eyebrow text-amber-700">Master data</p>
+            <h1 class="mt-1 text-3xl font-semibold">Storage locations</h1>
+            <p class="mt-2 text-sm text-stone-500">
+                Manage racks and shelves in {{ config('lrms.storage.room_name') }}.
+            </p>
+        </div>
+        @can('storage.manage')
+            <button class="btn-icon-primary shrink-0" type="button" data-modal-open="add-rack" aria-label="Add rack" title="Add rack">
+                <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
+                </svg>
+            </button>
+        @endcan
+    </div>
+
+    <form class="list-page__filters grid gap-3 border border-stone-200 bg-white p-4 sm:grid-cols-[1fr_180px]" method="GET" data-list-filter-form>
+        <input
+            class="form-input"
+            type="search"
+            name="search"
+            value="{{ request('search') }}"
+            placeholder="Search rack code or name"
+            data-list-filter-search
+        >
+        <select class="form-input" name="status" data-list-filter-select>
+            <option value="">All statuses</option>
+            <option value="active" @selected(request('status') === 'active')>Active</option>
+            <option value="inactive" @selected(request('status') === 'inactive')>Inactive</option>
+        </select>
+    </form>
+
+    {{-- Desktop table --}}
+    <div @class([
+        'list-page__table hidden',
+        'lg:block' => $racks->isNotEmpty(),
+        'list-page__table--empty lg:flex' => $racks->isEmpty(),
+    ])>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Rack code</th>
+                    <th>Rack name</th>
+                    <th class="text-center">Shelves</th>
+                    <th class="text-center">Active shelves</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            @if($racks->isNotEmpty())
+                <tbody>
+                    @foreach($racks as $rack)
+                        <tr>
+                            <td class="font-semibold">{{ $rack->code }}</td>
+                            <td>{{ $rack->name }}</td>
+                            <td class="text-center">{{ $rack->shelves_count }}</td>
+                            <td class="text-center">{{ $rack->active_shelves_count }}</td>
+                            <td class="text-center">
+                                <span class="status-badge {{ $rack->is_active ? 'status-approved' : 'status-rejected' }}">
+                                    {{ $rack->is_active ? 'Active' : 'Inactive' }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <a class="btn-secondary" href="{{ route('storage.racks.show', $rack) }}">Manage</a>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            @endif
+        </table>
+        @if($racks->isEmpty())
+            @include('layouts.partials.table-empty', [
+                'icon' => 'archive',
+                'title' => 'No racks configured yet',
+                'message' => 'Add a rack to start defining shelves for file storage.',
+            ])
+        @endif
+    </div>
+
+    {{-- Mobile cards --}}
+    <div @class(['list-page__mobile lg:hidden', 'list-page__mobile--empty' => $racks->isEmpty()])>
+        @if($racks->isNotEmpty())
+            <div class="mobile-list">
+                @foreach($racks as $rack)
+                    @include('layouts.partials.mobile-list-card', [
+                        'title' => $rack->code,
+                        'meta' => $rack->name,
+                        'detail' => number_format($rack->shelves_count).' shelves · '.number_format($rack->active_shelves_count).' active',
+                        'badge' => $rack->is_active ? 'Active' : 'Inactive',
+                        'badgeTone' => $rack->is_active ? 'approved' : 'rejected',
+                        'href' => route('storage.racks.show', $rack),
+                        'ariaLabel' => 'Manage rack '.$rack->code,
+                    ])
+                @endforeach
+            </div>
+        @else
+            @include('layouts.partials.table-empty', [
+                'icon' => 'archive',
+                'title' => 'No racks configured yet',
+                'message' => 'Add a rack to start defining shelves for file storage.',
+            ])
+        @endif
+    </div>
 </div>
 
 @can('storage.manage')
-<section class="mt-8 grid gap-4 lg:grid-cols-3">
-    <form class="border border-stone-200 bg-white p-5" method="POST" action="{{ route('storage.rooms.store') }}">
-        @csrf
-        <h2 class="font-semibold">Add room</h2>
-        <p class="mt-1 text-sm text-stone-500">Create a top-level storage area.</p>
-        <div class="mt-4 grid gap-3">
-            <input class="form-input" name="code" placeholder="Code" required>
-            <input class="form-input" name="name" placeholder="Room name" required>
-            <button class="btn-primary">Add room</button>
-        </div>
-    </form>
+    <button class="fab-add" type="button" data-modal-open="add-rack" aria-label="Add rack" title="Add rack">
+        <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14" />
+        </svg>
+    </button>
 
-    <form class="border border-stone-200 bg-white p-5" method="POST" action="{{ route('storage.cabinets.store') }}">
-        @csrf
-        <h2 class="font-semibold">Add cabinet</h2>
-        <p class="mt-1 text-sm text-stone-500">Place a cabinet inside an active room.</p>
-        <div class="mt-4 grid gap-3">
-            <select class="form-input" name="room_id" required>
-                <option value="">Select room</option>
-                @foreach($rooms->where('is_active', true) as $room)
-                    <option value="{{ $room->id }}">{{ $room->code }} — {{ $room->name }}</option>
-                @endforeach
-            </select>
-            <input class="form-input" name="code" placeholder="Code" required>
-            <input class="form-input" name="name" placeholder="Cabinet name" required>
-            <button class="btn-primary">Add cabinet</button>
-        </div>
-    </form>
-
-    <form class="border border-stone-200 bg-white p-5" method="POST" action="{{ route('storage.shelves.store') }}">
-        @csrf
-        <h2 class="font-semibold">Add shelf</h2>
-        <p class="mt-1 text-sm text-stone-500">Add a shelf inside an active cabinet.</p>
-        <div class="mt-4 grid gap-3">
-            <select class="form-input" name="cabinet_id" required>
-                <option value="">Select cabinet</option>
-                @foreach($rooms as $room)
-                    @foreach($room->cabinets->where('is_active', true) as $cabinet)
-                        <option value="{{ $cabinet->id }}">{{ $room->code }} / {{ $cabinet->code }}</option>
-                    @endforeach
-                @endforeach
-            </select>
-            <input class="form-input" name="code" placeholder="Code" required>
-            <input class="form-input" name="name" placeholder="Shelf name" required>
-            <button class="btn-primary">Add shelf</button>
-        </div>
-    </form>
-</section>
-@endcan
-
-<section class="mt-8 space-y-5">
-@forelse($rooms as $room)
-    @php
-        $cabinetCount = $room->cabinets->count();
-        $activeCabinetCount = $room->cabinets->where('is_active', true)->count();
-        $shelfCount = $room->cabinets->sum(fn ($cabinet) => $cabinet->shelves->count());
-    @endphp
-    <article class="border border-stone-200 bg-white p-5 sm:p-6">
-        <div class="storage-room-header">
-            <div>
-                <p class="text-xs font-bold uppercase tracking-[0.12em] text-stone-500">Room {{ $room->code }}</p>
-                <h2 class="mt-1 text-xl font-semibold text-stone-900">{{ $room->name }}</h2>
-                <p class="mt-2 text-sm text-stone-500">{{ $cabinetCount }} cabinets, {{ $shelfCount }} shelves, {{ $activeCabinetCount }} active cabinets.</p>
+    <div class="modal-overlay hidden" data-modal="add-rack" aria-hidden="true">
+        <div class="modal-panel max-w-lg" role="dialog" aria-modal="true" aria-labelledby="add-rack-title">
+            <div class="modal-header">
+                <div>
+                    <p class="eyebrow text-amber-700">Storage</p>
+                    <h2 id="add-rack-title" class="mt-1 text-2xl font-semibold">Add rack</h2>
+                </div>
+                <button class="modal-close" type="button" data-modal-close aria-label="Close modal">Close</button>
             </div>
-            <form method="POST" action="{{ route('storage.rooms.toggle', $room) }}">
+            <form class="mt-5 grid gap-4" method="POST" action="{{ route('storage.racks.store') }}">
                 @csrf
-                @method('PATCH')
-                <button class="status-badge {{ $room->is_active ? 'status-approved' : 'status-rejected' }}">{{ $room->is_active ? 'Active' : 'Inactive' }}</button>
+                <label class="block">
+                    <span class="form-label">Rack code</span>
+                    <input class="form-input mt-1.5" name="code" placeholder="e.g. A1" required autofocus>
+                </label>
+                <label class="block">
+                    <span class="form-label">Rack name</span>
+                    <input class="form-input mt-1.5" name="name" placeholder="e.g. Residential Conveyancing Bay" required>
+                </label>
+                <div class="flex justify-end gap-3">
+                    <button class="btn-secondary" type="button" data-modal-close>Cancel</button>
+                    <button class="btn-primary">Add rack</button>
+                </div>
             </form>
         </div>
-
-        <form class="storage-entity-form mt-5" method="POST" action="{{ route('storage.rooms.update', $room) }}" data-inline-edit>
-            @csrf
-            @method('PATCH')
-            <div class="storage-entity-fields">
-                <label class="storage-inline-field">
-                    <span class="form-label">Code</span>
-                    <span class="storage-field-display" data-inline-display>{{ $room->code }}</span>
-                    <input class="form-input hidden" name="code" value="{{ $room->code }}" required data-inline-input>
-                </label>
-                <label class="storage-inline-field">
-                    <span class="form-label">Room name</span>
-                    <span class="storage-field-display" data-inline-display>{{ $room->name }}</span>
-                    <input class="form-input hidden" name="name" value="{{ $room->name }}" required data-inline-input>
-                </label>
-            </div>
-            <div class="storage-inline-actions">
-                @can('storage.manage')
-                    <button type="button" class="btn-secondary" data-inline-edit-trigger>Edit</button>
-                    <div class="hidden items-center gap-2" data-inline-edit-actions>
-                        <button class="btn-primary">Save room</button>
-                        <button type="button" class="btn-secondary" data-inline-cancel>Cancel</button>
-                    </div>
-                @endcan
-            </div>
-        </form>
-
-        <div class="mt-6 space-y-4">
-        @forelse($room->cabinets as $cabinet)
-            @php
-                $activeShelfCount = $cabinet->shelves->where('is_active', true)->count();
-            @endphp
-            <section class="border border-stone-200 bg-stone-50 p-4 sm:p-5">
-                <div class="storage-cabinet-header">
-                    <div>
-                        <p class="text-xs font-bold uppercase tracking-[0.12em] text-stone-500">Cabinet {{ $room->code }} / {{ $cabinet->code }}</p>
-                        <h3 class="mt-1 text-lg font-semibold text-stone-900">{{ $cabinet->name }}</h3>
-                        <p class="mt-1 text-sm text-stone-500">{{ $cabinet->shelves->count() }} shelves, {{ $activeShelfCount }} active.</p>
-                    </div>
-                    <form method="POST" action="{{ route('storage.cabinets.toggle', $cabinet) }}">
-                        @csrf
-                        @method('PATCH')
-                        <button class="status-badge {{ $cabinet->is_active ? 'status-approved' : 'status-rejected' }}">{{ $cabinet->is_active ? 'Active' : 'Inactive' }}</button>
-                    </form>
-                </div>
-
-                <form class="storage-entity-form mt-4" method="POST" action="{{ route('storage.cabinets.update', $cabinet) }}" data-inline-edit>
-                    @csrf
-                    @method('PATCH')
-                    <div class="storage-entity-fields">
-                        <label class="storage-inline-field">
-                            <span class="form-label">Code</span>
-                            <span class="storage-field-display" data-inline-display>{{ $cabinet->code }}</span>
-                            <input class="form-input hidden" name="code" value="{{ $cabinet->code }}" required data-inline-input>
-                        </label>
-                        <label class="storage-inline-field">
-                            <span class="form-label">Cabinet name</span>
-                            <span class="storage-field-display" data-inline-display>{{ $cabinet->name }}</span>
-                            <input class="form-input hidden" name="name" value="{{ $cabinet->name }}" required data-inline-input>
-                        </label>
-                    </div>
-                    <div class="storage-inline-actions">
-                        @can('storage.manage')
-                            <button type="button" class="btn-secondary" data-inline-edit-trigger>Edit</button>
-                            <div class="hidden items-center gap-2" data-inline-edit-actions>
-                                <button class="btn-primary">Save cabinet</button>
-                                <button type="button" class="btn-secondary" data-inline-cancel>Cancel</button>
-                            </div>
-                        @endcan
-                    </div>
-                </form>
-
-                <div class="mt-4 overflow-hidden border border-stone-200 bg-white">
-                    <div class="hidden grid-cols-[120px_minmax(0,1fr)_auto] border-b border-stone-200 bg-stone-100 px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-stone-600 md:grid">
-                        <span>Shelf code</span>
-                        <span>Shelf name</span>
-                        <span class="text-right">Actions</span>
-                    </div>
-                    <div class="divide-y divide-stone-200">
-                    @forelse($cabinet->shelves as $shelf)
-                        <form class="storage-shelf-row" method="POST" action="{{ route('storage.shelves.update', $shelf) }}" data-inline-edit>
-                            @csrf
-                            @method('PATCH')
-                            <label class="storage-inline-field">
-                                <span class="form-label md:hidden">Shelf code</span>
-                                <span class="storage-field-display" data-inline-display>{{ $shelf->code }}</span>
-                                <input class="form-input hidden" name="code" value="{{ $shelf->code }}" data-inline-input>
-                            </label>
-                            <label class="storage-inline-field">
-                                <span class="form-label md:hidden">Shelf name</span>
-                                <span class="storage-field-display" data-inline-display>{{ $shelf->name }}</span>
-                                <input class="form-input hidden" name="name" value="{{ $shelf->name }}" data-inline-input>
-                            </label>
-                            <div class="storage-shelf-actions">
-                                @can('storage.manage')
-                                    <button type="button" class="btn-secondary" data-inline-edit-trigger>Edit</button>
-                                    <div class="hidden items-center gap-2" data-inline-edit-actions>
-                                        <button class="btn-primary">Save shelf</button>
-                                        <button type="button" class="btn-secondary" data-inline-cancel>Cancel</button>
-                                    </div>
-                                @endcan
-                                <button formmethod="POST" formaction="{{ route('storage.shelves.toggle', $shelf) }}" class="status-badge {{ $shelf->is_active ? 'status-approved' : 'status-rejected' }}">{{ $shelf->is_active ? 'Active' : 'Inactive' }}</button>
-                            </div>
-                        </form>
-                    @empty
-                        <div class="p-5 text-sm text-stone-500">No shelves have been added to this cabinet yet.</div>
-                    @endforelse
-                    </div>
-                </div>
-            </section>
-        @empty
-            <div class="border border-dashed border-stone-300 bg-stone-50 p-6 text-sm text-stone-500">No cabinets have been added to this room yet.</div>
-        @endforelse
-        </div>
-    </article>
-@empty
-    <p class="border border-stone-200 bg-white p-8 text-center text-stone-500">No storage locations configured.</p>
-@endforelse
-</section>
+    </div>
+@endcan
 @endsection

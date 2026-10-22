@@ -5,21 +5,36 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class LegalFile extends Model
 {
-    public const STATUS_AVAILABLE = 'available';
+    public const STATUS_REGISTERED = 'registered';
+
+    public const STATUS_PENDING = 'pending';
+
+    public const STATUS_COMPLETED = 'completed';
+
+    public const STATUS_STORED = 'stored';
 
     public const STATUS_BORROWED = 'borrowed';
 
     public const STATUS_MISSING = 'missing';
 
+    public const TYPE_LOAN = 'loan';
+
+    public const TYPE_SNP = 'snp';
+
+    public const TYPE_LITIGATION = 'litigation';
+
     protected $fillable = [
-        'reference_number', 'loan_reference', 'purchaser', 'vendor', 'property',
-        'matter_type', 'important_date', 'person_in_charge_id', 'shelf_id',
+        'reference_number', 'purchaser', 'vendor', 'bank', 'property', 'title_number',
+        'suite_number', 'ic_number', 'case_category_id', 'case_type', 'matter_type',
+        'start_date', 'end_date', 'person_in_charge_id', 'shelf_id',
         'current_holder_id', 'status', 'archived_at', 'created_by', 'updated_by',
     ];
 
@@ -28,12 +43,17 @@ class LegalFile extends Model
         static::creating(function (LegalFile $file): void {
             $file->qr_identifier ??= (string) Str::uuid();
             $file->file_identifier ??= self::nextIdentifier();
+            $file->status ??= self::STATUS_REGISTERED;
         });
     }
 
     protected function casts(): array
     {
-        return ['important_date' => 'date', 'archived_at' => 'datetime'];
+        return [
+            'start_date' => 'date',
+            'end_date' => 'date',
+            'archived_at' => 'datetime',
+        ];
     }
 
     public static function nextIdentifier(): string
@@ -71,7 +91,12 @@ class LegalFile extends Model
 
     public function scopeActive(Builder $query): Builder
     {
-        return $query->whereNull('archived_at');
+        return $query;
+    }
+
+    public function caseCategory(): BelongsTo
+    {
+        return $this->belongsTo(CaseCategory::class);
     }
 
     public function shelf(): BelongsTo
@@ -92,5 +117,134 @@ class LegalFile extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(FileMovement::class)->latest('occurred_at');
+    }
+
+    public function linkedAsPrimary(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            self::class,
+            'legal_file_links',
+            'legal_file_id',
+            'related_legal_file_id',
+        )->withTimestamps();
+    }
+
+    public function linkedAsRelated(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            self::class,
+            'legal_file_links',
+            'related_legal_file_id',
+            'legal_file_id',
+        )->withTimestamps();
+    }
+
+    public function relatedFiles(): Collection
+    {
+        return $this->linkedAsPrimary->merge($this->linkedAsRelated)->unique('id')->sortBy('reference_number')->values();
+    }
+
+    public function syncRelatedFiles(array $relatedIds): void
+    {
+        $relatedIds = collect($relatedIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0 && $id !== (int) $this->id)
+            ->unique()
+            ->values();
+
+        DB::table('legal_file_links')
+            ->where('legal_file_id', $this->id)
+            ->orWhere('related_legal_file_id', $this->id)
+            ->delete();
+
+        $now = now();
+        $rows = $relatedIds->map(function (int $relatedId) use ($now): array {
+            $left = min((int) $this->id, $relatedId);
+            $right = max((int) $this->id, $relatedId);
+
+            return [
+                'legal_file_id' => $left,
+                'related_legal_file_id' => $right,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        })->all();
+
+        if ($rows) {
+            DB::table('legal_file_links')->insert($rows);
+        }
+    }
+
+    public function categoryLabel(): string
+    {
+        return $this->caseCategory?->name
+            ?? $this->matter_type
+            ?? '—';
+    }
+
+    public static function caseTypes(): array
+    {
+        return [
+            self::TYPE_LOAN,
+            self::TYPE_SNP,
+            self::TYPE_LITIGATION,
+        ];
+    }
+
+    public function caseTypeLabel(): string
+    {
+        return match ($this->case_type) {
+            self::TYPE_LOAN => 'Loan',
+            self::TYPE_SNP => 'S&P',
+            self::TYPE_LITIGATION => 'Litigation',
+            default => str($this->case_type)->headline()->toString(),
+        };
+    }
+
+    public function partyNameLabel(): string
+    {
+        return match ($this->case_type) {
+            self::TYPE_LOAN => 'Borrower',
+            self::TYPE_LITIGATION => "Person's name",
+            default => 'Purchaser',
+        };
+    }
+
+    public static function statuses(): array
+    {
+        return [
+            self::STATUS_REGISTERED,
+            self::STATUS_PENDING,
+            self::STATUS_COMPLETED,
+            self::STATUS_STORED,
+            self::STATUS_BORROWED,
+            self::STATUS_MISSING,
+        ];
+    }
+
+    public function statusLabel(): string
+    {
+        return match ($this->status) {
+            self::STATUS_REGISTERED => 'Registered',
+            self::STATUS_PENDING => 'Pending',
+            self::STATUS_COMPLETED => 'Completed',
+            self::STATUS_STORED => 'Stored',
+            self::STATUS_BORROWED => 'Borrowed',
+            self::STATUS_MISSING => 'Missing',
+            default => str($this->status)->headline()->toString(),
+        };
+    }
+
+    public function statusTone(): string
+    {
+        return match ($this->status) {
+            self::STATUS_REGISTERED => 'neutral',
+            self::STATUS_PENDING => 'pending',
+            self::STATUS_COMPLETED => 'ready',
+            self::STATUS_STORED => 'approved',
+            self::STATUS_BORROWED => 'borrowed',
+            self::STATUS_MISSING => 'rejected',
+            default => 'neutral',
+        };
     }
 }

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Database\Factories\StaffFactory;
+use Endroid\QrCode\QrCode;
+use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -47,5 +49,15 @@ class Staff extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(FileMovement::class, 'employee_id');
+    }
+
+    public function receivedMovements(): HasMany
+    {
+        return $this->hasMany(FileMovement::class, 'receiver_id');
+    }
+
+    public function qrDataUri(): string
+    {
+        return (new SvgWriter)->write(new QrCode(data: $this->qr_identifier))->getDataUri();
     }
 }
