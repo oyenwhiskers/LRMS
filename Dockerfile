@@ -4,15 +4,15 @@
 # --- Composer deps (also needed so Tailwind can scan vendor Blade views) ---
 FROM composer:2 AS vendor
 WORKDIR /app
-# Dummy key so artisan / package discover can run during build.
-ENV APP_ENV=production \
-    APP_DEBUG=false \
-    APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+# composer:2 image lacks ext-gd; runtime stage installs it. Ignore platform checks here.
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction \
+        --ignore-platform-req=ext-gd
 COPY . .
 RUN composer dump-autoload --optimize --no-dev --no-scripts \
-    && php artisan package:discover --ansi
+    && APP_ENV=production APP_DEBUG=false \
+       APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+       php artisan package:discover --ansi
 
 # --- Vite / Tailwind build ---
 FROM node:22-bookworm-slim AS frontend
