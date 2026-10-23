@@ -390,6 +390,35 @@ const createDashboardChartRenderer = (container) => {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+    const entryMore = document.querySelector('[data-entry-more]');
+    if (entryMore) {
+        const moreToggle = entryMore.querySelector('[data-entry-more-toggle]');
+        const morePanel = entryMore.querySelector('[data-entry-more-panel]');
+
+        const closeEntryMore = () => {
+            morePanel?.classList.add('hidden');
+            moreToggle?.setAttribute('aria-expanded', 'false');
+        };
+
+        moreToggle?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const open = morePanel?.classList.toggle('hidden') === false;
+            moreToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+
+        document.addEventListener('click', (event) => {
+            if (! entryMore.contains(event.target)) {
+                closeEntryMore();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeEntryMore();
+            }
+        });
+    }
+
     const updateDashboardChart = async (form) => {
         const panel = document.querySelector('[data-dashboard-chart-panel]');
         const chartContainer = document.querySelector('[data-dashboard-chart]');
@@ -1407,11 +1436,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             hintLabels.forEach((hint) => {
                 const forKind = hint.getAttribute('data-file-label-hint-for');
-                const show = isDocument
-                    ? forKind === 'document'
-                    : isData
-                        ? forKind === 'data'
-                        : forKind === 'label';
+                const show = forKind === selectedType
+                    || (forKind === 'label' && (selectedType === 'front' || selectedType === 'side'));
                 hint.classList.toggle('hidden', ! show);
             });
 

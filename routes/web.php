@@ -11,6 +11,7 @@ use App\Http\Controllers\CompletionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Entry\EntryAuthController;
 use App\Http\Controllers\Entry\EntryController;
+use App\Http\Controllers\Entry\EntryOperatorController;
 use App\Http\Controllers\Entry\EntryPrintStationController;
 use App\Http\Controllers\ImportExportController;
 use App\Http\Controllers\LegalFileController;
@@ -59,6 +60,9 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware('entry')->prefix('entry')->name('entry.')->group(function (): void {
         Route::get('/', [EntryController::class, 'home'])->name('home');
         Route::get('/history', [EntryController::class, 'history'])->name('history');
+        Route::get('/operators', [EntryOperatorController::class, 'index'])->name('operators.index');
+        Route::get('/operators/scans/{scan}/document', [EntryOperatorController::class, 'document'])
+            ->name('operators.document');
         Route::get('/scan', [EntryController::class, 'create'])->name('scan');
         Route::post('/scan', [EntryController::class, 'store'])->name('scan.store');
         Route::post('/confirm', [EntryController::class, 'save'])->name('save');

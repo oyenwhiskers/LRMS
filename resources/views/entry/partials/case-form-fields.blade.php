@@ -2,6 +2,7 @@
     $suggestion = $suggestion ?? [];
     $selectedType = $selectedType ?? App\Models\LegalFile::TYPE_SNP;
     $useOld = $useOld ?? true;
+    $readonly = $readonly ?? false;
     $layout = $layout ?? 'default';
     $isModalLayout = $layout === 'modal';
     $field = function (string $key, mixed $fallback = '') use ($useOld, $suggestion): mixed {
@@ -106,8 +107,10 @@
                     </div>
                 @endforeach
             </div>
-            <button class="entry-app__logout" type="button" data-add-borrower>Tambah peminjam</button>
-            <span class="form-help">Semua nama akan dipaparkan pada label fail (disambung dengan &amp;).</span>
+            @unless ($readonly)
+                <button class="entry-app__logout" type="button" data-add-borrower>Tambah peminjam</button>
+                <span class="form-help">Semua nama akan dipaparkan pada label fail (disambung dengan &amp;).</span>
+            @endunless
             <template data-borrower-template>
                 <div class="{{ $borrowerCardClass }}" data-borrower-row>
                     <p class="entry-case-fields__party-title">Peminjam lain</p>

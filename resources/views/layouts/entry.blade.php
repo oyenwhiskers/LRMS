@@ -15,8 +15,10 @@
     $navHome = request()->routeIs('entry.home');
     $navScan = request()->routeIs('entry.scan', 'entry.review', 'entry.shelf');
     $navHistory = request()->routeIs('entry.history');
+    $navOperators = request()->routeIs('entry.operators.*');
     $navPrint = request()->routeIs('entry.print-station');
     $navAi = request()->routeIs('entry.ai-usage.*');
+    $navMore = $navPrint || $navAi;
 @endphp
 <body class="entry-app">
     <div class="entry-app__shell">
@@ -30,6 +32,12 @@
                         </span>
                         <span>Utama</span>
                     </a>
+                    <a class="entry-app__tab {{ $navOperators ? 'is-active' : '' }}" href="{{ route('entry.operators.index') }}" @if($navOperators) aria-current="page" @endif>
+                        <span class="entry-app__tab-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.125a7.125 7.125 0 0114.25 0V20.25H4.5v-1.125z"/></svg>
+                        </span>
+                        <span>Operator</span>
+                    </a>
                     <a class="entry-app__tab {{ $navScan ? 'is-active' : '' }}" href="{{ route('entry.scan') }}" @if($navScan) aria-current="page" @endif>
                         <span class="entry-app__tab-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7 4.5H5.25A1.75 1.75 0 003.5 6.25V8M17 4.5h1.75A1.75 1.75 0 0120.5 6.25V8M7 19.5H5.25A1.75 1.75 0 013.5 17.75V16M17 19.5h1.75a1.75 1.75 0 001.75-1.75V16M7.5 12h9"/></svg>
@@ -42,6 +50,50 @@
                         </span>
                         <span>Sejarah</span>
                     </a>
+                    <div class="entry-app__more entry-app__more--mobile" data-entry-more>
+                        <button
+                            class="entry-app__tab {{ $navMore ? 'is-active' : '' }}"
+                            type="button"
+                            data-entry-more-toggle
+                            aria-expanded="false"
+                            aria-controls="entry-more-panel"
+                            aria-haspopup="true"
+                        >
+                            <span class="entry-app__tab-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" d="M6 12h.01M12 12h.01M18 12h.01"/></svg>
+                            </span>
+                            <span>Lagi</span>
+                        </button>
+                        <div
+                            class="entry-app__more-panel hidden"
+                            id="entry-more-panel"
+                            data-entry-more-panel
+                            role="menu"
+                            aria-label="Menu lanjut"
+                        >
+                            <a class="entry-app__more-item {{ $navPrint ? 'is-active' : '' }}" href="{{ route('entry.print-station') }}" role="menuitem">
+                                <span class="entry-app__more-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 7.5V4.5h9v3M6 13.5h12M8.25 19.5h7.5A1.75 1.75 0 0017.5 17.75v-4.5H6.5v4.5A1.75 1.75 0 008.25 19.5zM6.5 13.25V10.5A1.5 1.5 0 018 9h8a1.5 1.5 0 011.5 1.5v2.75"/></svg>
+                                </span>
+                                Cetak
+                            </a>
+                            <a class="entry-app__more-item {{ $navAi ? 'is-active' : '' }}" href="{{ route('entry.ai-usage.index') }}" role="menuitem">
+                                <span class="entry-app__more-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3.75l1.35 3.9 3.9 1.35-3.9 1.35L12 14.25l-1.35-3.9-3.9-1.35 3.9-1.35L12 3.75zM6.75 15.75l.7 2.05 2.05.7-2.05.7-.7 2.05-.7-2.05-2.05-.7 2.05-.7.7-2.05zM17.25 14.25l.55 1.6 1.6.55-1.6.55-.55 1.6-.55-1.6-1.6-.55 1.6-.55.55-1.6z"/></svg>
+                                </span>
+                                AI
+                            </a>
+                            <form method="POST" action="{{ route('logout') }}" role="none">
+                                @csrf
+                                <button class="entry-app__more-item entry-app__more-item--danger" type="submit" role="menuitem">
+                                    <span class="entry-app__more-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6A2.25 2.25 0 005.25 5.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 12h8.25M17.25 8.25L21 12l-3.75 3.75"/></svg>
+                                    </span>
+                                    Log keluar
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -71,8 +123,6 @@
                     <p class="entry-app__mark">{{ auth()->user()->email }}</p>
                 </div>
                 <div class="entry-app__header-actions">
-                    <a class="entry-app__logout entry-app__logout--mobile {{ $navPrint ? 'is-active' : '' }}" href="{{ route('entry.print-station') }}">Cetak</a>
-                    <a class="entry-app__logout entry-app__logout--mobile {{ $navAi ? 'is-active' : '' }}" href="{{ route('entry.ai-usage.index') }}">AI</a>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button class="entry-app__logout" type="submit">Log keluar</button>
