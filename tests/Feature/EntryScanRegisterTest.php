@@ -423,7 +423,7 @@ class EntryScanRegisterTest extends TestCase
             'user_id' => $entry->id,
             'document_path' => 'entry-scans/print.jpg',
             'legal_file_id' => $file->id,
-            'status' => EntryScan::STATUS_SAVED,
+            'status' => EntryScan::STATUS_STORED,
         ]);
 
         $this->actingAs($entry)
@@ -486,7 +486,7 @@ class EntryScanRegisterTest extends TestCase
             'updated_by' => $entry->id,
         ]);
 
-        EntryScan::create([
+        $scan = EntryScan::create([
             'user_id' => $entry->id,
             'document_path' => 'entry-scans/count.jpg',
             'legal_file_id' => $file->id,
@@ -498,8 +498,56 @@ class EntryScanRegisterTest extends TestCase
             ->assertOk()
             ->assertSee('CON/2019/0707', false)
             ->assertSee('class="entry-stat__value">1</p>', false)
-            ->assertSee('data-file-label-type="data"', false)
-            ->assertSee('name="purchaser"', false);
+            ->assertSee(route('entry.shelf', $scan), false)
+            ->assertSee('Belum di rak', false)
+            ->assertDontSee('data-modal-open="file-label-'.$file->id.'"', false)
+            ->assertDontSee('data-file-label-type="data"', false);
+    }
+
+    public function test_saved_scan_without_shelf_goes_to_shelf_not_detail_modal(): void
+    {
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2019/0711',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Resume Shelf',
+            'property' => 'Lot Resume',
+            'title_number' => 'PN RESUME',
+            'status' => LegalFile::STATUS_REGISTERED,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+
+        $scan = EntryScan::create([
+            'user_id' => $entry->id,
+            'document_path' => 'entry-scans/resume.jpg',
+            'legal_file_id' => $file->id,
+            'status' => EntryScan::STATUS_SAVED,
+        ]);
+
+        $this->actingAs($entry)
+            ->get(route('entry.home'))
+            ->assertOk()
+            ->assertSee(route('entry.shelf', $scan), false)
+            ->assertDontSee('data-modal-open="file-label-'.$file->id.'"', false)
+            ->assertDontSee('data-file-label-modal', false);
+
+        $this->actingAs($entry)
+            ->get(route('entry.history'))
+            ->assertOk()
+            ->assertSee(route('entry.shelf', $scan), false)
+            ->assertDontSee('data-modal-open="file-label-'.$file->id.'"', false);
+
+        $this->actingAs($entry)
+            ->get(route('entry.shelf', $scan))
+            ->assertOk()
+            ->assertSee('Imbas QR rak', false)
+            ->assertSee('CON/2019/0711', false)
+            ->assertSee(route('entry.scan.destroy', $scan), false);
     }
 
     public function test_entry_user_can_update_own_scan_case_data(): void
@@ -517,7 +565,7 @@ class EntryScanRegisterTest extends TestCase
             'vendor' => 'Old Seller',
             'property' => 'Lot Old',
             'title_number' => 'PN OLD',
-            'status' => LegalFile::STATUS_REGISTERED,
+            'status' => LegalFile::STATUS_STORED,
             'created_by' => $entry->id,
             'updated_by' => $entry->id,
         ]);
@@ -526,7 +574,7 @@ class EntryScanRegisterTest extends TestCase
             'user_id' => $entry->id,
             'document_path' => 'entry-scans/edit.jpg',
             'legal_file_id' => $file->id,
-            'status' => EntryScan::STATUS_SAVED,
+            'status' => EntryScan::STATUS_STORED,
         ]);
 
         $payload = [
@@ -608,7 +656,7 @@ class EntryScanRegisterTest extends TestCase
             'user_id' => $owner->id,
             'document_path' => $documentPath,
             'legal_file_id' => $file->id,
-            'status' => EntryScan::STATUS_SAVED,
+            'status' => EntryScan::STATUS_STORED,
         ]);
 
         $this->actingAs($owner)
@@ -674,7 +722,12 @@ class EntryScanRegisterTest extends TestCase
         $this->actingAs($entry)
             ->get(route('entry.home'))
             ->assertOk()
-            ->assertSee('data-modal-open="delete-entry-scan-'.$scan->id.'"', false)
+            ->assertSee(route('entry.shelf', $scan), false)
+            ->assertDontSee('data-modal-open="delete-entry-scan-'.$scan->id.'"', false);
+
+        $this->actingAs($entry)
+            ->get(route('entry.shelf', $scan))
+            ->assertOk()
             ->assertSee(route('entry.scan.destroy', $scan), false);
 
         $this->actingAs($other)

@@ -1306,6 +1306,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const dimLabels = [...modal.querySelectorAll('[data-file-label-dims-for]')];
         const hintLabels = [...modal.querySelectorAll('[data-file-label-hint-for]')];
         const documentImage = modal.querySelector('[data-file-label-document]');
+        const previewWrap = modal.querySelector('[data-file-label-preview-wrap]');
         const queueStatus = modal.querySelector('[data-file-label-queue-status]');
         const printBase = modal.getAttribute('data-print-url') || '';
         const pdfBase = modal.getAttribute('data-pdf-url') || '';
@@ -1415,6 +1416,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             showPreview(selectedType);
+
+            previewWrap?.classList.toggle('file-label-modal__preview-wrap--form', isData);
 
             if (isDocument) {
                 ensureDocumentLoaded();

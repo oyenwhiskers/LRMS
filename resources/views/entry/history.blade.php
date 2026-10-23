@@ -64,23 +64,40 @@
     <section class="entry-list">
         @forelse ($scans as $scan)
             @if ($scan->legalFile)
-                <button
-                    type="button"
-                    class="entry-card entry-card--action"
-                    data-modal-open="file-label-{{ $scan->legalFile->id }}"
-                >
-                    <div class="entry-card__body">
-                        <p class="entry-card__title">{{ $scan->legalFile->reference_number }}</p>
-                        <p class="entry-card__meta">{{ $scan->legalFile->purchaser ?: '—' }}</p>
-                        <p class="entry-card__shelf">
-                            {{ \App\Support\LocalDate::format($scan->created_at, 'Y-m-d H:i') }}
-                            @if ($scan->shelf)
-                                · {{ $scan->shelf->full_location }}
-                            @endif
-                        </p>
-                    </div>
-                    <span class="entry-pill">{{ $scan->statusLabel() }}</span>
-                </button>
+                @if ($scan->status === App\Models\EntryScan::STATUS_SAVED)
+                    <a
+                        class="entry-card entry-card--action"
+                        href="{{ route('entry.shelf', $scan) }}"
+                    >
+                        <div class="entry-card__body">
+                            <p class="entry-card__title">{{ $scan->legalFile->reference_number }}</p>
+                            <p class="entry-card__meta">{{ $scan->legalFile->purchaser ?: '—' }}</p>
+                            <p class="entry-card__shelf">
+                                {{ \App\Support\LocalDate::format($scan->created_at, 'Y-m-d H:i') }}
+                                · Belum di rak · imbas QR rak
+                            </p>
+                        </div>
+                        <span class="entry-pill">{{ $scan->statusLabel() }}</span>
+                    </a>
+                @else
+                    <button
+                        type="button"
+                        class="entry-card entry-card--action"
+                        data-modal-open="file-label-{{ $scan->legalFile->id }}"
+                    >
+                        <div class="entry-card__body">
+                            <p class="entry-card__title">{{ $scan->legalFile->reference_number }}</p>
+                            <p class="entry-card__meta">{{ $scan->legalFile->purchaser ?: '—' }}</p>
+                            <p class="entry-card__shelf">
+                                {{ \App\Support\LocalDate::format($scan->created_at, 'Y-m-d H:i') }}
+                                @if ($scan->shelf)
+                                    · {{ $scan->shelf->full_location }}
+                                @endif
+                            </p>
+                        </div>
+                        <span class="entry-pill">{{ $scan->statusLabel() }}</span>
+                    </button>
+                @endif
             @else
                 <article class="entry-card">
                     <div class="entry-card__body">
@@ -105,7 +122,11 @@
 </div>
 
 @foreach ($scans as $scan)
-    @if ($scan->legalFile && isset($labelQrs[$scan->legalFile->id]))
+    @if (
+        $scan->legalFile
+        && $scan->status === App\Models\EntryScan::STATUS_STORED
+        && isset($labelQrs[$scan->legalFile->id])
+    )
         @include('entry.partials.file-label-modal', [
             'file' => $scan->legalFile,
             'qr' => $labelQrs[$scan->legalFile->id],

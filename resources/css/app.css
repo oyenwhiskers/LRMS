@@ -1659,6 +1659,15 @@
         @apply h-40 w-40;
     }
 
+    .modal-panel.file-label-modal {
+        @apply flex max-h-[90vh] flex-col overflow-hidden;
+    }
+
+    .file-label-modal__top,
+    .file-label-modal__bottom {
+        @apply shrink-0;
+    }
+
     .file-label-modal__controls {
         @apply mt-4;
     }
@@ -1672,19 +1681,17 @@
     }
 
     .file-label-modal__types {
-        @apply mt-2 grid grid-cols-2 gap-2;
+        @apply mt-3 flex gap-2 overflow-x-auto pb-1;
+        scrollbar-width: thin;
     }
 
-    .file-label-modal__types--with-document {
-        @apply grid-cols-3;
-    }
-
+    .file-label-modal__types--with-document,
     .file-label-modal__types--four {
-        @apply grid-cols-2 sm:grid-cols-4;
+        @apply flex;
     }
 
     .file-label-modal__type {
-        @apply min-h-11 border border-stone-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-stone-700 transition;
+        @apply min-h-11 shrink-0 border border-stone-300 bg-white px-3.5 py-2.5 text-[11px] font-bold uppercase tracking-[0.12em] text-stone-700 transition;
     }
 
     .file-label-modal__type:hover {
@@ -1699,7 +1706,12 @@
     }
 
     .file-label-modal__preview-wrap {
-        @apply mt-4 overflow-hidden border border-stone-200 bg-stone-100 p-3 sm:p-4;
+        @apply mt-5 min-h-0 flex-1 overflow-x-hidden overflow-y-auto border border-stone-200 bg-stone-100 p-3 sm:p-4;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .file-label-modal__preview-wrap--form {
+        @apply border-0 bg-transparent p-0 pr-1;
     }
 
     .file-label-modal__preview {
@@ -1745,10 +1757,58 @@
     .file-label-modal__preview--data {
         aspect-ratio: auto;
         max-width: none;
-        max-height: min(70vh, 36rem);
-        overflow: auto;
+        max-height: none;
+        overflow: visible;
         background: transparent;
         box-shadow: none;
+    }
+
+    .file-label-modal__edit-form {
+        @apply flex flex-col gap-5;
+    }
+
+    .entry-case-fields__party-title {
+        @apply text-sm font-medium text-[#12352f];
+    }
+
+    .entry-case-fields--modal {
+        @apply flex flex-col gap-5;
+    }
+
+    .entry-case-fields--modal .entry-case-fields__field {
+        @apply flex flex-col gap-2;
+    }
+
+    .entry-case-fields--modal .form-label {
+        @apply mb-0 text-[11px] tracking-[0.14em];
+    }
+
+    .entry-case-fields--modal .form-input {
+        @apply px-4 py-3 text-base leading-snug;
+    }
+
+    .entry-case-fields--modal .form-help {
+        @apply mt-1 leading-relaxed;
+    }
+
+    .entry-case-fields--modal .entry-case-fields__panel {
+        @apply flex flex-col gap-5;
+    }
+
+    .entry-case-fields--modal .entry-case-fields__parties {
+        @apply flex flex-col gap-5;
+    }
+
+    .entry-case-fields--modal .entry-case-fields__party {
+        @apply flex flex-col gap-4 border-t border-stone-200 pt-5;
+    }
+
+    .entry-case-fields--modal .entry-case-fields__party:first-child {
+        @apply border-t-0 pt-0;
+    }
+
+    .entry-case-fields--modal .entry-case-fields__party-title {
+        @apply text-[13px] font-semibold tracking-wide;
     }
 
     .file-label-modal__queue-status {
@@ -1770,8 +1830,12 @@
         @apply mt-2 text-center text-[11px] font-medium text-stone-500;
     }
 
+    .file-label-modal__bottom {
+        @apply mt-5;
+    }
+
     .file-label-modal__actions {
-        @apply mt-5 grid gap-2 sm:flex sm:flex-wrap sm:justify-end sm:gap-3;
+        @apply grid gap-2 sm:flex sm:flex-wrap sm:justify-end sm:gap-3;
     }
 
     .file-label-modal__actions .btn-primary,
@@ -2546,13 +2610,15 @@
     background: #fff;
 }
 
-button.entry-card--action {
+button.entry-card--action,
+a.entry-card--action {
     width: 100%;
     margin: 0;
     font: inherit;
     line-height: inherit;
     color: inherit;
     text-align: left;
+    text-decoration: none;
     cursor: pointer;
     appearance: none;
     -webkit-appearance: none;
@@ -2560,7 +2626,9 @@ button.entry-card--action {
 }
 
 button.entry-card--action:hover,
-button.entry-card--action:focus-visible {
+button.entry-card--action:focus-visible,
+a.entry-card--action:hover,
+a.entry-card--action:focus-visible {
     border-color: color-mix(in srgb, var(--entry-ink) 28%, var(--entry-line));
     background: color-mix(in srgb, var(--entry-bg) 55%, #fff);
     outline: none;
@@ -3197,6 +3265,22 @@ button.entry-card--action:focus-visible {
 
 .entry-shelf__form.is-ready .entry-shelf__confirm:hover {
     background: color-mix(in srgb, var(--entry-ink) 88%, black);
+}
+
+.entry-shelf__aside {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
+.entry-shelf__aside form {
+    display: grid;
+}
+
+.entry-shelf__aside-btn {
+    width: 100%;
+    min-height: 3rem;
+    justify-content: center;
 }
 
 .entry-ai {

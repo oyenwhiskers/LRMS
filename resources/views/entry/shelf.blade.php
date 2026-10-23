@@ -82,5 +82,14 @@
             <p class="entry-shelf__error">{{ $message }}</p>
         @enderror
     </form>
+
+    <div class="entry-shelf__aside">
+        <a class="btn-secondary entry-shelf__aside-btn" href="{{ route('entry.home') }}">Kembali ke utama</a>
+        <form method="POST" action="{{ route('entry.scan.destroy', $scan) }}" onsubmit="return confirm('Padam rekod ini secara kekal?');">
+            @csrf
+            @method('DELETE')
+            <button class="btn-danger entry-shelf__aside-btn" type="submit">Padam fail</button>
+        </form>
+    </div>
 </div>
 @endsection

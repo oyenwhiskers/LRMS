@@ -49,7 +49,7 @@
     aria-hidden="{{ $openLabel ? 'false' : 'true' }}"
 >
     <div
-        class="modal-panel max-w-3xl"
+        class="modal-panel file-label-modal max-w-3xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="file-label-title-{{ $file->id }}"
@@ -60,43 +60,51 @@
         data-legal-file-id="{{ $file->id }}"
         data-file-label-initial-type="{{ $initialType }}"
     >
-        <div class="modal-header">
-            <div class="min-w-0">
-                <p class="eyebrow text-amber-700">Label fail</p>
-                <h2 id="file-label-title-{{ $file->id }}" class="mt-1 break-words text-xl font-semibold sm:text-2xl">
-                    {{ $file->reference_number }}
-                </h2>
-                <p class="file-label-modal__dims" data-file-label-dims>
-                    <span @class(['hidden' => $initialType !== 'front']) data-file-label-dims-for="front">Hadapan · 150 × 100 mm</span>
-                    <span @class(['hidden' => $initialType !== 'side']) data-file-label-dims-for="side">Sisi · 80 × 40 mm</span>
+        <div class="file-label-modal__top">
+            <div class="modal-header">
+                <div class="min-w-0">
+                    <p class="eyebrow text-amber-700">Label fail</p>
+                    <h2 id="file-label-title-{{ $file->id }}" class="mt-1 break-words text-xl font-semibold sm:text-2xl">
+                        {{ $file->reference_number }}
+                    </h2>
+                    <p class="file-label-modal__dims" data-file-label-dims>
+                        <span @class(['hidden' => $initialType !== 'front']) data-file-label-dims-for="front">Hadapan · 150 × 100 mm</span>
+                        <span @class(['hidden' => $initialType !== 'side']) data-file-label-dims-for="side">Sisi · 80 × 40 mm</span>
+                        @if ($canEdit)
+                            <span @class(['hidden' => $initialType !== 'data']) data-file-label-dims-for="data">Maklumat imbasan</span>
+                        @endif
+                        @if ($hasDocument)
+                            <span @class(['hidden' => $initialType !== 'document']) data-file-label-dims-for="document">Gambar asal imbasan</span>
+                        @endif
+                    </p>
+                </div>
+                <button class="modal-close shrink-0" type="button" data-modal-close aria-label="Tutup">Tutup</button>
+            </div>
+
+            <style>@include('files.labels.styles')</style>
+
+            <div class="file-label-modal__controls" role="group" aria-label="Jenis pratonton">
+                <p class="file-label-modal__legend">Jenis pratonton</p>
+                <div class="file-label-modal__types{{ $typesClass }}">
+                    <button type="button" @class(['file-label-modal__type', 'is-active' => $initialType === 'front']) data-file-label-type="front">Hadapan</button>
+                    <button type="button" @class(['file-label-modal__type', 'is-active' => $initialType === 'side']) data-file-label-type="side">Sisi</button>
                     @if ($canEdit)
-                        <span @class(['hidden' => $initialType !== 'data']) data-file-label-dims-for="data">Maklumat imbasan</span>
+                        <button type="button" @class(['file-label-modal__type', 'is-active' => $initialType === 'data']) data-file-label-type="data">Maklumat</button>
                     @endif
                     @if ($hasDocument)
-                        <span @class(['hidden' => $initialType !== 'document']) data-file-label-dims-for="document">Gambar asal imbasan</span>
+                        <button type="button" @class(['file-label-modal__type', 'is-active' => $initialType === 'document']) data-file-label-type="document">Dokumen</button>
                     @endif
-                </p>
-            </div>
-            <button class="modal-close shrink-0" type="button" data-modal-close aria-label="Tutup">Tutup</button>
-        </div>
-
-        <style>@include('files.labels.styles')</style>
-
-        <div class="file-label-modal__controls" role="group" aria-label="Jenis pratonton">
-            <p class="file-label-modal__legend">Jenis pratonton</p>
-            <div class="file-label-modal__types{{ $typesClass }}">
-                <button type="button" @class(['file-label-modal__type', 'is-active' => $initialType === 'front']) data-file-label-type="front">Hadapan</button>
-                <button type="button" @class(['file-label-modal__type', 'is-active' => $initialType === 'side']) data-file-label-type="side">Sisi</button>
-                @if ($canEdit)
-                    <button type="button" @class(['file-label-modal__type', 'is-active' => $initialType === 'data']) data-file-label-type="data">Maklumat</button>
-                @endif
-                @if ($hasDocument)
-                    <button type="button" @class(['file-label-modal__type', 'is-active' => $initialType === 'document']) data-file-label-type="document">Dokumen</button>
-                @endif
+                </div>
             </div>
         </div>
 
-        <div class="file-label-modal__preview-wrap">
+        <div
+            @class([
+                'file-label-modal__preview-wrap',
+                'file-label-modal__preview-wrap--form' => $initialType === 'data',
+            ])
+            data-file-label-preview-wrap
+        >
             <div @class(['file-label-modal__preview', 'hidden' => $initialType !== 'front']) data-file-label-preview="front">
                 <div class="file-label-preview-scale">
                     @include('files.labels.front', ['file' => $file, 'qr' => $qr])
@@ -110,7 +118,7 @@
             @if ($canEdit)
                 <div @class(['file-label-modal__preview', 'file-label-modal__preview--data', 'hidden' => $initialType !== 'data']) data-file-label-preview="data">
                     <form
-                        class="space-y-4"
+                        class="file-label-modal__edit-form"
                         method="POST"
                         action="{{ route('entry.scan.update', $scan) }}"
                         data-case-type-form
@@ -124,6 +132,7 @@
                             'suggestion' => $suggestion,
                             'selectedType' => $selectedType,
                             'useOld' => (string) old('_legal_file_id') === (string) $file->id,
+                            'layout' => 'modal',
                         ])
                         <button class="btn-primary min-h-12 w-full" type="submit">Simpan perubahan</button>
                     </form>
@@ -147,24 +156,26 @@
             @endif
         </div>
 
-        <div class="file-label-modal__actions" data-file-label-actions>
-            @if ($scan)
+        <div class="file-label-modal__bottom">
+            <div class="file-label-modal__actions" data-file-label-actions>
+                @if ($scan)
+                    <button
+                        class="btn-danger"
+                        type="button"
+                        data-modal-open="delete-entry-scan-{{ $scan->id }}"
+                        data-file-label-delete
+                    >Padam</button>
+                @endif
+                <a class="btn-secondary" data-file-label-pdf href="{{ route('entry.files.label.pdf', ['file' => $file, 'type' => 'front']) }}">Muat turun PDF</a>
                 <button
-                    class="btn-danger"
+                    class="btn-primary"
                     type="button"
-                    data-modal-open="delete-entry-scan-{{ $scan->id }}"
-                    data-file-label-delete
-                >Padam</button>
-            @endif
-            <a class="btn-secondary" data-file-label-pdf href="{{ route('entry.files.label.pdf', ['file' => $file, 'type' => 'front']) }}">Muat turun PDF</a>
-            <button
-                class="btn-primary"
-                type="button"
-                data-file-label-print
-                data-print-href="{{ route('entry.files.label', ['file' => $file, 'type' => 'front']) }}"
-            >Hantar ke stesen</button>
+                    data-file-label-print
+                    data-print-href="{{ route('entry.files.label', ['file' => $file, 'type' => 'front']) }}"
+                >Hantar ke stesen</button>
+            </div>
+            <p class="file-label-modal__queue-status hidden" data-file-label-queue-status role="status"></p>
         </div>
-        <p class="file-label-modal__queue-status hidden" data-file-label-queue-status role="status"></p>
     </div>
 </div>
 
