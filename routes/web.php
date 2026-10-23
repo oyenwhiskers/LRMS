@@ -66,6 +66,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/scan/{scan}/shelf', [EntryController::class, 'shelf'])->name('shelf');
         Route::post('/scan/{scan}/shelf', [EntryController::class, 'storeShelf'])->name('shelf.store');
         Route::get('/scan/{scan}/document', [EntryController::class, 'document'])->name('scan.document');
+        Route::put('/scan/{scan}', [EntryController::class, 'update'])->name('scan.update');
         Route::delete('/scan/{scan}', [EntryController::class, 'destroy'])->name('scan.destroy');
         Route::get('/files/{file}/label', [EntryController::class, 'label'])->name('files.label');
         Route::get('/files/{file}/label.pdf', [EntryController::class, 'labelPdf'])->name('files.label.pdf');

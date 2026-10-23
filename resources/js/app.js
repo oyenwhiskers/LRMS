@@ -1300,6 +1300,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('[data-file-label-modal]').forEach((modal) => {
         const printButton = modal.querySelector('[data-file-label-print]');
         const pdfLink = modal.querySelector('[data-file-label-pdf]');
+        const deleteButton = modal.querySelector('[data-file-label-delete]');
         const typeButtons = [...modal.querySelectorAll('[data-file-label-type]')];
         const previews = [...modal.querySelectorAll('[data-file-label-preview]')];
         const dimLabels = [...modal.querySelectorAll('[data-file-label-dims-for]')];
@@ -1310,7 +1311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const pdfBase = modal.getAttribute('data-pdf-url') || '';
         const queueUrl = modal.getAttribute('data-print-queue-url') || '';
         const legalFileId = modal.getAttribute('data-legal-file-id') || '';
-        let selectedType = 'front';
+        let selectedType = modal.getAttribute('data-file-label-initial-type') || 'front';
         let queueBusy = false;
 
         const withType = (url, type) => {
@@ -1392,6 +1393,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const sync = () => {
             const isDocument = selectedType === 'document';
+            const isData = selectedType === 'data';
+            const hidePrintActions = isDocument || isData;
 
             typeButtons.forEach((button) => {
                 button.classList.toggle('is-active', button.getAttribute('data-file-label-type') === selectedType);
@@ -1403,7 +1406,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             hintLabels.forEach((hint) => {
                 const forKind = hint.getAttribute('data-file-label-hint-for');
-                const show = isDocument ? forKind === 'document' : forKind === 'label';
+                const show = isDocument
+                    ? forKind === 'document'
+                    : isData
+                        ? forKind === 'data'
+                        : forKind === 'label';
                 hint.classList.toggle('hidden', ! show);
             });
 
@@ -1414,20 +1421,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if (printButton) {
-                printButton.classList.toggle('hidden', isDocument);
-                if (! isDocument) {
+                printButton.classList.toggle('hidden', hidePrintActions);
+                if (! hidePrintActions) {
                     printButton.setAttribute('data-print-href', withType(printBase, selectedType));
                 }
             }
 
             if (pdfLink) {
-                pdfLink.classList.toggle('hidden', isDocument);
-                if (! isDocument) {
+                pdfLink.classList.toggle('hidden', hidePrintActions);
+                if (! hidePrintActions) {
                     pdfLink.href = withType(pdfBase, selectedType);
                 }
             }
 
-            if (! isDocument) {
+            if (deleteButton) {
+                deleteButton.classList.toggle('hidden', hidePrintActions);
+            }
+
+            if (! hidePrintActions) {
                 requestAnimationFrame(fitVisiblePreview);
             }
         };
@@ -2376,6 +2387,49 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         select?.addEventListener('change', () => {
             syncCaseTypePanels(select.value);
+        });
+
+        const borrowersRoot = form.querySelector('[data-borrowers-root]');
+        const coBorrowersEl = form.querySelector('[data-co-borrowers]');
+        const borrowerTemplate = form.querySelector('[data-borrower-template]');
+        const addBorrowerBtn = form.querySelector('[data-add-borrower]');
+
+        const nextBorrowerIndex = () => {
+            if (! borrowersRoot) {
+                return 1;
+            }
+
+            return borrowersRoot.querySelectorAll('[data-borrower-row]').length;
+        };
+
+        const addBorrowerRow = (name = '', ic = '') => {
+            if (! coBorrowersEl || ! borrowerTemplate) {
+                return;
+            }
+
+            const index = nextBorrowerIndex();
+            const html = borrowerTemplate.innerHTML.replaceAll('__INDEX__', String(index));
+            const wrap = document.createElement('div');
+            wrap.innerHTML = html.trim();
+            const row = wrap.firstElementChild;
+            if (! row) {
+                return;
+            }
+
+            const nameInput = row.querySelector(`[name="borrowers[${index}][name]"]`);
+            const icInput = row.querySelector(`[name="borrowers[${index}][ic_number]"]`);
+            if (nameInput) {
+                nameInput.value = name || '';
+            }
+            if (icInput) {
+                icInput.value = ic || '';
+            }
+            coBorrowersEl.appendChild(row);
+        };
+
+        addBorrowerBtn?.addEventListener('click', (event) => {
+            event.preventDefault();
+            addBorrowerRow();
         });
     });
 

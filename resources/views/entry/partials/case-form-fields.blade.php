@@ -1,6 +1,14 @@
 @php
     $suggestion = $suggestion ?? [];
     $selectedType = $selectedType ?? App\Models\LegalFile::TYPE_SNP;
+    $useOld = $useOld ?? true;
+    $field = function (string $key, mixed $fallback = '') use ($useOld, $suggestion): mixed {
+        if ($useOld) {
+            return old($key, $suggestion[$key] ?? $fallback);
+        }
+
+        return $suggestion[$key] ?? $fallback;
+    };
 @endphp
 
 <section class="space-y-4 border border-[#12352f]/15 bg-white p-4">
@@ -9,14 +17,16 @@
         <input
             class="form-input font-mono"
             name="reference_number"
-            value="{{ old('reference_number', $suggestion['reference_number'] ?? '') }}"
+            value="{{ $field('reference_number') }}"
             required
             autocomplete="off"
             placeholder="cth. THY/MW/ABMB/2024/02"
             data-entry-field="reference_number"
         >
         <span class="form-help">Ambil dari dokumen. Medan lain boleh kosong — isi kemudian jika tiada pada muka depan.</span>
-        @error('reference_number')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+        @if ($useOld)
+            @error('reference_number')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+        @endif
     </label>
 
     <label class="block space-y-1">
@@ -27,7 +37,9 @@
             <option value="{{ App\Models\LegalFile::TYPE_SNP }}" @selected($selectedType === App\Models\LegalFile::TYPE_SNP)>Jual beli (S&amp;P)</option>
             <option value="{{ App\Models\LegalFile::TYPE_LITIGATION }}" @selected($selectedType === App\Models\LegalFile::TYPE_LITIGATION)>Litigasi</option>
         </select>
-        @error('case_type')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+        @if ($useOld)
+            @error('case_type')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+        @endif
     </label>
 
     <label class="block space-y-1">
@@ -35,18 +47,20 @@
         <select class="form-input" name="case_category_id" required data-entry-field="case_category_id">
             <option value="">Pilih kategori</option>
             @foreach($categories as $category)
-                <option value="{{ $category->id }}" @selected((string) old('case_category_id', $suggestion['case_category_id'] ?? '') === (string) $category->id)>
+                <option value="{{ $category->id }}" @selected((string) $field('case_category_id') === (string) $category->id)>
                     {{ $category->code }} — {{ $category->name }}
                 </option>
             @endforeach
         </select>
-        @error('case_category_id')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+        @if ($useOld)
+            @error('case_category_id')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+        @endif
     </label>
 
     @php
-        $oldBorrowers = old('borrowers', $suggestion['borrowers'] ?? []);
+        $oldBorrowers = $field('borrowers', $suggestion['borrowers'] ?? []);
         if (! is_array($oldBorrowers) || $oldBorrowers === []) {
-            $joined = old('purchaser', $suggestion['purchaser'] ?? '');
+            $joined = $field('purchaser', $suggestion['purchaser'] ?? '');
             $oldBorrowers = $joined !== '' ? [['name' => $joined, 'ic_number' => '']] : [['name' => '', 'ic_number' => '']];
         }
         $mainBorrower = $oldBorrowers[0] ?? ['name' => '', 'ic_number' => ''];
@@ -99,59 +113,61 @@
         </div>
         <label class="block space-y-1">
             <span class="form-label">Bank</span>
-            <input class="form-input" name="bank" value="{{ old('bank', $suggestion['bank'] ?? '') }}" data-entry-field="bank" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+            <input class="form-input" name="bank" value="{{ $field('bank') }}" data-entry-field="bank" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
         </label>
         <label class="block space-y-1">
             <span class="form-label">Alamat hartanah</span>
-            <textarea class="form-input min-h-24" name="property" data-entry-field="property" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ old('property', $suggestion['property'] ?? '') }}</textarea>
+            <textarea class="form-input min-h-24" name="property" data-entry-field="property" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $field('property') }}</textarea>
         </label>
         <label class="block space-y-1">
             <span class="form-label">No. hakmilik</span>
-            <input class="form-input" name="title_number" value="{{ old('title_number', $suggestion['title_number'] ?? '') }}" data-entry-field="title_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+            <input class="form-input" name="title_number" value="{{ $field('title_number') }}" data-entry-field="title_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
         </label>
     </div>
 
     <div class="grid gap-4 {{ $selectedType === App\Models\LegalFile::TYPE_SNP ? '' : 'hidden' }}" data-case-type-panel="snp">
         <label class="block space-y-1">
             <span class="form-label">Pembeli</span>
-            <input class="form-input" name="purchaser" value="{{ old('purchaser', $suggestion['purchaser'] ?? '') }}" data-entry-field="purchaser" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
+            <input class="form-input" name="purchaser" value="{{ $field('purchaser') }}" data-entry-field="purchaser" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
         </label>
         <label class="block space-y-1">
             <span class="form-label">Penjual</span>
-            <input class="form-input" name="vendor" value="{{ old('vendor', $suggestion['vendor'] ?? '') }}" data-entry-field="vendor" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
+            <input class="form-input" name="vendor" value="{{ $field('vendor') }}" data-entry-field="vendor" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
         </label>
         <label class="block space-y-1">
             <span class="form-label">Alamat hartanah</span>
-            <textarea class="form-input min-h-24" name="property" data-entry-field="property" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>{{ old('property', $suggestion['property'] ?? '') }}</textarea>
+            <textarea class="form-input min-h-24" name="property" data-entry-field="property" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>{{ $field('property') }}</textarea>
         </label>
         <label class="block space-y-1">
             <span class="form-label">No. hakmilik</span>
-            <input class="form-input" name="title_number" value="{{ old('title_number', $suggestion['title_number'] ?? '') }}" data-entry-field="title_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
+            <input class="form-input" name="title_number" value="{{ $field('title_number') }}" data-entry-field="title_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
         </label>
     </div>
 
     <div class="grid gap-4 {{ $selectedType === App\Models\LegalFile::TYPE_LITIGATION ? '' : 'hidden' }}" data-case-type-panel="litigation">
         <label class="block space-y-1">
             <span class="form-label">No. guaman</span>
-            <input class="form-input" name="suite_number" value="{{ old('suite_number', $suggestion['suite_number'] ?? '') }}" data-entry-field="suite_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>
+            <input class="form-input" name="suite_number" value="{{ $field('suite_number') }}" data-entry-field="suite_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>
         </label>
         <label class="block space-y-1">
             <span class="form-label">Nama individu</span>
-            <input class="form-input" name="purchaser" value="{{ old('purchaser', $suggestion['purchaser'] ?? '') }}" data-entry-field="purchaser" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>
+            <input class="form-input" name="purchaser" value="{{ $field('purchaser') }}" data-entry-field="purchaser" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>
         </label>
         <label class="block space-y-1">
             <span class="form-label">No. KP</span>
-            <input class="form-input" name="ic_number" value="{{ old('ic_number', $suggestion['ic_number'] ?? '') }}" data-entry-field="ic_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>
+            <input class="form-input" name="ic_number" value="{{ $field('ic_number') }}" data-entry-field="ic_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>
         </label>
     </div>
 
     <label class="block space-y-1">
         <span class="form-label">Tarikh mula</span>
-        <input class="form-input" type="date" name="start_date" value="{{ old('start_date', $suggestion['start_date'] ?? '') }}" data-entry-field="start_date">
+        <input class="form-input" type="date" name="start_date" value="{{ $field('start_date') }}" data-entry-field="start_date">
     </label>
     <label class="block space-y-1">
         <span class="form-label">Tarikh tamat</span>
-        <input class="form-input" type="date" name="end_date" value="{{ old('end_date', $suggestion['end_date'] ?? '') }}" data-entry-field="end_date">
-        @error('end_date')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+        <input class="form-input" type="date" name="end_date" value="{{ $field('end_date') }}" data-entry-field="end_date">
+        @if ($useOld)
+            @error('end_date')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+        @endif
     </label>
 </section>

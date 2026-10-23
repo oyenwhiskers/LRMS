@@ -61,6 +61,7 @@
             'file' => $scan->legalFile,
             'qr' => $labelQrs[$scan->legalFile->id],
             'scan' => $scan,
+            'categories' => $categories,
         ])
     @endif
 @endforeach

@@ -419,7 +419,7 @@ class EntryScanRegisterTest extends TestCase
             'updated_by' => $entry->id,
         ]);
 
-        EntryScan::create([
+        $scan = EntryScan::create([
             'user_id' => $entry->id,
             'document_path' => 'entry-scans/print.jpg',
             'legal_file_id' => $file->id,
@@ -433,6 +433,11 @@ class EntryScanRegisterTest extends TestCase
             ->assertSee('data-file-label-modal', false)
             ->assertSee('data-file-label-type="front"', false)
             ->assertSee('data-file-label-type="side"', false)
+            ->assertSee('data-file-label-type="data"', false)
+            ->assertSee('data-file-label-preview="data"', false)
+            ->assertSee('name="purchaser"', false)
+            ->assertSee('Print Me', false)
+            ->assertSee(route('entry.scan.update', $scan), false)
             ->assertSee(route('entry.files.label', $file), false)
             ->assertSee('PN PRINT', false)
             ->assertSee('class="file-label__detail"', false);
@@ -492,7 +497,89 @@ class EntryScanRegisterTest extends TestCase
             ->get(route('entry.home'))
             ->assertOk()
             ->assertSee('CON/2019/0707', false)
-            ->assertSee('class="entry-stat__value">1</p>', false);
+            ->assertSee('class="entry-stat__value">1</p>', false)
+            ->assertSee('data-file-label-type="data"', false)
+            ->assertSee('name="purchaser"', false);
+    }
+
+    public function test_entry_user_can_update_own_scan_case_data(): void
+    {
+        $entry = User::factory()->entry()->create();
+        $other = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2019/0808',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Old Buyer',
+            'vendor' => 'Old Seller',
+            'property' => 'Lot Old',
+            'title_number' => 'PN OLD',
+            'status' => LegalFile::STATUS_REGISTERED,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+
+        $scan = EntryScan::create([
+            'user_id' => $entry->id,
+            'document_path' => 'entry-scans/edit.jpg',
+            'legal_file_id' => $file->id,
+            'status' => EntryScan::STATUS_SAVED,
+        ]);
+
+        $payload = [
+            '_legal_file_id' => $file->id,
+            'reference_number' => 'CON/2019/0808',
+            'case_type' => LegalFile::TYPE_SNP,
+            'case_category_id' => $category->id,
+            'purchaser' => 'New Buyer',
+            'vendor' => 'New Seller',
+            'property' => 'Lot New',
+            'title_number' => 'PN NEW',
+        ];
+
+        $this->actingAs($entry)
+            ->from(route('entry.home'))
+            ->put(route('entry.scan.update', $scan), $payload)
+            ->assertRedirect(route('entry.home'))
+            ->assertSessionHas('success')
+            ->assertSessionHas('open_file_label', $file->id);
+
+        $file->refresh();
+        $this->assertSame('New Buyer', $file->purchaser);
+        $this->assertSame('New Seller', $file->vendor);
+        $this->assertSame('Lot New', $file->property);
+        $this->assertSame('PN NEW', $file->title_number);
+
+        $this->actingAs($other)
+            ->put(route('entry.scan.update', $scan), $payload)
+            ->assertForbidden();
+
+        LegalFile::create([
+            'reference_number' => 'CON/2019/0809',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Other File',
+            'property' => 'Lot Other',
+            'title_number' => 'PN OTHER',
+            'status' => LegalFile::STATUS_REGISTERED,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+
+        $this->actingAs($entry)
+            ->from(route('entry.home'))
+            ->put(route('entry.scan.update', $scan), [
+                ...$payload,
+                'reference_number' => 'CON/2019/0809',
+            ])
+            ->assertRedirect(route('entry.home'))
+            ->assertSessionHasErrors('reference_number');
+
+        $this->assertSame('CON/2019/0808', $file->fresh()->reference_number);
     }
 
     public function test_entry_user_can_view_own_scan_document_and_others_cannot(): void

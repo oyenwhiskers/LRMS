@@ -209,11 +209,6 @@
         borrowers.slice(1).forEach((b) => addBorrowerRow(b?.name || '', b?.ic_number || ''));
     };
 
-    saveForm?.querySelector('[data-add-borrower]')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        addBorrowerRow();
-    });
-
     const fillDraft = (draft) => {
         const typeSelect = saveForm.querySelector('[data-case-type-select]');
         if (typeSelect && draft.case_type) {

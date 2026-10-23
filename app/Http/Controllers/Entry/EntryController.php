@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Entry;
 
 use App\Domain\Entry\RegisterEntryCase;
 use App\Domain\Entry\StoreEntryCaseOnShelf;
+use App\Domain\Entry\UpdateEntryCase;
 use App\Http\Controllers\Controller;
 use App\Models\CaseCategory;
 use App\Models\EntryPrintJob;
@@ -41,7 +42,8 @@ class EntryController extends Controller
             ->where('user_id', $user->id)
             ->whereIn('status', $savedStatuses)
             ->with([
-                'legalFile:id,reference_number,case_type,purchaser,property,bank,title_number,suite_number,file_identifier,qr_identifier',
+                'legalFile:id,reference_number,case_type,case_category_id,purchaser,vendor,property,bank,title_number,suite_number,ic_number,start_date,end_date,file_identifier,qr_identifier',
+                'legalFile.parties',
                 'shelf.rack',
             ])
             ->latest()
@@ -49,8 +51,9 @@ class EntryController extends Controller
             ->get();
 
         $labelQrs = $this->labelQrsForScans($recent);
+        $categories = $this->activeCategories();
 
-        return view('entry.home', compact('storedCount', 'recent', 'labelQrs'));
+        return view('entry.home', compact('storedCount', 'recent', 'labelQrs', 'categories'));
     }
 
     public function history(Request $request): View
@@ -67,7 +70,8 @@ class EntryController extends Controller
             ->where('user_id', $request->user()->id)
             ->whereIn('status', [EntryScan::STATUS_SAVED, EntryScan::STATUS_STORED])
             ->with([
-                'legalFile:id,reference_number,case_type,purchaser,property,bank,title_number,suite_number,file_identifier,qr_identifier,status',
+                'legalFile:id,reference_number,case_type,case_category_id,purchaser,vendor,property,bank,title_number,suite_number,ic_number,start_date,end_date,file_identifier,qr_identifier,status',
+                'legalFile.parties',
                 'shelf.rack',
             ]);
 
@@ -116,6 +120,7 @@ class EntryController extends Controller
             'racks' => $racks,
             'shelves' => $shelves,
             'labelQrs' => $this->labelQrsForScans($scans),
+            'categories' => $this->activeCategories(),
             'filters' => [
                 'q' => $filters['q'] ?? '',
                 'date_from' => $filters['date_from'] ?? '',
@@ -195,6 +200,23 @@ class EntryController extends Controller
         return redirect()
             ->route('entry.shelf', $scan)
             ->with('success', 'Kes disimpan. Imbas QR rak tempat fail diletakkan.');
+    }
+
+    public function update(Request $request, EntryScan $scan, UpdateEntryCase $updater): RedirectResponse
+    {
+        $this->authorizeScan($request, $scan);
+        abort_unless(in_array($scan->status, [EntryScan::STATUS_SAVED, EntryScan::STATUS_STORED], true), 422);
+
+        $scan->load('legalFile');
+        $file = $scan->legalFile;
+        abort_unless($file !== null, 422);
+
+        $data = $this->validatedCase($request, $file);
+        $updater->handle($scan, $request->user(), $data);
+
+        return back()
+            ->with('success', 'Maklumat fail dikemas kini.')
+            ->with('open_file_label', $file->id);
     }
 
     public function document(Request $request, EntryScan $scan): Response
@@ -357,19 +379,32 @@ class EntryController extends Controller
     }
 
     /**
+     * @return \Illuminate\Support\Collection<int, CaseCategory>
+     */
+    private function activeCategories()
+    {
+        return CaseCategory::query()->where('is_active', true)->orderBy('code')->get();
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function validatedCase(Request $request): array
+    private function validatedCase(Request $request, ?LegalFile $file = null): array
     {
         $caseType = (string) $request->input('case_type');
         $request->merge([
             'reference_number' => preg_replace('/\s+/', '', trim((string) $request->input('reference_number', ''))) ?: '',
         ]);
 
+        $referenceRule = Rule::unique('legal_files', 'reference_number');
+        if ($file !== null) {
+            $referenceRule = $referenceRule->ignore($file->id);
+        }
+
         // Entry from cover scan: only ref + type + category required. Other fields
         // follow the document; missing ones stay empty for later completion.
         $data = $request->validate([
-            'reference_number' => ['required', 'string', 'max:100', 'unique:legal_files,reference_number'],
+            'reference_number' => ['required', 'string', 'max:100', $referenceRule],
             'case_type' => ['required', Rule::in(LegalFile::caseTypes())],
             'case_category_id' => [
                 'required',

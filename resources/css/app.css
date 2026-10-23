@@ -1679,6 +1679,10 @@
         @apply grid-cols-3;
     }
 
+    .file-label-modal__types--four {
+        @apply grid-cols-2 sm:grid-cols-4;
+    }
+
     .file-label-modal__type {
         @apply min-h-11 border border-stone-300 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] text-stone-700 transition;
     }
@@ -1736,6 +1740,15 @@
         width: auto;
         height: auto;
         object-fit: contain;
+    }
+
+    .file-label-modal__preview--data {
+        aspect-ratio: auto;
+        max-width: none;
+        max-height: min(70vh, 36rem);
+        overflow: auto;
+        background: transparent;
+        box-shadow: none;
     }
 
     .file-label-modal__queue-status {
