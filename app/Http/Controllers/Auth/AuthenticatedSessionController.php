@@ -29,15 +29,21 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('account.status');
         }
 
+        if ($request->user()->isEntry()) {
+            return redirect()->intended(route('entry.home', absolute: false));
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 
     public function destroy(Request $request): RedirectResponse
     {
+        $toEntryLogin = $request->user()?->isEntry() === true;
+
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('login');
+        return redirect()->route($toEntryLogin ? 'entry.login' : 'login');
     }
 }

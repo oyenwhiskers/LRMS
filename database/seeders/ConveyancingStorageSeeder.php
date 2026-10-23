@@ -3,61 +3,70 @@
 namespace Database\Seeders;
 
 use App\Models\Rack;
+use App\Models\Shelf;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class ConveyancingStorageSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::transaction(function (): void {
-            foreach (['B', 'C', 'D'] as $rackCode) {
-                $this->seedRack($rackCode, [
-                    [range('A', 'C'), 6],
-                    [range('D', 'X'), 5],
-                ]);
-            }
+        $path = database_path('data/storage_layout.json');
 
-            $this->seedRack('E', [
-                [range('A', 'I'), 5],
-                [range('J', 'U'), 8],
-                [array_merge(range('V', 'Z'), ['Z1']), 7],
-            ]);
-            $this->seedRack('F', [
-                [range('A', 'F'), 5],
-                [range('G', 'I'), 7],
-                [range('J', 'Q'), 8],
-                [range('R', 'T'), 7],
-                [array_merge(range('U', 'Z'), ['Z1', 'Z2', 'Z3']), 8],
-            ]);
-            $this->seedRack('G', [[range('A', 'L'), 8]]);
-        });
-    }
-
-    private function seedRack(string $rackCode, array $sections): void
-    {
-        $rack = Rack::firstOrCreate(
-            ['code' => $rackCode],
-            ['name' => 'Conveyancing', 'is_active' => true],
-        );
-
-        $expectedCodes = [];
-        foreach ($sections as [$columns, $rowCount]) {
-            foreach ($columns as $column) {
-                foreach (range(1, $rowCount) as $row) {
-                    $code = $column.$row;
-                    $expectedCodes[] = $code;
-                    $rack->shelves()->firstOrCreate(
-                        ['code' => $code],
-                        ['name' => "Column {$column}, Row {$row}", 'is_active' => true],
-                    );
-                }
-            }
+        if (! is_file($path)) {
+            throw new RuntimeException("Missing storage layout snapshot: {$path}");
         }
 
-        $rack->shelves()
-            ->whereNotIn('code', $expectedCodes)
-            ->whereDoesntHave('legalFiles')
-            ->delete();
+        /** @var array{racks: list<array{code: string, name: ?string, is_active: bool, shelves: list<array{code: string, name: ?string, is_active: bool, qr_identifier: ?string}>}>} $payload */
+        $payload = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+
+        DB::transaction(function () use ($payload): void {
+            foreach ($payload['racks'] ?? [] as $rackData) {
+                $rack = Rack::query()->firstOrCreate(
+                    ['code' => $rackData['code']],
+                    [
+                        'name' => $rackData['name'] ?? null,
+                        'is_active' => (bool) ($rackData['is_active'] ?? true),
+                    ],
+                );
+
+                $expectedCodes = [];
+
+                foreach ($rackData['shelves'] ?? [] as $shelfData) {
+                    $code = $shelfData['code'];
+                    $expectedCodes[] = $code;
+
+                    $shelf = $rack->shelves()->where('code', $code)->first();
+
+                    if ($shelf) {
+                        $shelf->fill([
+                            'name' => $shelfData['name'] ?? $shelf->name,
+                            'is_active' => (bool) ($shelfData['is_active'] ?? true),
+                        ])->save();
+
+                        continue;
+                    }
+
+                    $shelf = new Shelf([
+                        'rack_id' => $rack->id,
+                        'code' => $code,
+                        'name' => $shelfData['name'] ?? null,
+                        'is_active' => (bool) ($shelfData['is_active'] ?? true),
+                    ]);
+
+                    if (! empty($shelfData['qr_identifier'])) {
+                        $shelf->qr_identifier = $shelfData['qr_identifier'];
+                    }
+
+                    $shelf->save();
+                }
+
+                $rack->shelves()
+                    ->whereNotIn('code', $expectedCodes)
+                    ->whereDoesntHave('legalFiles')
+                    ->delete();
+            }
+        });
     }
 }

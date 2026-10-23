@@ -1,12 +1,17 @@
 <?php
 
+use App\Http\Controllers\Admin\EntryUserController;
 use App\Http\Controllers\Admin\PositionController;
 use App\Http\Controllers\Admin\RegistrationApprovalController;
+use App\Http\Controllers\Entry\AiTokenUsageController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\CaseCategoryController;
 use App\Http\Controllers\CompletionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Entry\EntryAuthController;
+use App\Http\Controllers\Entry\EntryController;
+use App\Http\Controllers\Entry\EntryPrintStationController;
 use App\Http\Controllers\ImportExportController;
 use App\Http\Controllers\LegalFileController;
 use App\Http\Controllers\MovementController;
@@ -17,9 +22,16 @@ use App\Http\Controllers\StorageLabelController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return auth()->check()
-        ? redirect()->route(auth()->user()->isApproved() ? 'dashboard' : 'account.status')
-        : redirect()->route('login');
+    if (! auth()->check()) {
+        return redirect()->route('login');
+    }
+
+    $user = auth()->user();
+    if (! $user->isApproved()) {
+        return redirect()->route('account.status');
+    }
+
+    return redirect()->route($user->isEntry() ? 'entry.home' : 'dashboard');
 });
 
 Route::middleware('guest')->group(function (): void {
@@ -27,13 +39,53 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('throttle:8,1');
     Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
     Route::post('/register', [RegisteredUserController::class, 'store'])->middleware('throttle:5,10');
+
+    Route::prefix('entry')->name('entry.')->group(function (): void {
+        Route::get('/login', [EntryAuthController::class, 'createLogin'])->name('login');
+        Route::post('/login', [EntryAuthController::class, 'storeLogin'])
+            ->middleware('throttle:8,1')
+            ->name('login.store');
+        Route::get('/register', [EntryAuthController::class, 'createRegister'])->name('register');
+        Route::post('/register', [EntryAuthController::class, 'storeRegister'])
+            ->middleware('throttle:5,10')
+            ->name('register.store');
+    });
 });
 
 Route::middleware('auth')->group(function (): void {
     Route::view('/account-status', 'auth.account-status')->name('account.status');
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
-    Route::middleware('approved')->group(function (): void {
+    Route::middleware('entry')->prefix('entry')->name('entry.')->group(function (): void {
+        Route::get('/', [EntryController::class, 'home'])->name('home');
+        Route::get('/history', [EntryController::class, 'history'])->name('history');
+        Route::get('/scan', [EntryController::class, 'create'])->name('scan');
+        Route::post('/scan', [EntryController::class, 'store'])->name('scan.store');
+        Route::post('/confirm', [EntryController::class, 'save'])->name('save');
+        Route::get('/scan/shelves/{identifier}', [EntryController::class, 'lookupShelf'])->name('shelves.lookup');
+        Route::get('/scan/{scan}/shelf', [EntryController::class, 'shelf'])->name('shelf');
+        Route::post('/scan/{scan}/shelf', [EntryController::class, 'storeShelf'])->name('shelf.store');
+        Route::get('/scan/{scan}/document', [EntryController::class, 'document'])->name('scan.document');
+        Route::delete('/scan/{scan}', [EntryController::class, 'destroy'])->name('scan.destroy');
+        Route::get('/files/{file}/label', [EntryController::class, 'label'])->name('files.label');
+        Route::get('/files/{file}/label.pdf', [EntryController::class, 'labelPdf'])->name('files.label.pdf');
+
+        Route::get('/print-station', [EntryPrintStationController::class, 'index'])->name('print-station');
+        Route::get('/print-jobs', [EntryPrintStationController::class, 'list'])->name('print-jobs.index');
+        Route::post('/print-jobs', [EntryPrintStationController::class, 'store'])->name('print-jobs.store');
+        Route::post('/print-jobs/mark-printed', [EntryPrintStationController::class, 'markPrinted'])->name('print-jobs.mark-printed');
+        Route::delete('/print-jobs/{job}', [EntryPrintStationController::class, 'destroy'])->name('print-jobs.destroy');
+
+        Route::get('/ai-usage/unlock', [AiTokenUsageController::class, 'unlockForm'])->name('ai-usage.unlock');
+        Route::post('/ai-usage/unlock', [AiTokenUsageController::class, 'unlock'])
+            ->middleware('throttle:8,1')
+            ->name('ai-usage.unlock.store');
+        Route::get('/ai-usage', [AiTokenUsageController::class, 'index'])
+            ->middleware('ai_usage')
+            ->name('ai-usage.index');
+    });
+
+    Route::middleware(['approved', 'not_entry'])->group(function (): void {
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
 
         Route::get('/account/password', [PasswordController::class, 'edit'])->name('account.password.edit');
@@ -45,6 +97,13 @@ Route::middleware('auth')->group(function (): void {
             Route::patch('/registrations/{registration}', [RegistrationApprovalController::class, 'update'])
                 ->name('registrations.update');
             Route::resource('positions', PositionController::class)->except('show');
+
+            Route::get('/entry-users', [EntryUserController::class, 'index'])->name('entry-users.index');
+            Route::post('/entry-users', [EntryUserController::class, 'store'])->name('entry-users.store');
+            Route::patch('/entry-users/{entryUser}/deactivate', [EntryUserController::class, 'deactivate'])
+                ->name('entry-users.deactivate');
+            Route::patch('/entry-users/{entryUser}/reactivate', [EntryUserController::class, 'reactivate'])
+                ->name('entry-users.reactivate');
         });
 
         Route::resource('staff', StaffController::class)->except(['show', 'destroy']);

@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Middleware\EnsureAccountIsApproved;
+use App\Http\Middleware\EnsureAiTokenUsageUnlocked;
+use App\Http\Middleware\EnsureEntryAccess;
+use App\Http\Middleware\RedirectEntryOperators;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,7 +20,20 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', SecurityHeaders::class);
         $middleware->alias([
             'approved' => EnsureAccountIsApproved::class,
+            'ai_usage' => EnsureAiTokenUsageUnlocked::class,
+            'entry' => EnsureEntryAccess::class,
+            'not_entry' => RedirectEntryOperators::class,
         ]);
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('entry', 'entry/*')
+            ? route('entry.login')
+            : route('login'));
+        $middleware->redirectUsersTo(function (Request $request) {
+            $user = $request->user();
+
+            return ($user && $user->isEntry())
+                ? route('entry.home')
+                : route('dashboard');
+        });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

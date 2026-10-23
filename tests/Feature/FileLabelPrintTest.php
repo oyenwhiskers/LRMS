@@ -88,6 +88,76 @@ class FileLabelPrintTest extends TestCase
         }
     }
 
+    public function test_front_label_shows_main_purchaser_only(): void
+    {
+        [$admin, $file] = $this->adminWithFile();
+        $file->forceFill([
+            'purchaser' => 'ZETTY AKMAR BINTI SAMSUL & KAMISAH BINTI KILAN',
+            'property' => 'HS(D) 12345',
+        ])->save();
+
+        $html = $this->actingAs($admin)
+            ->get(route('files.label', ['file' => $file, 'type' => 'front']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('ZETTY AKMAR BINTI SAMSUL', $html);
+        $this->assertStringNotContainsString('KAMISAH BINTI KILAN', $html);
+        $this->assertStringContainsString('HS(D) 12345', $html);
+        $this->assertStringNotContainsString($file->file_identifier, $html);
+    }
+
+    public function test_front_label_shows_type_aware_detail(): void
+    {
+        [$admin, $loan] = $this->adminWithFile();
+        $loan->forceFill([
+            'case_type' => LegalFile::TYPE_LOAN,
+            'bank' => 'MAYBANK ISLAMIC BERHAD',
+            'title_number' => 'PN IGNORE',
+            'suite_number' => 'WA-22NCVC-999-01/2025',
+        ])->save();
+
+        $loanHtml = $this->actingAs($admin)
+            ->get(route('files.label', ['file' => $loan, 'type' => 'front']))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('MAYBANK ISLAMIC BERHAD', $loanHtml);
+        $this->assertStringNotContainsString('PN IGNORE', $loanHtml);
+        $this->assertStringNotContainsString('WA-22NCVC-999-01/2025', $loanHtml);
+
+        $snp = $loan->replicate(['file_identifier', 'qr_identifier']);
+        $snp->forceFill([
+            'reference_number' => 'CON/2026/0001',
+            'case_type' => LegalFile::TYPE_SNP,
+            'bank' => 'SHOULD NOT SHOW',
+            'title_number' => 'PN 123456',
+            'suite_number' => null,
+        ])->save();
+
+        $snpHtml = $this->actingAs($admin)
+            ->get(route('files.label', ['file' => $snp, 'type' => 'front']))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('PN 123456', $snpHtml);
+        $this->assertStringNotContainsString('SHOULD NOT SHOW', $snpHtml);
+
+        $lit = $loan->replicate(['file_identifier', 'qr_identifier']);
+        $lit->forceFill([
+            'reference_number' => 'LIT/2026/0001',
+            'case_type' => LegalFile::TYPE_LITIGATION,
+            'bank' => null,
+            'title_number' => null,
+            'suite_number' => 'WA-22NCVC-123-01/2025',
+            'property' => '',
+        ])->save();
+
+        $litHtml = $this->actingAs($admin)
+            ->get(route('files.label', ['file' => $lit, 'type' => 'front']))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('WA-22NCVC-123-01/2025', $litHtml);
+    }
+
     /**
      * @return array{0: User, 1: LegalFile}
      */

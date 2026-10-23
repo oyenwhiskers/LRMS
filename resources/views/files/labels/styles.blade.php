@@ -40,8 +40,8 @@
 
 .file-label__brand,
 .file-label--side__brand {
-    height: 13mm;
-    padding: 0 0 2mm;
+    height: auto;
+    padding: 0;
     border-bottom: 0.5mm solid #c8a24a;
     color: #444;
     font-size: 11pt;
@@ -80,7 +80,8 @@
     word-break: break-word;
 }
 
-.file-label__property {
+.file-label__property,
+.file-label__detail {
     margin: 0 0 7mm;
     color: #222;
     font-size: 11pt;
@@ -146,17 +147,19 @@
 }
 
 .file-label--front .file-label__brand {
-    height: 13mm;
     font-size: 15pt;
 }
 
 .file-label--front .file-label__info {
-    padding-top: 3mm;
+    padding-top: 8mm;
 }
 
 .file-label--front .file-label__reference {
     margin-bottom: 3mm;
-    font-size: 26pt;
+    font-size: 20pt;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
 }
 
 .file-label--front .file-label__purchaser {
@@ -164,17 +167,16 @@
     font-size: 18pt;
 }
 
-.file-label--front .file-label__property {
+.file-label--front .file-label__property,
+.file-label--front .file-label__detail {
     margin-bottom: 3mm;
     font-size: 14pt;
     line-height: 1.25;
 }
 
-.file-label--front .file-label__file-id {
-    height: 9mm;
-    padding-top: 2mm;
-    font-size: 16pt;
-    vertical-align: middle;
+.file-label--front .file-label__detail {
+    color: #333;
+    font-weight: 700;
 }
 
 .file-label--front .file-label__qr-group,

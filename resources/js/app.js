@@ -1302,9 +1302,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         const pdfLink = modal.querySelector('[data-file-label-pdf]');
         const typeButtons = [...modal.querySelectorAll('[data-file-label-type]')];
         const previews = [...modal.querySelectorAll('[data-file-label-preview]')];
+        const dimLabels = [...modal.querySelectorAll('[data-file-label-dims-for]')];
+        const hintLabels = [...modal.querySelectorAll('[data-file-label-hint-for]')];
+        const documentImage = modal.querySelector('[data-file-label-document]');
+        const queueStatus = modal.querySelector('[data-file-label-queue-status]');
         const printBase = modal.getAttribute('data-print-url') || '';
         const pdfBase = modal.getAttribute('data-pdf-url') || '';
+        const queueUrl = modal.getAttribute('data-print-queue-url') || '';
+        const legalFileId = modal.getAttribute('data-legal-file-id') || '';
         let selectedType = 'front';
+        let queueBusy = false;
 
         const withType = (url, type) => {
             const next = new URL(url, window.location.origin);
@@ -1313,25 +1320,115 @@ document.addEventListener('DOMContentLoaded', async () => {
             return next.pathname + next.search;
         };
 
+        const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        const setQueueStatus = (message, kind = '') => {
+            if (! queueStatus) {
+                return;
+            }
+
+            queueStatus.textContent = message || '';
+            queueStatus.classList.toggle('hidden', ! message);
+            queueStatus.classList.toggle('is-ok', kind === 'ok');
+            queueStatus.classList.toggle('is-error', kind === 'error');
+        };
+
+        const showQueueSuccessModal = (message, alreadyQueued = false) => {
+            const successModal = document.querySelector('[data-modal="entry-print-queued"]');
+            if (! successModal) {
+                setQueueStatus(message, 'ok');
+                return;
+            }
+
+            const title = successModal.querySelector('[data-print-queue-success-title]');
+            const body = successModal.querySelector('[data-print-queue-success-message]');
+            if (title) {
+                title.textContent = alreadyQueued ? 'Sudah dihantar' : 'Berjaya dihantar';
+            }
+            if (body) {
+                body.textContent = message || (alreadyQueued
+                    ? 'Job sudah dihantar ke stesen cetak.'
+                    : 'Job berjaya dihantar ke stesen cetak.');
+            }
+
+            setQueueStatus('');
+            openModal(successModal);
+        };
+
+        const fitPreview = (preview) => {
+            const scaleEl = preview.querySelector('.file-label-preview-scale');
+            if (! scaleEl || preview.classList.contains('hidden')) {
+                return;
+            }
+
+            // transform does not change layout size, so offsetWidth is the natural sticker width.
+            const naturalPx = scaleEl.offsetWidth;
+            const width = preview.clientWidth;
+            if (width > 0 && naturalPx > 0) {
+                scaleEl.style.setProperty('--file-label-scale', String(width / naturalPx));
+            }
+        };
+
+        const fitVisiblePreview = () => {
+            previews.forEach((preview) => fitPreview(preview));
+        };
+
         const showPreview = (type) => {
             previews.forEach((preview) => {
                 preview.classList.toggle('hidden', preview.getAttribute('data-file-label-preview') !== type);
             });
         };
 
+        const ensureDocumentLoaded = () => {
+            if (! documentImage) {
+                return;
+            }
+
+            const src = documentImage.getAttribute('data-src') || '';
+            if (src !== '' && ! documentImage.getAttribute('src')) {
+                documentImage.setAttribute('src', src);
+            }
+        };
+
         const sync = () => {
+            const isDocument = selectedType === 'document';
+
             typeButtons.forEach((button) => {
                 button.classList.toggle('is-active', button.getAttribute('data-file-label-type') === selectedType);
             });
 
+            dimLabels.forEach((label) => {
+                label.classList.toggle('hidden', label.getAttribute('data-file-label-dims-for') !== selectedType);
+            });
+
+            hintLabels.forEach((hint) => {
+                const forKind = hint.getAttribute('data-file-label-hint-for');
+                const show = isDocument ? forKind === 'document' : forKind === 'label';
+                hint.classList.toggle('hidden', ! show);
+            });
+
             showPreview(selectedType);
 
+            if (isDocument) {
+                ensureDocumentLoaded();
+            }
+
             if (printButton) {
-                printButton.setAttribute('data-print-href', withType(printBase, selectedType));
+                printButton.classList.toggle('hidden', isDocument);
+                if (! isDocument) {
+                    printButton.setAttribute('data-print-href', withType(printBase, selectedType));
+                }
             }
 
             if (pdfLink) {
-                pdfLink.href = withType(pdfBase, selectedType);
+                pdfLink.classList.toggle('hidden', isDocument);
+                if (! isDocument) {
+                    pdfLink.href = withType(pdfBase, selectedType);
+                }
+            }
+
+            if (! isDocument) {
+                requestAnimationFrame(fitVisiblePreview);
             }
         };
 
@@ -1358,6 +1455,47 @@ document.addEventListener('DOMContentLoaded', async () => {
             frame.src = url + (url.includes('?') ? '&' : '?') + '_print=' + Date.now();
         };
 
+        const queuePrintJob = async () => {
+            if (! queueUrl || ! legalFileId || queueBusy) {
+                return;
+            }
+
+            queueBusy = true;
+            printButton?.setAttribute('disabled', 'disabled');
+            setQueueStatus('Menghantar…');
+
+            try {
+                const response = await fetch(queueUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': csrfToken(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        legal_file_id: Number(legalFileId),
+                        type: selectedType,
+                    }),
+                });
+
+                const payload = await response.json().catch(() => ({}));
+                if (! response.ok) {
+                    throw new Error(payload.message || 'Gagal menghantar job.');
+                }
+
+                showQueueSuccessModal(
+                    payload.message || 'Job berjaya dihantar ke stesen cetak',
+                    Boolean(payload.already_queued),
+                );
+            } catch (error) {
+                setQueueStatus(error instanceof Error ? error.message : 'Gagal menghantar job.', 'error');
+            } finally {
+                queueBusy = false;
+                printButton?.removeAttribute('disabled');
+            }
+        };
+
         typeButtons.forEach((button) => {
             button.addEventListener('click', () => {
                 selectedType = button.getAttribute('data-file-label-type') || 'front';
@@ -1366,12 +1504,807 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         printButton?.addEventListener('click', () => {
+            if (queueUrl) {
+                queuePrintJob();
+                return;
+            }
+
             const href = printButton.getAttribute('data-print-href') || withType(printBase, selectedType);
             printLabel(href);
         });
 
+        if (typeof ResizeObserver !== 'undefined') {
+            const observer = new ResizeObserver(() => fitVisiblePreview());
+            previews.forEach((preview) => observer.observe(preview));
+        }
+
+        const overlay = modal.closest('[data-modal]');
+        if (overlay) {
+            const modalObserver = new MutationObserver(() => {
+                if (! overlay.classList.contains('hidden')) {
+                    requestAnimationFrame(fitVisiblePreview);
+                }
+            });
+            modalObserver.observe(overlay, { attributes: true, attributeFilter: ['class', 'aria-hidden'] });
+        }
+
         sync();
     });
+
+    (() => {
+        const station = document.querySelector('[data-entry-print-station]');
+        if (! station) {
+            return;
+        }
+
+        const jobsUrl = station.getAttribute('data-jobs-url') || '';
+        const markUrl = station.getAttribute('data-mark-url') || '';
+        const listEl = station.querySelector('[data-print-station-list]');
+        const countEl = station.querySelector('[data-print-station-count]');
+        const countLabelEl = station.querySelector('[data-print-station-count-label]');
+        const pendingCountEl = station.querySelector('[data-print-station-pending-count]');
+        const statusEl = station.querySelector('[data-print-station-status]');
+        const printSelectedBtn = station.querySelector('[data-print-station-print-selected]');
+        const refreshBtn = station.querySelector('[data-print-station-refresh]');
+        const searchInput = station.querySelector('[data-print-station-search]');
+        const desktopStatusSelect = station.querySelector('[data-print-station-status-filter]');
+        const desktopOperatorSelect = station.querySelector('[data-print-station-operator]');
+        const mobileFilterInputs = station.querySelectorAll('[data-print-station-mobile-filter]');
+        const previewModal = document.querySelector('[data-modal="entry-print-preview"]');
+        const previewFrame = previewModal?.querySelector('[data-print-preview-frame]');
+        const previewTitle = previewModal?.querySelector('[data-print-preview-title]');
+        const previewPrintBtn = previewModal?.querySelector('[data-print-preview-print]');
+        const previewDeleteBtn = previewModal?.querySelector('[data-print-preview-delete]');
+        const desktopFilterQuery = window.matchMedia('(min-width: 900px)');
+        let jobs = [];
+        let busy = false;
+        let previewJob = null;
+
+        const statusFilter = () => desktopStatusSelect?.value
+            || station.getAttribute('data-status-filter')
+            || 'pending';
+
+        const countLabelFor = (filter) => {
+            if (filter === 'printed') {
+                return 'dicetak';
+            }
+            if (filter === 'all') {
+                return 'job';
+            }
+
+            return 'belum dicetak';
+        };
+
+        const printSelectedLabel = (filter) => (
+            filter === 'printed' ? 'Cetak semula dipilih' : 'Cetak dipilih'
+        );
+
+        const allSelectBoxes = () => [...(listEl?.querySelectorAll('[data-print-station-select]') || [])];
+
+        // Cards + table both render the same jobs; dedupe by value for counts/selection.
+        const rowCheckboxes = () => {
+            const unique = new Map();
+            allSelectBoxes().forEach((box) => {
+                if (! unique.has(box.value)) {
+                    unique.set(box.value, box);
+                }
+            });
+
+            return [...unique.values()];
+        };
+
+        const setBoxesChecked = (idsOrAll, checked) => {
+            const all = idsOrAll === true;
+            const idSet = all ? null : new Set([...idsOrAll].map(String));
+            allSelectBoxes().forEach((box) => {
+                if (all || idSet.has(box.value)) {
+                    box.checked = checked;
+                }
+            });
+        };
+
+        const selectedJobs = () => {
+            const ids = new Set(
+                rowCheckboxes()
+                    .filter((box) => box.checked)
+                    .map((box) => Number(box.value)),
+            );
+
+            return jobs.filter((job) => ids.has(job.id));
+        };
+
+        const syncSelectionUi = () => {
+            const boxes = rowCheckboxes();
+            const checkedCount = boxes.filter((box) => box.checked).length;
+            const allChecked = boxes.length > 0 && checkedCount === boxes.length;
+            const indeterminate = checkedCount > 0 && checkedCount < boxes.length;
+
+            listEl?.querySelectorAll('[data-print-station-select-all]').forEach((selectAll) => {
+                selectAll.checked = allChecked;
+                selectAll.indeterminate = indeterminate;
+            });
+
+            if (printSelectedBtn) {
+                printSelectedBtn.disabled = checkedCount === 0 || busy;
+                printSelectedBtn.textContent = printSelectedLabel(statusFilter());
+            }
+        };
+
+        const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        const setStatus = (message, kind = '') => {
+            if (! statusEl) {
+                return;
+            }
+
+            statusEl.textContent = message || '';
+            statusEl.classList.toggle('hidden', ! message);
+            statusEl.classList.toggle('is-ok', kind === 'ok');
+            statusEl.classList.toggle('is-error', kind === 'error');
+        };
+
+        const escapeHtml = (value) => String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;');
+
+        const requestedByParam = () => {
+            if (desktopOperatorSelect && desktopFilterQuery.matches) {
+                return desktopOperatorSelect.value || '';
+            }
+
+            return station.getAttribute('data-requested-by') || '';
+        };
+
+        const searchQuery = () => {
+            const fromInput = searchInput?.value?.trim() || '';
+            if (fromInput !== '') {
+                return fromInput;
+            }
+
+            return (station.getAttribute('data-q') || '').trim();
+        };
+
+        const syncFilterControlMode = () => {
+            const desktop = desktopFilterQuery.matches;
+            mobileFilterInputs.forEach((input) => {
+                input.disabled = desktop;
+            });
+            [desktopStatusSelect, desktopOperatorSelect].forEach((select) => {
+                if (select) {
+                    select.disabled = ! desktop;
+                }
+            });
+        };
+
+        const applyDesktopFilters = () => {
+            if (desktopStatusSelect) {
+                station.setAttribute('data-status-filter', desktopStatusSelect.value);
+                const hiddenStatus = station.querySelector('[data-print-station-mobile-filter][name="status"]');
+                if (hiddenStatus) {
+                    hiddenStatus.value = desktopStatusSelect.value;
+                }
+            }
+
+            if (desktopOperatorSelect) {
+                station.setAttribute('data-requested-by', desktopOperatorSelect.value);
+                const hiddenOperator = station.querySelector('[data-print-station-mobile-filter][name="requested_by"]');
+                if (hiddenOperator) {
+                    hiddenOperator.value = desktopOperatorSelect.value;
+                }
+            }
+
+            reloadJobs();
+        };
+
+        const previewUrlFor = (job) => {
+            if (job.preview_url) {
+                return job.preview_url;
+            }
+
+            const printUrl = job.print_url || '';
+            if (! printUrl) {
+                return '';
+            }
+
+            return printUrl + (printUrl.includes('?') ? '&' : '?') + 'embed=1';
+        };
+
+        const openPreview = (job) => {
+            const url = previewUrlFor(job);
+            if (! previewModal || ! previewFrame || ! url) {
+                return;
+            }
+
+            previewJob = job;
+            if (previewTitle) {
+                previewTitle.textContent = job.preview_title
+                    || `${job.reference_number || 'Label'} · ${job.type_label || ''}`.trim();
+            }
+
+            if (previewDeleteBtn) {
+                previewDeleteBtn.hidden = ! job.delete_url;
+                previewDeleteBtn.disabled = busy || ! job.delete_url;
+            }
+
+            const frameWrap = previewModal.querySelector('.entry-print-preview__frame-wrap');
+            if (frameWrap) {
+                frameWrap.style.aspectRatio = job.type === 'side' ? '2 / 1' : '3 / 2';
+            }
+
+            previewFrame.src = url + (url.includes('?') ? '&' : '?') + '_preview=' + Date.now();
+            openModal(previewModal);
+        };
+
+        const closePreview = () => {
+            if (previewFrame) {
+                previewFrame.src = 'about:blank';
+            }
+            previewJob = null;
+            if (previewModal) {
+                closeModal(previewModal);
+            }
+        };
+
+        const renderJobs = (nextJobs, pendingCount = null) => {
+            const previouslySelected = new Set(
+                rowCheckboxes()
+                    .filter((box) => box.checked)
+                    .map((box) => Number(box.value)),
+            );
+            jobs = nextJobs;
+            const filter = statusFilter();
+            if (countEl) {
+                countEl.textContent = String(jobs.length);
+            }
+            if (countLabelEl) {
+                countLabelEl.textContent = countLabelFor(filter);
+            }
+            if (pendingCountEl && pendingCount !== null) {
+                pendingCountEl.textContent = String(pendingCount);
+            }
+
+            if (! listEl) {
+                return;
+            }
+
+            if (jobs.length === 0) {
+                const emptyTitle = filter === 'printed'
+                    ? 'Tiada job dicetak'
+                    : (filter === 'all' ? 'Tiada job' : 'Tiada job menunggu');
+                listEl.innerHTML = `
+                    <div class="entry-empty" data-print-station-empty>
+                        <p class="entry-empty__title">${emptyTitle}</p>
+                        <p class="entry-empty__text">Apabila operator tekan Hantar ke stesen, job akan muncul di sini.</p>
+                    </div>
+                `;
+                syncSelectionUi();
+                return;
+            }
+
+            const cards = [];
+            const rows = [];
+
+            jobs.forEach((job) => {
+                const pending = job.is_pending !== false && job.status !== 'printed';
+                const badgeClass = pending ? 'pending' : 'printed';
+                const statusLabel = escapeHtml(job.status_label || (pending ? 'Belum dicetak' : 'Dicetak'));
+                const sentAt = escapeHtml(job.created_at || '—');
+                const printedAt = escapeHtml(job.printed_at || '—');
+                const ref = escapeHtml(job.reference_number || '—');
+                const typeLabel = escapeHtml(job.type_label || '');
+                const operator = escapeHtml(job.operator || '—');
+                const printUrl = escapeHtml(job.print_url || '');
+                const previewUrl = escapeHtml(previewUrlFor(job));
+                const previewTitleText = escapeHtml(`${job.reference_number || 'Label'} · ${job.type_label || ''}`.trim());
+                const deleteUrl = escapeHtml(job.delete_url || '');
+                const checked = previouslySelected.has(job.id) ? ' checked' : '';
+                const status = escapeHtml(job.status || (pending ? 'pending' : 'printed'));
+                const attrs = `
+                    data-print-job-id="${job.id}"
+                    data-job-status="${status}"
+                    data-print-url="${printUrl}"
+                    data-preview-url="${previewUrl}"
+                    data-preview-title="${previewTitleText}"
+                    data-delete-url="${deleteUrl}"
+                `;
+
+                cards.push(`
+                <article class="entry-print-station__card" ${attrs}>
+                    <label class="entry-print-station__check">
+                        <input
+                            type="checkbox"
+                            data-print-station-select
+                            value="${job.id}"
+                            aria-label="Pilih ${ref}"${checked}
+                        >
+                    </label>
+                    <div class="entry-print-station__card-body">
+                        <div class="entry-print-station__card-head">
+                            <p class="entry-print-station__ref">${ref}</p>
+                            <span class="entry-print-station__badge entry-print-station__badge--${badgeClass}">${statusLabel}</span>
+                        </div>
+                        <p class="entry-print-station__card-meta">${operator} · ${typeLabel}</p>
+                    </div>
+                </article>
+                `);
+
+                rows.push(`
+                <tr ${attrs}>
+                    <td class="entry-print-station__check">
+                        <input
+                            type="checkbox"
+                            data-print-station-select
+                            value="${job.id}"
+                            aria-label="Pilih ${ref}"${checked}
+                        >
+                    </td>
+                    <td><span class="entry-print-station__ref">${ref}</span></td>
+                    <td>
+                        <span class="entry-print-station__badge entry-print-station__badge--${badgeClass}">${statusLabel}</span>
+                    </td>
+                    <td>${operator}</td>
+                    <td>${typeLabel}</td>
+                    <td class="entry-print-station__when-cell">${sentAt}</td>
+                    <td class="entry-print-station__when-cell">${printedAt}</td>
+                </tr>
+                `);
+            });
+
+            const keepSelecting = Boolean(
+                listEl.querySelector('[data-print-station-cards].is-selecting')
+                || previouslySelected.size > 0,
+            );
+
+            listEl.innerHTML = `
+                <div class="entry-print-station__cards${keepSelecting ? ' is-selecting' : ''}" data-print-station-cards>
+                    <div class="entry-print-station__select-bar">
+                        <label class="entry-print-station__select-all">
+                            <input type="checkbox" data-print-station-select-all aria-label="Pilih semua">
+                            <span>Pilih semua</span>
+                        </label>
+                    </div>
+                    ${cards.join('')}
+                </div>
+                <div class="entry-print-station__table-wrap">
+                    <table class="entry-print-station__table">
+                        <thead>
+                            <tr>
+                                <th class="entry-print-station__check" scope="col">
+                                    <input type="checkbox" data-print-station-select-all aria-label="Pilih semua">
+                                </th>
+                                <th scope="col">Rujukan</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Operator</th>
+                                <th scope="col">Jenis</th>
+                                <th scope="col">Dihantar</th>
+                                <th scope="col">Dicetak</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows.join('')}</tbody>
+                    </table>
+                </div>
+            `;
+            syncSelectionUi();
+        };
+
+        const fetchJobs = async () => {
+            if (! jobsUrl) {
+                return;
+            }
+
+            const url = new URL(jobsUrl, window.location.origin);
+            const requestedBy = requestedByParam();
+            const q = searchQuery();
+            if (requestedBy) {
+                url.searchParams.set('requested_by', requestedBy);
+            }
+            if (q) {
+                url.searchParams.set('q', q);
+            }
+            url.searchParams.set('status', statusFilter());
+
+            const response = await fetch(url.pathname + url.search, {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (! response.ok) {
+                throw new Error('Gagal memuat job.');
+            }
+
+            const payload = await response.json();
+            renderJobs(
+                Array.isArray(payload.jobs) ? payload.jobs : [],
+                typeof payload.pending_count === 'number' ? payload.pending_count : null,
+            );
+        };
+
+        const markPrinted = async (ids) => {
+            if (! markUrl || ids.length === 0) {
+                return;
+            }
+
+            const response = await fetch(markUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': csrfToken(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ ids }),
+            });
+
+            if (! response.ok) {
+                throw new Error('Gagal menanda job sebagai dicetak.');
+            }
+        };
+
+        const printViaFrame = (url) => new Promise((resolve) => {
+            let frame = document.getElementById('entry-print-station-frame');
+            if (! frame) {
+                frame = document.createElement('iframe');
+                frame.id = 'entry-print-station-frame';
+                frame.setAttribute('aria-hidden', 'true');
+                frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+                document.body.appendChild(frame);
+            }
+
+            let settled = false;
+            const finish = () => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                frame.contentWindow?.removeEventListener('afterprint', finish);
+                resolve();
+            };
+
+            frame.onload = () => {
+                try {
+                    frame.contentWindow?.addEventListener('afterprint', finish);
+                    frame.contentWindow?.focus();
+                    frame.contentWindow?.print();
+                    // Fallback if afterprint never fires (some mobile/desktop browsers).
+                    window.setTimeout(finish, 1500);
+                } catch (error) {
+                    window.open(url, '_blank', 'noopener');
+                    finish();
+                }
+            };
+
+            frame.src = url + (url.includes('?') ? '&' : '?') + '_print=' + Date.now();
+        });
+
+        const printJobs = async (selected, { mark = true } = {}) => {
+            if (busy || selected.length === 0) {
+                return;
+            }
+
+            busy = true;
+            syncSelectionUi();
+            setStatus(`Mencetak ${selected.length} job…`);
+
+            const printedIds = [];
+            try {
+                for (const job of selected) {
+                    if (! job.print_url) {
+                        continue;
+                    }
+                    await printViaFrame(job.print_url);
+                    if (mark && (job.is_pending !== false && job.status !== 'printed')) {
+                        printedIds.push(job.id);
+                    }
+                }
+
+                if (mark && printedIds.length > 0) {
+                    await markPrinted(printedIds);
+                    setStatus(`${printedIds.length} job ditanda dicetak`, 'ok');
+                } else {
+                    setStatus(`${selected.length} job dicetak`, 'ok');
+                }
+                await fetchJobs();
+            } catch (error) {
+                setStatus(error instanceof Error ? error.message : 'Cetakan gagal.', 'error');
+                try {
+                    await fetchJobs();
+                } catch (_error) {
+                    // ignore refresh failure after print error
+                }
+            } finally {
+                busy = false;
+                syncSelectionUi();
+            }
+        };
+
+        const deleteJob = async (job) => {
+            if (! job?.delete_url || busy) {
+                return;
+            }
+
+            if (! window.confirm(`Padam job ${job.reference_number || ''} dari stesen?`)) {
+                return;
+            }
+
+            busy = true;
+            syncSelectionUi();
+            setStatus('Memadam job…');
+
+            try {
+                const response = await fetch(job.delete_url, {
+                    method: 'DELETE',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': csrfToken(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (! response.ok) {
+                    throw new Error(payload.message || 'Gagal memadam job.');
+                }
+
+                if (previewJob?.id === job.id) {
+                    closePreview();
+                }
+
+                setStatus(payload.message || 'Job dipadam dari stesen', 'ok');
+                await fetchJobs();
+            } catch (error) {
+                setStatus(error instanceof Error ? error.message : 'Gagal memadam job.', 'error');
+            } finally {
+                busy = false;
+                syncSelectionUi();
+            }
+        };
+
+        const reloadJobs = () => {
+            fetchJobs().catch((error) => {
+                setStatus(error instanceof Error ? error.message : 'Gagal memuat job.', 'error');
+            });
+        };
+
+        syncFilterControlMode();
+        if (typeof desktopFilterQuery.addEventListener === 'function') {
+            desktopFilterQuery.addEventListener('change', syncFilterControlMode);
+        } else if (typeof desktopFilterQuery.addListener === 'function') {
+            desktopFilterQuery.addListener(syncFilterControlMode);
+        }
+
+        desktopStatusSelect?.addEventListener('change', applyDesktopFilters);
+        desktopOperatorSelect?.addEventListener('change', applyDesktopFilters);
+        refreshBtn?.addEventListener('click', reloadJobs);
+
+        printSelectedBtn?.addEventListener('click', () => {
+            printJobs(selectedJobs());
+        });
+
+        previewPrintBtn?.addEventListener('click', () => {
+            if (! previewJob?.print_url || busy) {
+                return;
+            }
+
+            const job = previewJob;
+            const reprint = job.is_pending === false || job.status === 'printed';
+            closePreview();
+            printJobs([job], { mark: ! reprint });
+        });
+
+        previewDeleteBtn?.addEventListener('click', () => {
+            if (! previewJob?.delete_url || busy) {
+                return;
+            }
+
+            deleteJob(previewJob);
+        });
+
+        if (previewModal && typeof MutationObserver !== 'undefined') {
+            const previewObserver = new MutationObserver(() => {
+                if (previewModal.classList.contains('hidden')) {
+                    if (previewFrame) {
+                        previewFrame.src = 'about:blank';
+                    }
+                    previewJob = null;
+                }
+            });
+            previewObserver.observe(previewModal, { attributes: true, attributeFilter: ['class'] });
+        }
+
+        const cardsRoot = () => listEl?.querySelector('[data-print-station-cards]');
+
+        const isCardSelecting = () => Boolean(cardsRoot()?.classList.contains('is-selecting'));
+
+        const setCardSelecting = (on) => {
+            const root = cardsRoot();
+            if (! root) {
+                return;
+            }
+
+            root.classList.toggle('is-selecting', on);
+            if (! on) {
+                setBoxesChecked(true, false);
+            }
+            syncSelectionUi();
+        };
+
+        const enterCardSelecting = (card) => {
+            const root = cardsRoot();
+            if (! root || ! card) {
+                return;
+            }
+
+            root.classList.add('is-selecting');
+            const id = card.getAttribute('data-print-job-id');
+            if (id) {
+                setBoxesChecked([id], true);
+            }
+            syncSelectionUi();
+
+            if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+                navigator.vibrate(12);
+            }
+        };
+
+        listEl?.addEventListener('change', (event) => {
+            const selectAll = event.target.closest('[data-print-station-select-all]');
+            if (selectAll) {
+                setBoxesChecked(true, selectAll.checked);
+                if (selectAll.closest('[data-print-station-cards]') && ! selectAll.checked) {
+                    setCardSelecting(false);
+                    return;
+                }
+                if (selectAll.closest('[data-print-station-cards]') && selectAll.checked) {
+                    cardsRoot()?.classList.add('is-selecting');
+                }
+                syncSelectionUi();
+                return;
+            }
+
+            const box = event.target.closest('[data-print-station-select]');
+            if (box) {
+                setBoxesChecked([box.value], box.checked);
+                if (box.closest('[data-print-station-cards]') && rowCheckboxes().every((entry) => ! entry.checked)) {
+                    setCardSelecting(false);
+                    return;
+                }
+                syncSelectionUi();
+            }
+        });
+
+        let longPressTimer = null;
+        let longPressTriggered = false;
+        let longPressOrigin = null;
+        const clearLongPress = () => {
+            if (longPressTimer) {
+                window.clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            longPressOrigin = null;
+        };
+
+        listEl?.addEventListener('pointerdown', (event) => {
+            if (event.pointerType === 'mouse' && event.button !== 0) {
+                return;
+            }
+
+            const card = event.target.closest('.entry-print-station__card');
+            if (! card || ! listEl.contains(card) || event.target.closest('label, input')) {
+                return;
+            }
+
+            longPressTriggered = false;
+            clearLongPress();
+            longPressOrigin = { x: event.clientX, y: event.clientY };
+            longPressTimer = window.setTimeout(() => {
+                longPressTriggered = true;
+                longPressTimer = null;
+                longPressOrigin = null;
+                enterCardSelecting(card);
+            }, 420);
+        });
+
+        listEl?.addEventListener('pointerup', clearLongPress);
+        listEl?.addEventListener('pointercancel', clearLongPress);
+        listEl?.addEventListener('pointermove', (event) => {
+            if (! longPressTimer || ! longPressOrigin) {
+                return;
+            }
+
+            const dx = event.clientX - longPressOrigin.x;
+            const dy = event.clientY - longPressOrigin.y;
+            if ((dx * dx) + (dy * dy) > 100) {
+                clearLongPress();
+            }
+        });
+
+        listEl?.addEventListener('contextmenu', (event) => {
+            if (event.target.closest('.entry-print-station__card')) {
+                event.preventDefault();
+            }
+        });
+
+        listEl?.addEventListener('click', (event) => {
+            if (event.target.closest('[data-print-station-select], [data-print-station-select-all], label')) {
+                return;
+            }
+
+            const card = event.target.closest('.entry-print-station__card');
+            if (longPressTriggered) {
+                longPressTriggered = false;
+                return;
+            }
+
+            if (card && isCardSelecting()) {
+                const box = card.querySelector('[data-print-station-select]');
+                if (box) {
+                    setBoxesChecked([box.value], ! box.checked);
+                    if (rowCheckboxes().every((entry) => ! entry.checked)) {
+                        setCardSelecting(false);
+                    } else {
+                        syncSelectionUi();
+                    }
+                }
+                return;
+            }
+
+            const row = event.target.closest('[data-print-job-id]');
+            if (! row || ! listEl.contains(row)) {
+                return;
+            }
+
+            const id = Number(row.getAttribute('data-print-job-id'));
+            const job = jobs.find((entry) => entry.id === id) || {
+                id,
+                print_url: row.getAttribute('data-print-url') || '',
+                preview_url: row.getAttribute('data-preview-url') || '',
+                preview_title: row.getAttribute('data-preview-title') || '',
+                delete_url: row.getAttribute('data-delete-url') || '',
+                reference_number: row.querySelector('.entry-print-station__ref')?.textContent?.trim() || 'Label',
+                type_label: '',
+            };
+            openPreview(job);
+        });
+
+        // Seed from server-rendered rows so selection works before first poll.
+        const seenJobIds = new Set();
+        jobs = [...station.querySelectorAll('[data-print-job-id]')].flatMap((row) => {
+            const id = Number(row.getAttribute('data-print-job-id'));
+            if (seenJobIds.has(id)) {
+                return [];
+            }
+            seenJobIds.add(id);
+            const status = row.getAttribute('data-job-status') || 'pending';
+            return [{
+                id,
+                status,
+                status_label: row.querySelector('.entry-print-station__badge')?.textContent?.trim() || '',
+                is_pending: status === 'pending',
+                print_url: row.getAttribute('data-print-url') || '',
+                preview_url: row.getAttribute('data-preview-url') || '',
+                preview_title: row.getAttribute('data-preview-title') || '',
+                delete_url: row.getAttribute('data-delete-url') || '',
+                reference_number: row.querySelector('.entry-print-station__ref')?.textContent?.trim() || '—',
+                operator: '',
+                type_label: '',
+                created_at: '',
+            }];
+        });
+        syncSelectionUi();
+
+        window.setInterval(() => {
+            if (busy || document.hidden) {
+                return;
+            }
+
+            fetchJobs().catch(() => {
+                // silent poll failure
+            });
+        }, 5000);
+    })();
 
     document.addEventListener('click', (event) => {
         const trigger = event.target.closest('[data-reject-completion]');
@@ -1826,18 +2759,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     const shelfScan = document.getElementById('shelf_scan');
     const shelfQr = document.getElementById('shelf_qr');
     const status = document.getElementById('scanner-status');
+    const shelfForm = shelfScan?.form;
+    const shelfResult = shelfForm?.querySelector('[data-shelf-result]');
+    const shelfLocation = shelfForm?.querySelector('[data-shelf-location]');
+    const shelfConfirm = shelfForm?.querySelector('[data-shelf-confirm]');
     let shelfLookupTimer;
     let shelfLookupVersion = 0;
 
+    const msg = (key, fallback) => status?.dataset?.[key] || fallback;
+
+    const setShelfReady = (ready, location = '') => {
+        shelfForm?.classList.toggle('is-ready', ready);
+        if (shelfConfirm) shelfConfirm.disabled = !ready;
+        if (shelfResult) {
+            shelfResult.classList.toggle('hidden', !ready);
+            if (shelfLocation) shelfLocation.textContent = location;
+        }
+    };
+
+    const clearShelfReady = () => {
+        if (shelfQr) shelfQr.value = '';
+        setShelfReady(false);
+    };
+
     const resolveShelf = async (payload) => {
         const version = ++shelfLookupVersion;
-        shelfQr.value = '';
+        clearShelfReady();
         if (!payload.startsWith(shelfPrefix) || !uuidPattern.test(payload.slice(shelfPrefix.length))) {
-            status.textContent = 'Scan a valid shelf QR code.';
+            status.textContent = msg('msgInvalid', 'Scan a valid shelf QR code.');
             return;
         }
 
-        status.textContent = 'Checking shelf…';
+        status.textContent = msg('msgChecking', 'Checking shelf…');
         try {
             const identifier = payload.slice(shelfPrefix.length);
             const response = await fetch(shelfScan.dataset.lookupUrl.replace('__IDENTIFIER__', identifier), {
@@ -1848,10 +2801,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (version !== shelfLookupVersion) return;
             shelfQr.value = payload;
             shelfScan.value = shelf.location;
-            status.textContent = '';
+            setShelfReady(true, shelf.location);
+            status.textContent = msg('msgOk', '');
         } catch {
             if (version !== shelfLookupVersion) return;
-            status.textContent = 'Shelf QR is invalid or the shelf is inactive.';
+            status.textContent = msg('msgBad', 'Shelf QR is invalid or the shelf is inactive.');
         }
     };
 
@@ -1861,13 +2815,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         shelfScan.addEventListener('input', () => {
             clearTimeout(shelfLookupTimer);
             shelfLookupVersion++;
-            shelfQr.value = '';
+            clearShelfReady();
             shelfLookupTimer = setTimeout(() => resolveShelf(shelfScan.value.trim()), 180);
         });
         shelfScan.form.addEventListener('submit', (event) => {
             if (shelfQr.value) return;
             event.preventDefault();
-            status.textContent = 'Scan a valid shelf QR code before storing the file.';
+            status.textContent = msg('msgRequired', 'Scan a valid shelf QR code before storing the file.');
             shelfScan.focus();
         });
     }
@@ -1893,7 +2847,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             running = false;
         }
         if (activeButton) {
-            activeButton.textContent = activeButton.dataset.originalLabel;
+            // Preserve icon markup on entry shelf scan button.
+            if (activeButton.dataset.labelIdle) {
+                const icon = activeButton.querySelector('.entry-shelf__scan-icon');
+                activeButton.replaceChildren();
+                if (icon) activeButton.append(icon, document.createTextNode(activeButton.dataset.labelIdle));
+                else activeButton.textContent = activeButton.dataset.labelIdle;
+            } else {
+                activeButton.textContent = activeButton.dataset.originalLabel;
+            }
             activeButton = null;
         }
     };
@@ -1904,16 +2866,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (running && activeTarget?.id === button.dataset.scanTarget) {
                 await stop();
                 reader.classList.add('hidden');
-                status.textContent = 'Camera stopped.';
+                status.textContent = msg('msgCameraStop', 'Camera stopped.');
                 return;
             }
             activeTarget = document.getElementById(button.dataset.scanTarget);
             if (!activeTarget) return;
             await stop();
             activeButton = button;
-            button.dataset.originalLabel ??= button.textContent;
+            button.dataset.originalLabel ??= button.textContent.trim();
+            if (button.dataset.labelActive) {
+                const icon = button.querySelector('.entry-shelf__scan-icon');
+                button.replaceChildren();
+                if (icon) button.append(icon, document.createTextNode(button.dataset.labelActive));
+                else button.textContent = button.dataset.labelActive;
+            }
             reader.classList.remove('hidden');
-            status.textContent = 'Camera active — hold the QR code inside the frame.';
+            status.textContent = msg('msgCamera', 'Camera active — hold the QR code inside the frame.');
             try {
                 await scanner.start(
                     { facingMode: 'environment' },
@@ -1924,7 +2892,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                             ? value.startsWith(shelfPrefix) && uuidPattern.test(value.slice(shelfPrefix.length))
                             : !kind || uuidPattern.test(value);
                         if (!valid) {
-                            status.textContent = `Wrong QR type. Scan a ${kind === 'shelf' ? 'shelf' : 'file or staff'} QR.`;
+                            const wrongKind = kind === 'shelf' ? 'shelf' : 'file or staff';
+                            status.textContent = status?.dataset.msgWrong
+                                || ('Wrong QR type. Scan a ' + wrongKind + ' QR.');
                             return;
                         }
                         if (activeTarget.tagName === 'TEXTAREA') {
@@ -1932,7 +2902,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             if (! values.includes(value)) {
                                 values.push(value);
                                 activeTarget.value = values.join('\n');
-                                status.textContent = `${values.length} file QR code(s) captured. Scan another file or tap Scan file to stop.`;
+                                status.textContent = values.length + ' file QR code(s) captured. Scan another file or tap Scan file to stop.';
                             } else {
                                 status.textContent = 'File already scanned. Scan another file or tap Scan file to stop.';
                             }
@@ -1947,15 +2917,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                         await stop();
                         reader.classList.add('hidden');
-                        activeTarget.focus();
+                        if (kind === 'shelf' && shelfConfirm && !shelfConfirm.disabled) {
+                            shelfConfirm.focus();
+                        } else {
+                            activeTarget.focus();
+                        }
                     },
                 );
                 running = true;
                 if (activeTarget.tagName === 'TEXTAREA') button.textContent = 'Stop scanning';
             } catch {
                 await stop();
-                status.textContent = 'Camera unavailable. Use a USB scanner or enter the QR identifier.';
+                status.textContent = msg('msgCameraFail', 'Camera unavailable. Use a USB scanner or enter the QR identifier.');
                 reader.classList.add('hidden');
             }
     });
+
 });

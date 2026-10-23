@@ -15,6 +15,8 @@ class User extends Authenticatable
 
     public const ROLE_USER = 'user';
 
+    public const ROLE_ENTRY = 'entry';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_APPROVED = 'approved';
@@ -71,6 +73,11 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === self::ROLE_ADMIN;
+    }
+
+    public function isEntry(): bool
+    {
+        return $this->role === self::ROLE_ENTRY;
     }
 
     public function isApproved(): bool

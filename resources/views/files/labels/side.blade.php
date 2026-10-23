@@ -1,5 +1,5 @@
 @php
-    $purchaser = trim((string) ($file->purchaser ?? ''));
+    $purchaser = $file->primaryPurchaserName();
 @endphp
 {{-- The side sticker remains 80 x 40 mm, with a rotated 40 x 80 mm spine layout. --}}
 <div class="file-label file-label--side">
@@ -13,9 +13,6 @@
             </tr>
             <tr>
                 <td class="file-label--side__purchaser">{{ $purchaser !== '' ? $purchaser : '—' }}</td>
-            </tr>
-            <tr>
-                <td class="file-label--side__file-id">{{ $file->file_identifier }}</td>
             </tr>
             <tr>
                 <td class="file-label--side__qr-cell">

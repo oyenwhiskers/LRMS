@@ -7,9 +7,8 @@ use App\Models\FileMovement;
 use App\Models\LegalFile;
 use App\Models\Shelf;
 use App\Models\Staff;
+use App\Support\LegalFileQr;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Endroid\QrCode\QrCode;
-use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -187,7 +186,7 @@ class LegalFileController extends Controller
             ])
             ->paginate(30)
             ->withQueryString();
-        $qr = $request->user()->can('labels.print') ? $this->qr($file) : null;
+        $qr = $request->user()->can('labels.print') ? LegalFileQr::dataUri($file) : null;
         $shelves = Shelf::with('rack')->where('is_active', true)->orderBy('code')->get();
 
         return view('files.show', compact('file', 'movements', 'qr', 'shelves'));
@@ -454,18 +453,9 @@ class LegalFileController extends Controller
 
         return [
             'file' => $file,
-            'qr' => $this->qr($file),
+            'qr' => LegalFileQr::dataUri($file),
             'type' => $type,
             'types' => $type === 'both' ? ['front', 'side'] : [$type],
         ];
-    }
-
-    private function qr(LegalFile $file): string
-    {
-        return (new SvgWriter)->write(new QrCode(
-            data: $file->qr_identifier,
-            size: 240,
-            margin: 12,
-        ))->getDataUri();
     }
 }

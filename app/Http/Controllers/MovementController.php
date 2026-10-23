@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Storage\ResolveShelfFromQr;
 use App\Models\FileMovement;
 use App\Models\LegalFile;
 use App\Models\MovementBatch;
@@ -371,21 +372,7 @@ class MovementController extends Controller
 
     private function validatedShelfQr(?string $payload, string $field): Shelf
     {
-        if (! is_string($payload) || ! str_starts_with($payload, Shelf::QR_PREFIX)) {
-            throw ValidationException::withMessages([$field => 'Scan a valid shelf QR code.']);
-        }
-
-        $identifier = substr($payload, strlen(Shelf::QR_PREFIX));
-        if (! str($identifier)->isUuid()) {
-            throw ValidationException::withMessages([$field => 'Scan a valid shelf QR code.']);
-        }
-
-        $shelf = Shelf::with('rack')->where('qr_identifier', $identifier)->first();
-        if (! $shelf || ! $shelf->is_active || ! $shelf->rack?->is_active) {
-            throw ValidationException::withMessages([$field => 'The scanned shelf is unavailable or inactive.']);
-        }
-
-        return $shelf;
+        return app(ResolveShelfFromQr::class)->handle($payload, $field);
     }
 
     private function authenticatedOperatorStaff(Request $request): Staff

@@ -67,4 +67,13 @@ class UserFactory extends Factory
             'staff_id' => null,
         ]);
     }
+
+    public function entry(): static
+    {
+        return $this->state(fn (): array => [
+            'role' => User::ROLE_ENTRY,
+            'status' => User::STATUS_APPROVED,
+            'staff_id' => null,
+        ]);
+    }
 }

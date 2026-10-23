@@ -270,11 +270,17 @@
             data-pdf-url="{{ route('files.label.pdf', $file) }}"
         >
             <div class="modal-header">
-                <div>
+                <div class="min-w-0">
                     <p class="eyebrow text-amber-700">File label</p>
-                    <h2 id="file-label-title-{{ $file->id }}" class="mt-1 text-2xl font-semibold">Front 100 × 150 mm (landscape) · Side 80 × 40 mm</h2>
+                    <h2 id="file-label-title-{{ $file->id }}" class="mt-1 break-words text-xl font-semibold sm:text-2xl">
+                        {{ $file->reference_number }}
+                    </h2>
+                    <p class="file-label-modal__dims" data-file-label-dims>
+                        <span data-file-label-dims-for="front">Front · 150 × 100 mm</span>
+                        <span class="hidden" data-file-label-dims-for="side">Side · 80 × 40 mm</span>
+                    </p>
                 </div>
-                <button class="modal-close" type="button" data-modal-close aria-label="Close modal">Close</button>
+                <button class="modal-close shrink-0" type="button" data-modal-close aria-label="Close modal">Close</button>
             </div>
 
             <style>@include('files.labels.styles')</style>
@@ -298,9 +304,10 @@
                         @include('files.labels.side', ['file' => $file, 'qr' => $qr])
                     </div>
                 </div>
+                <p class="file-label-modal__hint">Preview only · actual size when printing / PDF</p>
             </div>
 
-            <div class="mt-5 flex flex-wrap justify-end gap-3">
+            <div class="file-label-modal__actions">
                 <a class="btn-secondary" data-file-label-pdf href="{{ route('files.label.pdf', ['file' => $file, 'type' => 'front']) }}">Download PDF</a>
                 <button
                     class="btn-primary"

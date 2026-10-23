@@ -119,6 +119,69 @@ class LegalFile extends Model
         return $this->hasMany(FileMovement::class)->latest('occurred_at');
     }
 
+    public function parties(): HasMany
+    {
+        return $this->hasMany(LegalFileParty::class)->orderBy('sort_order');
+    }
+
+    /**
+     * @param  list<array{name?: string|null, ic_number?: string|null}>  $borrowers
+     */
+    public function syncBorrowers(array $borrowers): void
+    {
+        $normalized = collect($borrowers)
+            ->map(fn (array $borrower): array => [
+                'name' => trim((string) ($borrower['name'] ?? '')),
+                'ic_number' => ($ic = trim((string) ($borrower['ic_number'] ?? ''))) !== '' ? $ic : null,
+            ])
+            ->filter(fn (array $borrower): bool => $borrower['name'] !== '')
+            ->values();
+
+        $this->parties()->delete();
+
+        foreach ($normalized as $index => $borrower) {
+            $this->parties()->create([
+                'name' => $borrower['name'],
+                'ic_number' => $borrower['ic_number'],
+                'is_primary' => $index === 0,
+                'sort_order' => $index,
+            ]);
+        }
+
+        $this->forceFill([
+            'purchaser' => self::joinPartyNames($normalized->pluck('name')->all()),
+        ])->save();
+    }
+
+    /**
+     * @param  list<string>  $names
+     */
+    public static function joinPartyNames(array $names): string
+    {
+        return collect($names)
+            ->map(fn (string $name): string => trim($name))
+            ->filter()
+            ->implode(' & ');
+    }
+
+    /** Main party only — stickers omit co-borrowers (`purchaser` stores "A & B"). */
+    public function primaryPurchaserName(): string
+    {
+        $purchaser = trim((string) ($this->purchaser ?? ''));
+
+        return $purchaser === '' ? '' : trim(explode(' & ', $purchaser, 2)[0]);
+    }
+
+    /** Front sticker fourth line: bank / title no. / suite by case type. */
+    public function stickerDetail(): string
+    {
+        return trim((string) match ($this->case_type) {
+            self::TYPE_LOAN => $this->bank ?? '',
+            self::TYPE_LITIGATION => $this->suite_number ?? '',
+            default => $this->title_number ?? '',
+        });
+    }
+
     public function linkedAsPrimary(): BelongsToMany
     {
         return $this->belongsToMany(

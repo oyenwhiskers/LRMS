@@ -1,6 +1,7 @@
 @php
-    $purchaser = trim((string) ($file->purchaser ?? ''));
+    $purchaser = $file->primaryPurchaserName();
     $property = trim((string) ($file->property ?? ''));
+    $detail = $file->stickerDetail();
 @endphp
 <div class="file-label file-label--front">
     <table class="file-label__table" role="presentation">
@@ -15,7 +16,12 @@
             <td class="file-label__info">
                 <p class="file-label__reference">{{ $file->reference_number }}</p>
                 <p class="file-label__purchaser">{{ $purchaser !== '' ? $purchaser : '—' }}</p>
-                <p class="file-label__property">{{ $property !== '' ? $property : '—' }}</p>
+                @if ($property !== '')
+                    <p class="file-label__property">{{ $property }}</p>
+                @endif
+                @if ($detail !== '')
+                    <p class="file-label__detail">{{ $detail }}</p>
+                @endif
             </td>
             <td class="file-label__qr-cell">
                 <div class="file-label__qr-group">
@@ -23,9 +29,6 @@
                     <span class="file-label__qr-caption">Scan file</span>
                 </div>
             </td>
-        </tr>
-        <tr>
-            <td colspan="2" class="file-label__file-id">{{ $file->file_identifier }}</td>
         </tr>
     </table>
 </div>

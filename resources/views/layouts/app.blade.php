@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#111111">
     <title>@yield('title', 'LRMS') · {{ config('app.name') }}</title>
@@ -124,6 +124,13 @@
                                 'icon' => 'briefcase',
                                 'permission_check' => fn () => $user->can('viewAny', App\Models\Position::class),
                                 'active' => ['admin.positions.*'],
+                            ],
+                            [
+                                'label' => 'Entry operators',
+                                'route' => route('admin.entry-users.index'),
+                                'icon' => 'staff',
+                                'permission_check' => fn () => $user->isAdmin(),
+                                'active' => ['admin.entry-users.*'],
                             ],
                             [
                                 'label' => 'Case Categories',
