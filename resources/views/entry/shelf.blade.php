@@ -12,7 +12,7 @@
             <li class="entry-shelf__step is-current"><span>3</span></li>
         </ol>
         <h1 class="entry-page-title">Imbas QR rak</h1>
-        <p class="entry-page-lede">Imbas QR rak tempat fail ini diletakkan.</p>
+        <p class="entry-page-lede">Imbas QR rak tempat fail ini diletakkan, atau pilih secara manual.</p>
     </header>
 
     <section class="entry-shelf__file" aria-label="Fail untuk disimpan">
@@ -56,15 +56,16 @@
             data-msg-invalid="Imbas QR rak yang sah."
             data-msg-checking="Semak rak…"
             data-msg-bad="QR rak tidak sah atau rak tidak aktif."
-            data-msg-required="Imbas QR rak yang sah."
+            data-msg-required="Imbas QR rak atau pilih rak."
             data-msg-camera="Kamera aktif — letak QR dalam bingkai."
             data-msg-camera-stop="Kamera ditutup."
             data-msg-wrong="Jenis QR salah. Imbas QR rak."
-            data-msg-camera-fail="Kamera tidak tersedia."
+            data-msg-camera-fail="Kamera tidak tersedia. Pilih rak secara manual."
             data-msg-ok="Menyimpan…"
+            data-msg-manual-ok="Rak dipilih. Tekan Sahkan simpan."
         ></p>
 
-        {{-- Keep for camera / USB scanner wiring; not shown to avoid a second path. --}}
+        {{-- Keep for camera / USB scanner wiring; not shown as a second scan path. --}}
         <input
             id="shelf_scan"
             class="sr-only"
@@ -77,10 +78,47 @@
         >
 
         <input id="shelf_qr" type="hidden" name="shelf_qr" value="{{ old('shelf_qr') }}">
+        <input id="shelf_id" type="hidden" name="shelf_id" value="{{ old('shelf_id') }}">
+
+        <details class="entry-shelf__manual" @if(old('shelf_id') || $errors->has('shelf_id') || $errors->has('shelf_qr')) open @endif>
+            <summary>Atau pilih rak secara manual</summary>
+
+            <label class="entry-shelf__manual-label" for="shelf_rack_pick">Rak</label>
+            <select id="shelf_rack_pick" class="entry-shelf__input" data-entry-rack-pick>
+                <option value="">Pilih rak</option>
+                @foreach ($racks as $rack)
+                    <option value="{{ $rack->id }}">
+                        {{ $rack->code }}{{ $rack->name ? ' — '.$rack->name : '' }}
+                    </option>
+                @endforeach
+            </select>
+
+            <label class="entry-shelf__manual-label" for="shelf_shelf_pick">Shelf</label>
+            <select id="shelf_shelf_pick" class="entry-shelf__input" data-entry-shelf-pick>
+                <option value="">Pilih shelf</option>
+                @foreach ($shelves as $shelf)
+                    <option
+                        value="{{ $shelf->id }}"
+                        data-rack-id="{{ $shelf->rack_id }}"
+                        data-location="{{ $shelf->rack?->code }}/{{ $shelf->code }}"
+                        @selected((string) old('shelf_id') === (string) $shelf->id)
+                    >
+                        {{ $shelf->rack?->code }}/{{ $shelf->code }}{{ $shelf->name ? ' — '.$shelf->name : '' }}
+                    </option>
+                @endforeach
+            </select>
+        </details>
 
         @error('shelf_qr')
             <p class="entry-shelf__error">{{ $message }}</p>
         @enderror
+        @error('shelf_id')
+            <p class="entry-shelf__error">{{ $message }}</p>
+        @enderror
+
+        <button class="entry-shelf__confirm" type="submit" data-shelf-confirm disabled>
+            Sahkan simpan
+        </button>
     </form>
 
     <div class="entry-shelf__aside">

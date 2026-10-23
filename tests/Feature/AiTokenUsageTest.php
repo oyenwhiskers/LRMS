@@ -96,7 +96,7 @@ class AiTokenUsageTest extends TestCase
 
         $this->actingAs($entry)
             ->post(route('entry.scan.store'), [
-                'document' => UploadedFile::fake()->image('case.jpg'),
+                'documents' => [UploadedFile::fake()->image('case.jpg')],
             ], ['Accept' => 'application/json'])
             ->assertOk();
 
@@ -140,7 +140,7 @@ class AiTokenUsageTest extends TestCase
 
         $this->actingAs($entry)
             ->post(route('entry.scan.store'), [
-                'document' => UploadedFile::fake()->image('case.jpg'),
+                'documents' => [UploadedFile::fake()->image('case.jpg')],
             ], ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('warning', 'Jawapan AI tidak sah. Sila isi borang sendiri.');

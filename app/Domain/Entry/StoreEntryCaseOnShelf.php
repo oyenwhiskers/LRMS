@@ -6,6 +6,7 @@ use App\Domain\Storage\ResolveShelfFromQr;
 use App\Models\EntryScan;
 use App\Models\FileMovement;
 use App\Models\LegalFile;
+use App\Models\Shelf;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -14,26 +15,30 @@ class StoreEntryCaseOnShelf
 {
     public function __construct(private readonly ResolveShelfFromQr $resolveShelf) {}
 
-    public function handle(EntryScan $scan, User $user, ?string $shelfQr): EntryScan
+    public function handle(EntryScan $scan, User $user, ?string $shelfQr = null, ?int $shelfId = null): EntryScan
     {
         if (! $scan->isOwnedBy($user) && ! $user->isAdmin()) {
             abort(403);
         }
 
+        $field = $shelfId ? 'shelf_id' : 'shelf_qr';
+
         if ($scan->status !== EntryScan::STATUS_SAVED || ! $scan->legal_file_id) {
             throw ValidationException::withMessages([
-                'shelf_qr' => 'Simpan kes dahulu sebelum mengimbas rak.',
+                $field => 'Simpan kes dahulu sebelum mengimbas rak.',
             ]);
         }
 
-        $shelf = $this->resolveShelf->handle($shelfQr);
+        $shelf = $shelfId
+            ? $this->resolveActiveShelf($shelfId)
+            : $this->resolveShelf->handle($shelfQr);
 
-        return DB::transaction(function () use ($scan, $user, $shelf): EntryScan {
+        return DB::transaction(function () use ($scan, $user, $shelf, $field): EntryScan {
             $file = LegalFile::query()->whereKey($scan->legal_file_id)->lockForUpdate()->firstOrFail();
 
             if ($file->status !== LegalFile::STATUS_REGISTERED) {
                 throw ValidationException::withMessages([
-                    'shelf_qr' => "{$file->reference_number} tidak boleh disimpan pada status semasa.",
+                    $field => "{$file->reference_number} tidak boleh disimpan pada status semasa.",
                 ]);
             }
 
@@ -62,5 +67,17 @@ class StoreEntryCaseOnShelf
 
             return $scan->fresh(['legalFile', 'shelf.rack']);
         });
+    }
+
+    private function resolveActiveShelf(int $shelfId): Shelf
+    {
+        $shelf = Shelf::with('rack')->whereKey($shelfId)->first();
+        if (! $shelf || ! $shelf->is_active || ! $shelf->rack?->is_active) {
+            throw ValidationException::withMessages([
+                'shelf_id' => 'Rak tidak sah atau tidak aktif.',
+            ]);
+        }
+
+        return $shelf;
     }
 }

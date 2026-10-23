@@ -14,14 +14,19 @@ use Throwable;
 class GeminiCaseDraftService
 {
     /**
+     * @param  list<array{path: string, mime: string}>  $images
      * @return array{draft: array<string, mixed>, error: ?string}
      */
-    public function draftFromImage(string $absolutePath, string $mimeType, ?int $userId = null): array
+    public function draftFromImages(array $images, ?int $userId = null): array
     {
         $key = (string) config('services.gemini.key');
 
         if ($key === '') {
             return ['draft' => $this->emptyDraft(), 'error' => 'GEMINI_API_KEY belum ditetapkan.'];
+        }
+
+        if ($images === []) {
+            return ['draft' => $this->emptyDraft(), 'error' => 'Tiada gambar dokumen.'];
         }
 
         $categories = CaseCategory::query()
@@ -33,8 +38,10 @@ class GeminiCaseDraftService
             ->map(fn (CaseCategory $category): string => "{$category->code} — {$category->name} (id:{$category->id})")
             ->implode("\n");
 
+        $pageCount = count($images);
         $prompt = <<<PROMPT
 You are extracting data from a Malaysian law-firm case document photo for case registration of OLDER physical files.
+You may receive 1–{$pageCount} ordered page photos of the same physical file (page 1 first). Merge fields across pages — later pages often hold property, title_number, IC, or party details missing from the cover.
 Return ONLY valid JSON with these keys:
 {
   "reference_number": string | null,
@@ -60,7 +67,7 @@ Rules:
 {$categoryLines}
 - Document title drives case_type: Facility Agreement / Facilities Agreement / Loan Agreement / Financing-i / Murabahah / Deed of Assignment with a bank → loan. Sale & Purchase → snp. Court / writ / summons → litigation.
 - Bank financing / loan docs → prefer LOA (Loan Documentation). Do NOT treat bank codes or middle tokens inside a firm ref (e.g. CON in THY/YFT/CON/BRAKYAT/2025/18, or ABMB/MIB/UOB) as the case category.
-- Fill only what is clearly visible. Cover pages often lack property and title_number — leave those null. Do not invent or guess missing fields.
+- Fill only what is clearly visible across the provided pages. Cover pages often lack property and title_number — leave those null unless a later page shows them. Do not invent or guess missing fields.
 - For loan: fill borrowers in document order — party (1) first (main), then (2), (3), …. Include each customer's NRIC in ic_number when printed. Do not drop co-borrowers. Also set purchaser to all borrower names joined with " & " (e.g. "LOOK KAR YANG & LIM PUI SHEE"). Fill bank and start_date if dated; property/title_number only if printed.
 - For snp: fill purchaser, vendor, property, title_number only if printed; borrowers may be empty.
 - For litigation: fill suite_number, purchaser (person name), ic_number when visible; leave property empty; borrowers may be empty.
@@ -68,23 +75,22 @@ Rules:
 PROMPT;
 
         try {
-            $bytes = file_get_contents($absolutePath);
-            if ($bytes === false) {
-                throw new RuntimeException('Unable to read document image.');
+            $parts = [['text' => $prompt]];
+            foreach ($images as $image) {
+                $bytes = file_get_contents($image['path']);
+                if ($bytes === false) {
+                    throw new RuntimeException('Unable to read document image.');
+                }
+                $parts[] = [
+                    'inline_data' => [
+                        'mime_type' => ($image['mime'] ?? '') !== '' ? $image['mime'] : 'image/jpeg',
+                        'data' => base64_encode($bytes),
+                    ],
+                ];
             }
 
             $payload = [
-                'contents' => [[
-                    'parts' => [
-                        ['text' => $prompt],
-                        [
-                            'inline_data' => [
-                                'mime_type' => $mimeType ?: 'image/jpeg',
-                                'data' => base64_encode($bytes),
-                            ],
-                        ],
-                    ],
-                ]],
+                'contents' => [['parts' => $parts]],
                 'generationConfig' => [
                     'responseMimeType' => 'application/json',
                     'temperature' => 0.1,
@@ -95,6 +101,7 @@ PROMPT;
             $lastBody = null;
             $lastModel = null;
             $busy = false;
+            $timeout = count($images) > 1 ? 90 : 60;
 
             foreach ($this->candidateModels() as $model) {
                 $url = sprintf(
@@ -103,7 +110,7 @@ PROMPT;
                     urlencode($key),
                 );
 
-                $response = Http::timeout(60)->acceptJson()->post($url, $payload);
+                $response = Http::timeout($timeout)->acceptJson()->post($url, $payload);
                 $lastStatus = $response->status();
                 $lastBody = $response->body();
                 $lastModel = $model;

@@ -114,6 +114,8 @@ class EntryScanRegisterTest extends TestCase
             ->assertSee('data-entry-open-camera', false)
             ->assertSee('data-entry-open-upload', false)
             ->assertSee('data-entry-upload-input', false)
+            ->assertSee('data-entry-analyze', false)
+            ->assertSee('data-max-pages="3"', false)
             ->assertSee('Muat naik dokumen', false);
     }
 
@@ -148,11 +150,69 @@ class EntryScanRegisterTest extends TestCase
 
         $this->actingAs($entry)
             ->post(route('entry.scan.store'), [
-                'document' => UploadedFile::fake()->image('case.jpg'),
+                'documents' => [UploadedFile::fake()->image('case.jpg')],
             ], ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('draft.reference_number', 'CON/2019/0888')
             ->assertJsonPath('warning', null);
+    }
+
+    public function test_analyze_accepts_multiple_pages_and_sends_all_to_gemini(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'text' => json_encode([
+                                'reference_number' => 'LOA/2020/0011',
+                                'case_type' => LegalFile::TYPE_LOAN,
+                                'case_category_code' => 'LOA',
+                                'purchaser' => 'Page Two Borrower',
+                                'property' => 'Lot 9 from page 2',
+                            ]),
+                        ]],
+                    ],
+                ]],
+            ]),
+        ]);
+
+        config([
+            'services.gemini.key' => 'test-key',
+            'services.gemini.model' => 'gemini-3.1-flash-lite',
+        ]);
+
+        $entry = User::factory()->entry()->create();
+
+        $response = $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [
+                    UploadedFile::fake()->image('page1.jpg'),
+                    UploadedFile::fake()->image('page2.jpg'),
+                ],
+            ], ['Accept' => 'application/json']);
+
+        $response->assertOk()
+            ->assertJsonPath('draft.reference_number', 'LOA/2020/0011')
+            ->assertJsonPath('draft.property', 'Lot 9 from page 2');
+
+        $tempPath = $response->json('temp_path');
+        $this->assertNotEmpty($tempPath);
+        Storage::disk('local')->assertExists($tempPath);
+
+        Http::assertSent(function ($request): bool {
+            $parts = data_get($request->data(), 'contents.0.parts');
+            if (! is_array($parts)) {
+                return false;
+            }
+            $images = array_values(array_filter(
+                $parts,
+                fn ($part): bool => is_array($part) && isset($part['inline_data']['data']),
+            ));
+
+            return count($images) === 2;
+        });
     }
 
     public function test_analyze_does_not_create_draft_until_confirm_save(): void
@@ -192,7 +252,7 @@ class EntryScanRegisterTest extends TestCase
 
         $analyze = $this->actingAs($entry)
             ->post(route('entry.scan.store'), [
-                'document' => UploadedFile::fake()->image('case.jpg'),
+                'documents' => [UploadedFile::fake()->image('case.jpg')],
             ], ['Accept' => 'application/json']);
 
         $analyze->assertOk();
@@ -546,8 +606,48 @@ class EntryScanRegisterTest extends TestCase
             ->get(route('entry.shelf', $scan))
             ->assertOk()
             ->assertSee('Imbas QR rak', false)
+            ->assertSee('Atau pilih rak secara manual', false)
             ->assertSee('CON/2019/0711', false)
             ->assertSee(route('entry.scan.destroy', $scan), false);
+    }
+
+    public function test_entry_shelf_can_store_via_manual_shelf_id(): void
+    {
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $rack = Rack::create(['code' => 'B2', 'name' => 'Bay B']);
+        $shelf = Shelf::create(['rack_id' => $rack->id, 'code' => 'S3', 'name' => 'Shelf Three']);
+
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2019/0912',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Manual Buyer',
+            'property' => 'Lot M',
+            'title_number' => 'PN M',
+            'status' => LegalFile::STATUS_REGISTERED,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+
+        $scan = EntryScan::create([
+            'user_id' => $entry->id,
+            'document_path' => 'entry-scans/manual.jpg',
+            'legal_file_id' => $file->id,
+            'status' => EntryScan::STATUS_SAVED,
+        ]);
+
+        $this->actingAs($entry)
+            ->post(route('entry.shelf.store', $scan), [
+                'shelf_id' => $shelf->id,
+            ])
+            ->assertRedirect(route('entry.home'));
+
+        $this->assertSame(LegalFile::STATUS_STORED, $file->fresh()->status);
+        $this->assertSame($shelf->id, $file->fresh()->shelf_id);
+        $this->assertSame(EntryScan::STATUS_STORED, $scan->fresh()->status);
+        $this->assertSame($shelf->id, $scan->fresh()->shelf_id);
     }
 
     public function test_entry_user_can_update_own_scan_case_data(): void

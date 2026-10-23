@@ -160,18 +160,36 @@ class EntryController extends Controller
     public function store(Request $request, GeminiCaseDraftService $gemini): JsonResponse
     {
         $data = $request->validate([
-            'document' => ['required', 'file', 'image', 'max:10240'],
+            'documents' => ['required', 'array', 'min:1', 'max:3'],
+            'documents.*' => ['required', 'file', 'image', 'max:10240'],
         ]);
 
-        // Temporary image only — no EntryScan / draft row until user confirms save.
-        $path = $data['document']->store('entry-scans/tmp/'.$request->user()->id, 'local');
-        $absolute = Storage::disk('local')->path($path);
-        $mime = $data['document']->getMimeType() ?: 'image/jpeg';
+        // Temporary images only — no EntryScan / draft row until user confirms save.
+        // Persist primary (first) page path for save; extras are AI-only then deleted.
+        $stored = [];
+        foreach ($data['documents'] as $file) {
+            $path = $file->store('entry-scans/tmp/'.$request->user()->id, 'local');
+            $stored[] = [
+                'path' => $path,
+                'absolute' => Storage::disk('local')->path($path),
+                'mime' => $file->getMimeType() ?: 'image/jpeg',
+            ];
+        }
 
-        $result = $gemini->draftFromImage($absolute, $mime, $request->user()->id);
+        $result = $gemini->draftFromImages(
+            array_map(
+                fn (array $row): array => ['path' => $row['absolute'], 'mime' => $row['mime']],
+                $stored,
+            ),
+            $request->user()->id,
+        );
+
+        foreach (array_slice($stored, 1) as $extra) {
+            Storage::disk('local')->delete($extra['path']);
+        }
 
         return response()->json([
-            'temp_path' => $path,
+            'temp_path' => $stored[0]['path'],
             'draft' => $result['draft'],
             'warning' => $result['error'],
             'save_url' => route('entry.save'),
@@ -235,13 +253,43 @@ class EntryController extends Controller
         abort_unless($scan->status === EntryScan::STATUS_SAVED, 422, 'Save the case before scanning a shelf.');
         $scan->load(['legalFile']);
 
-        return view('entry.shelf', compact('scan'));
+        $racks = Rack::query()
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
+        $shelves = Shelf::query()
+            ->where('is_active', true)
+            ->with('rack:id,code')
+            ->orderBy('code')
+            ->get(['id', 'rack_id', 'code', 'name']);
+
+        return view('entry.shelf', compact('scan', 'racks', 'shelves'));
     }
 
     public function storeShelf(Request $request, EntryScan $scan, StoreEntryCaseOnShelf $store): RedirectResponse
     {
         $this->authorizeScan($request, $scan);
-        $store->handle($scan, $request->user(), $request->input('shelf_qr'));
+
+        $data = $request->validate([
+            'shelf_qr' => ['nullable', 'string'],
+            'shelf_id' => ['nullable', 'integer', 'exists:shelves,id'],
+        ]);
+
+        if (empty($data['shelf_qr']) && empty($data['shelf_id'])) {
+            throw ValidationException::withMessages([
+                'shelf_qr' => 'Imbas QR rak atau pilih rak.',
+            ]);
+        }
+
+        $shelfId = ! empty($data['shelf_id']) ? (int) $data['shelf_id'] : null;
+
+        $store->handle(
+            $scan,
+            $request->user(),
+            $shelfId ? null : ($data['shelf_qr'] ?? null),
+            $shelfId,
+        );
 
         return redirect()
             ->route('entry.home')

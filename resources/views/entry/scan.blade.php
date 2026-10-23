@@ -10,15 +10,16 @@
     class="entry-home"
     data-entry-flow
     data-analyze-url="{{ route('entry.scan.store') }}"
+    data-max-pages="3"
 >
     <div data-entry-heading>
         <p class="entry-stat__label" data-entry-step-label>Langkah 1 / 3</p>
         <h1 class="entry-page-title" data-entry-step-title>Ambil gambar</h1>
-        <p class="entry-page-lede" data-entry-step-lede>Ambil gambar dengan kamera, atau muat naik gambar dokumen.</p>
+        <p class="entry-page-lede" data-entry-step-lede>Ambil gambar dengan kamera, atau muat naik gambar dokumen. Boleh sampai 3 muka surat.</p>
     </div>
 
     <input type="file" accept="image/*" capture="environment" hidden data-entry-camera-input>
-    <input type="file" accept="image/*" hidden data-entry-upload-input>
+    <input type="file" accept="image/*" multiple hidden data-entry-upload-input>
 
     {{-- Step 1: camera or upload --}}
     <div class="entry-camera__panel" data-entry-step="1">
@@ -46,6 +47,17 @@
             <button class="entry-auth__submit" type="button" data-entry-open-upload>Muat naik dokumen</button>
             <button class="entry-app__logout" type="button" data-entry-camera-fallback-btn>Ambil gambar</button>
             <button class="entry-app__logout" type="button" data-entry-back-idle>Kembali</button>
+        </div>
+    </div>
+
+    {{-- Step 1: review pages before AI --}}
+    <div class="entry-camera__panel hidden" data-entry-step="1-pages">
+        <ul class="entry-camera__thumbs" data-entry-page-thumbs></ul>
+        <p class="entry-page-lede" data-entry-page-count></p>
+        <div class="entry-camera__actions">
+            <button class="entry-auth__submit" type="button" data-entry-analyze>Baca dengan AI</button>
+            <button class="entry-app__logout" type="button" data-entry-add-page>Tambah muka surat</button>
+            <button class="entry-app__logout" type="button" data-entry-clear-pages>Mulakan semula</button>
         </div>
     </div>
 
@@ -81,6 +93,7 @@
     root.dataset.bound = '1';
 
     const analyzeUrl = root.getAttribute('data-analyze-url');
+    const maxPages = Math.max(1, Number(root.getAttribute('data-max-pages') || 3));
     const cameraInput = root.querySelector('[data-entry-camera-input]');
     const uploadInput = root.querySelector('[data-entry-upload-input]');
     const video = root.querySelector('[data-entry-camera-video]');
@@ -91,6 +104,11 @@
     const cancelCamera = root.querySelector('[data-entry-cancel-camera]');
     const fallbackBtn = root.querySelector('[data-entry-camera-fallback-btn]');
     const backIdle = root.querySelector('[data-entry-back-idle]');
+    const thumbsEl = root.querySelector('[data-entry-page-thumbs]');
+    const pageCountEl = root.querySelector('[data-entry-page-count]');
+    const analyzeBtn = root.querySelector('[data-entry-analyze]');
+    const addPageBtn = root.querySelector('[data-entry-add-page]');
+    const clearPagesBtn = root.querySelector('[data-entry-clear-pages]');
     const saveForm = root.querySelector('[data-entry-save-form]');
     const tempPathInput = root.querySelector('[data-entry-temp-path]');
     const warningEl = root.querySelector('[data-entry-ai-warning]');
@@ -103,17 +121,22 @@
         '1': root.querySelector('[data-entry-step="1"]'),
         '1-live': root.querySelector('[data-entry-step="1-live"]'),
         '1-fallback': root.querySelector('[data-entry-step="1-fallback"]'),
+        '1-pages': root.querySelector('[data-entry-step="1-pages"]'),
         '2': root.querySelector('[data-entry-step="2"]'),
         '3': root.querySelector('[data-entry-step="3"]'),
     };
 
-    if (!analyzeUrl || !cameraInput || !uploadInput || !video || !saveForm || !openBtn) return;
+    if (!analyzeUrl || !cameraInput || !uploadInput || !video || !saveForm || !openBtn || !thumbsEl) return;
 
     let stream = null;
+    /** @type {{ file: File, url: string }[]} */
+    let pages = [];
+
     const copy = {
-        '1': { label: 'Langkah 1 / 3', title: 'Ambil gambar', lede: 'Ambil gambar dengan kamera, atau muat naik gambar dokumen.' },
+        '1': { label: 'Langkah 1 / 3', title: 'Ambil gambar', lede: 'Ambil gambar dengan kamera, atau muat naik gambar dokumen. Boleh sampai 3 muka surat.' },
         '1-live': { label: 'Langkah 1 / 3', title: 'Ambil gambar', lede: 'Halakan kamera ke dokumen, kemudian tekan Tangkap.' },
         '1-fallback': { label: 'Langkah 1 / 3', title: 'Ambil gambar', lede: 'Kamera tidak dapat dibuka. Muat naik gambar dokumen, atau cuba lagi melalui telefon.' },
+        '1-pages': { label: 'Langkah 1 / 3', title: 'Semak muka surat', lede: 'Tambah muka surat jika maklumat tidak lengkap pada muka pertama, kemudian baca dengan AI.' },
         '2': { label: 'Langkah 2 / 3', title: 'AI membaca', lede: 'Dokumen sedang diproses. Sila tunggu.' },
         '3': { label: 'Langkah 3 / 3', title: 'Semak borang', lede: 'Semak maklumat yang diisi AI, kemudian simpan.' },
     };
@@ -134,8 +157,67 @@
         video.srcObject = null;
     };
 
+    const clearPages = () => {
+        pages.forEach((page) => URL.revokeObjectURL(page.url));
+        pages = [];
+    };
+
+    const renderPages = () => {
+        thumbsEl.innerHTML = '';
+        pages.forEach((page, index) => {
+            const li = document.createElement('li');
+            li.className = 'entry-camera__thumb';
+            const img = document.createElement('img');
+            img.src = page.url;
+            img.alt = `Muka surat ${index + 1}`;
+            const label = document.createElement('span');
+            label.textContent = String(index + 1);
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'entry-camera__thumb-remove';
+            remove.setAttribute('aria-label', `Buang muka surat ${index + 1}`);
+            remove.textContent = '×';
+            remove.addEventListener('click', (e) => {
+                e.preventDefault();
+                URL.revokeObjectURL(page.url);
+                pages.splice(index, 1);
+                if (pages.length === 0) {
+                    goIdle();
+                    return;
+                }
+                renderPages();
+            });
+            li.append(img, label, remove);
+            thumbsEl.appendChild(li);
+        });
+        if (pageCountEl) {
+            pageCountEl.textContent = pages.length >= maxPages
+                ? `${pages.length} / ${maxPages} muka surat (maksimum).`
+                : `${pages.length} / ${maxPages} muka surat. Tambah lagi jika perlu.`;
+        }
+        if (addPageBtn) addPageBtn.disabled = pages.length >= maxPages;
+        if (analyzeBtn) analyzeBtn.disabled = pages.length === 0;
+    };
+
+    const showPages = () => {
+        stopCamera();
+        renderPages();
+        showStep('1-pages');
+    };
+
+    const addFiles = (fileList) => {
+        const incoming = Array.from(fileList || []).filter((f) => f && f.type.startsWith('image/'));
+        for (const file of incoming) {
+            if (pages.length >= maxPages) break;
+            pages.push({ file, url: URL.createObjectURL(file) });
+        }
+        if (pages.length === 0) return;
+        showPages();
+    };
+
     const goIdle = () => {
         stopCamera();
+        clearPages();
         cameraInput.value = '';
         uploadInput.value = '';
         showStep('1');
@@ -159,7 +241,11 @@
             });
             video.srcObject = stream;
             await video.play();
-            if (status) status.textContent = 'Halakan kamera ke dokumen.';
+            if (status) {
+                status.textContent = pages.length
+                    ? `Muka surat ${pages.length + 1}. Halakan kamera ke dokumen.`
+                    : 'Halakan kamera ke dokumen.';
+            }
             showStep('1-live');
         } catch (err) {
             stopCamera();
@@ -172,9 +258,9 @@
     const borrowerTemplate = () => saveForm.querySelector('[data-borrower-template]');
 
     const nextBorrowerIndex = () => {
-        const root = borrowersRoot();
-        if (!root) return 1;
-        return root.querySelectorAll('[data-borrower-row]').length;
+        const rootEl = borrowersRoot();
+        if (!rootEl) return 1;
+        return rootEl.querySelectorAll('[data-borrower-row]').length;
     };
 
     const addBorrowerRow = (name = '', ic = '') => {
@@ -235,11 +321,12 @@
         fillBorrowers(draft || {});
     };
 
-    const processWithAi = async (file) => {
+    const processWithAi = async () => {
+        if (pages.length === 0) return;
         stopCamera();
         showStep('2');
         const body = new FormData();
-        body.append('document', file);
+        pages.forEach((page) => body.append('documents[]', page.file));
         body.append('_token', csrf);
         try {
             const response = await fetch(analyzeUrl, {
@@ -265,9 +352,10 @@
                     warningEl.classList.add('hidden');
                 }
             }
+            clearPages();
             showStep('3');
         } catch (err) {
-            goIdle();
+            showPages();
             window.alert('Gagal baca dokumen. Sila cuba lagi.');
         }
     };
@@ -282,12 +370,30 @@
             openUpload();
         });
     });
-    cancelCamera?.addEventListener('click', (e) => { e.preventDefault(); goIdle(); });
+    cancelCamera?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (pages.length) {
+            showPages();
+            return;
+        }
+        goIdle();
+    });
     backIdle?.addEventListener('click', (e) => { e.preventDefault(); goIdle(); });
+    analyzeBtn?.addEventListener('click', (e) => { e.preventDefault(); processWithAi(); });
+    addPageBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (pages.length >= maxPages) return;
+        startCamera();
+    });
+    clearPagesBtn?.addEventListener('click', (e) => { e.preventDefault(); goIdle(); });
     shutter?.addEventListener('click', (e) => {
         e.preventDefault();
         if (!video.videoWidth) {
             if (status) status.textContent = 'Kamera belum sedia. Cuba lagi.';
+            return;
+        }
+        if (pages.length >= maxPages) {
+            showPages();
             return;
         }
         const canvas = document.createElement('canvas');
@@ -299,7 +405,7 @@
                 if (status) status.textContent = 'Gagal tangkap gambar. Cuba lagi.';
                 return;
             }
-            processWithAi(new File([blob], `entry-scan-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+            addFiles([new File([blob], `entry-scan-${Date.now()}.jpg`, { type: 'image/jpeg' })]);
         }, 'image/jpeg', 0.92);
     });
     fallbackBtn?.addEventListener('click', (e) => {
@@ -307,15 +413,18 @@
         cameraInput.value = '';
         cameraInput.click();
     });
-    const onPickedFile = (input) => {
-        const file = input.files?.[0];
-        if (file) processWithAi(file);
-    };
-    cameraInput.addEventListener('change', () => onPickedFile(cameraInput));
-    uploadInput.addEventListener('change', () => onPickedFile(uploadInput));
+    cameraInput.addEventListener('change', () => {
+        if (cameraInput.files?.length) addFiles(cameraInput.files);
+    });
+    uploadInput.addEventListener('change', () => {
+        if (uploadInput.files?.length) addFiles(uploadInput.files);
+    });
 
     showStep('1');
-    window.addEventListener('pagehide', stopCamera);
+    window.addEventListener('pagehide', () => {
+        stopCamera();
+        clearPages();
+    });
 })();
 </script>
 @endsection

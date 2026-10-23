@@ -2815,11 +2815,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const shelfScan = document.getElementById('shelf_scan');
     const shelfQr = document.getElementById('shelf_qr');
+    const shelfId = document.getElementById('shelf_id');
     const status = document.getElementById('scanner-status');
     const shelfForm = shelfScan?.form;
     const shelfResult = shelfForm?.querySelector('[data-shelf-result]');
     const shelfLocation = shelfForm?.querySelector('[data-shelf-location]');
     const shelfConfirm = shelfForm?.querySelector('[data-shelf-confirm]');
+    const rackPick = shelfForm?.querySelector('[data-entry-rack-pick]');
+    const shelfPick = shelfForm?.querySelector('[data-entry-shelf-pick]');
     let shelfLookupTimer;
     let shelfLookupVersion = 0;
     let shelfStoring = false;
@@ -2837,13 +2840,49 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const clearShelfReady = () => {
         if (shelfQr) shelfQr.value = '';
+        if (shelfId) shelfId.value = '';
         setShelfReady(false);
+    };
+
+    const applyManualShelf = () => {
+        if (!shelfPick) return;
+        const option = shelfPick.selectedOptions[0];
+        const id = shelfPick.value;
+        if (!id || !option) {
+            if (shelfId) shelfId.value = '';
+            if (!shelfQr?.value) setShelfReady(false);
+            return;
+        }
+
+        shelfLookupVersion++;
+        if (shelfQr) shelfQr.value = '';
+        if (shelfId) shelfId.value = id;
+        const location = option.dataset.location || option.textContent.trim();
+        setShelfReady(true, location);
+        if (status) status.textContent = msg('msgManualOk', 'Shelf selected. Confirm to store.');
+    };
+
+    const syncShelfPickOptions = () => {
+        if (!rackPick || !shelfPick) return;
+        const rackId = rackPick.value;
+        const options = Array.from(shelfPick.querySelectorAll('option[data-rack-id]'));
+        let cleared = false;
+        options.forEach((option) => {
+            const match = !rackId || option.dataset.rackId === rackId;
+            option.hidden = !match;
+            if (!match && option.selected) {
+                shelfPick.value = '';
+                cleared = true;
+            }
+        });
+        if (cleared || shelfPick.value) applyManualShelf();
     };
 
     const resolveShelf = async (payload, { autoStore = false } = {}) => {
         clearTimeout(shelfLookupTimer);
         const version = ++shelfLookupVersion;
         clearShelfReady();
+        if (shelfPick) shelfPick.value = '';
         if (!payload.startsWith(shelfPrefix) || !uuidPattern.test(payload.slice(shelfPrefix.length))) {
             status.textContent = msg('msgInvalid', 'Scan a valid shelf QR code.');
             return;
@@ -2859,6 +2898,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const shelf = await response.json();
             if (version !== shelfLookupVersion) return;
             shelfQr.value = payload;
+            if (shelfId) shelfId.value = '';
             shelfScan.value = shelf.location;
             setShelfReady(true, shelf.location);
             status.textContent = msg('msgOk', '');
@@ -2873,6 +2913,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     if (shelfScan) {
         if (shelfScan.dataset.initialQr) resolveShelf(shelfScan.dataset.initialQr);
+        else if (shelfId?.value) applyManualShelf();
         shelfScan.addEventListener('focus', () => shelfScan.select());
         shelfScan.addEventListener('input', () => {
             clearTimeout(shelfLookupTimer);
@@ -2884,10 +2925,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
         });
         shelfScan.form.addEventListener('submit', (event) => {
-            if (shelfQr.value) return;
+            if (shelfQr?.value || shelfId?.value) return;
             event.preventDefault();
             status.textContent = msg('msgRequired', 'Scan a valid shelf QR code before storing the file.');
         });
+    }
+    if (rackPick && shelfPick) {
+        syncShelfPickOptions();
+        rackPick.addEventListener('change', syncShelfPickOptions);
+        shelfPick.addEventListener('change', applyManualShelf);
     }
     document.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' || !event.target.matches('input[data-qr-kind]')) return;
