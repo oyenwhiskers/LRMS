@@ -11,8 +11,8 @@
             <li class="entry-shelf__step is-done" aria-hidden="true"><span>2</span></li>
             <li class="entry-shelf__step is-current"><span>3</span></li>
         </ol>
-        <h1 class="entry-page-title">Imbas rak</h1>
-        <p class="entry-page-lede">Imbas QR rak tempat fail ini diletakkan, kemudian sahkan.</p>
+        <h1 class="entry-page-title">Imbas QR rak</h1>
+        <p class="entry-page-lede">Imbas QR rak tempat fail ini diletakkan.</p>
     </header>
 
     <section class="entry-shelf__file" aria-label="Fail untuk disimpan">
@@ -25,6 +25,7 @@
         method="POST"
         action="{{ route('entry.shelf.store', $scan) }}"
         data-entry-shelf
+        data-auto-store
     >
         @csrf
 
@@ -55,38 +56,31 @@
             data-msg-invalid="Imbas QR rak yang sah."
             data-msg-checking="Semak rak…"
             data-msg-bad="QR rak tidak sah atau rak tidak aktif."
-            data-msg-required="Imbas QR rak yang sah sebelum menyimpan."
+            data-msg-required="Imbas QR rak yang sah."
             data-msg-camera="Kamera aktif — letak QR dalam bingkai."
             data-msg-camera-stop="Kamera ditutup."
             data-msg-wrong="Jenis QR salah. Imbas QR rak."
-            data-msg-camera-fail="Kamera tidak tersedia. Guna pengimbas USB atau taip kod."
-            data-msg-ok="Rak sedia. Tekan Sahkan simpan."
+            data-msg-camera-fail="Kamera tidak tersedia."
+            data-msg-ok="Menyimpan…"
         ></p>
 
-        <details class="entry-shelf__manual" @if(old('shelf_qr') || $errors->has('shelf_qr')) open @endif>
-            <summary>Atau taip / imbas USB</summary>
-            <label class="entry-shelf__manual-label" for="shelf_scan">Kod QR rak</label>
-            <input
-                id="shelf_scan"
-                class="entry-shelf__input"
-                data-qr-kind="shelf"
-                data-lookup-url="{{ route('entry.shelves.lookup', ['identifier' => '__IDENTIFIER__']) }}"
-                data-initial-qr="{{ old('shelf_qr') }}"
-                required
-                autocomplete="off"
-                placeholder="Imbas atau tampal kod QR rak"
-            >
-        </details>
+        {{-- Keep for camera / USB scanner wiring; not shown to avoid a second path. --}}
+        <input
+            id="shelf_scan"
+            class="sr-only"
+            data-qr-kind="shelf"
+            data-lookup-url="{{ route('entry.shelves.lookup', ['identifier' => '__IDENTIFIER__']) }}"
+            data-initial-qr="{{ old('shelf_qr') }}"
+            autocomplete="off"
+            tabindex="-1"
+            aria-hidden="true"
+        >
 
         <input id="shelf_qr" type="hidden" name="shelf_qr" value="{{ old('shelf_qr') }}">
 
         @error('shelf_qr')
             <p class="entry-shelf__error">{{ $message }}</p>
         @enderror
-
-        <button class="entry-shelf__confirm" type="submit" data-shelf-confirm disabled>
-            Sahkan simpan
-        </button>
     </form>
 </div>
 @endsection

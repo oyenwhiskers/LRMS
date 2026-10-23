@@ -2765,6 +2765,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const shelfConfirm = shelfForm?.querySelector('[data-shelf-confirm]');
     let shelfLookupTimer;
     let shelfLookupVersion = 0;
+    let shelfStoring = false;
 
     const msg = (key, fallback) => status?.dataset?.[key] || fallback;
 
@@ -2782,7 +2783,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         setShelfReady(false);
     };
 
-    const resolveShelf = async (payload) => {
+    const resolveShelf = async (payload, { autoStore = false } = {}) => {
+        clearTimeout(shelfLookupTimer);
         const version = ++shelfLookupVersion;
         clearShelfReady();
         if (!payload.startsWith(shelfPrefix) || !uuidPattern.test(payload.slice(shelfPrefix.length))) {
@@ -2803,12 +2805,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             shelfScan.value = shelf.location;
             setShelfReady(true, shelf.location);
             status.textContent = msg('msgOk', '');
+            if (autoStore && shelfForm?.hasAttribute('data-auto-store') && shelfQr.value && !shelfStoring) {
+                shelfStoring = true;
+                shelfForm.requestSubmit();
+            }
         } catch {
             if (version !== shelfLookupVersion) return;
             status.textContent = msg('msgBad', 'Shelf QR is invalid or the shelf is inactive.');
         }
     };
-
     if (shelfScan) {
         if (shelfScan.dataset.initialQr) resolveShelf(shelfScan.dataset.initialQr);
         shelfScan.addEventListener('focus', () => shelfScan.select());
@@ -2816,13 +2821,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             clearTimeout(shelfLookupTimer);
             shelfLookupVersion++;
             clearShelfReady();
-            shelfLookupTimer = setTimeout(() => resolveShelf(shelfScan.value.trim()), 180);
+            shelfLookupTimer = setTimeout(
+                () => resolveShelf(shelfScan.value.trim(), { autoStore: true }),
+                180,
+            );
         });
         shelfScan.form.addEventListener('submit', (event) => {
             if (shelfQr.value) return;
             event.preventDefault();
             status.textContent = msg('msgRequired', 'Scan a valid shelf QR code before storing the file.');
-            shelfScan.focus();
         });
     }
     document.addEventListener('keydown', (event) => {
@@ -2830,7 +2837,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         event.preventDefault();
         if (event.target === shelfScan) {
             clearTimeout(shelfLookupTimer);
-            resolveShelf(shelfScan.value.trim());
+            resolveShelf(shelfScan.value.trim(), { autoStore: true });
         }
     });
 
@@ -2911,12 +2918,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                             activeTarget.value = value;
                         }
                         if (kind === 'shelf') {
-                            await resolveShelf(value);
+                            await resolveShelf(value, { autoStore: true });
                         } else {
                             status.textContent = 'QR captured successfully.';
                         }
                         await stop();
                         reader.classList.add('hidden');
+                        if (kind === 'shelf' && shelfForm?.hasAttribute('data-auto-store')) {
+                            return;
+                        }
                         if (kind === 'shelf' && shelfConfirm && !shelfConfirm.disabled) {
                             shelfConfirm.focus();
                         } else {
