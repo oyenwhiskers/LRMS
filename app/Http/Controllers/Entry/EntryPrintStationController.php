@@ -215,10 +215,11 @@ class EntryPrintStationController extends Controller
      */
     private function jobPayload(EntryPrintJob $job): array
     {
+        // Relative: iframe print must hit the browser host, not a stale APP_URL absolute.
         $printUrl = route('entry.files.label', [
             'file' => $job->legal_file_id,
             'type' => $job->type,
-        ]);
+        ], absolute: false);
 
         return [
             'id' => $job->id,
@@ -236,7 +237,7 @@ class EntryPrintStationController extends Controller
             'print_url' => $printUrl,
             'preview_url' => $printUrl.(str_contains($printUrl, '?') ? '&' : '?').'embed=1',
             'delete_url' => ($job->isPending() || $job->isPrinted())
-                ? route('entry.print-jobs.destroy', $job)
+                ? route('entry.print-jobs.destroy', $job, absolute: false)
                 : null,
         ];
     }

@@ -297,11 +297,18 @@
         display: none !important;
     }
 
+    .file-label,
+    .file-label * {
+        visibility: visible !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
     .file-label {
         margin: 0;
         border: 0;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+        page-break-inside: avoid;
+        break-inside: avoid;
     }
 
     .file-label__qr,

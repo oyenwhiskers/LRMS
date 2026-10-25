@@ -1296,8 +1296,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         openModal(document.querySelector(`[data-modal="${trigger.dataset.modalOpen}"]`));
     });
 
-    // Chrome on some devices prints blank from width/height 0 (or display:none) iframes —
-    // keep a real layout box off-screen. visibility:hidden still lays out; opacity:0 alone is flaky.
+    // Windows Chrome can still paint OS accent selection on clickable rows even with
+    // user-select:none — that dark navy + dark ink makes cell text disappear.
+    const isEntryInteractiveRow = (node) => Boolean(
+        node?.closest?.(
+            '.entry-ops__table tbody tr, .entry-print-station__table tbody tr, button.entry-card--action, tr.table-row-link',
+        ),
+    );
+
+    document.addEventListener('selectstart', (event) => {
+        if (isEntryInteractiveRow(event.target)) {
+            event.preventDefault();
+        }
+    });
+
+    document.addEventListener('mousedown', (event) => {
+        if (! isEntryInteractiveRow(event.target)) {
+            return;
+        }
+
+        const selection = window.getSelection?.();
+        if (selection && selection.rangeCount > 0) {
+            selection.removeAllRanges();
+        }
+    });
+
+    // Chrome blank-print traps (device-dependent):
+    // - display:none / width:0 / visibility:hidden → empty or partial sheets
+    // - CSS mm on iframe boxes → 0×0 on some DPI/browser builds
+    // Keep a real px box off-screen, visible to the print engine.
+    const mmToPx = (mm) => `${Math.ceil((Number(mm) * 96) / 25.4)}px`;
+
     const ensurePrintFrame = (id, { width, height, title = 'Print' } = {}) => {
         let frame = document.getElementById(id);
         if (! frame) {
@@ -1308,7 +1337,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.body.appendChild(frame);
         }
 
-        frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${width};height:${height};border:0;visibility:hidden;pointer-events:none;`;
+        frame.style.cssText = [
+            'position:fixed',
+            'left:-10000px',
+            'top:0',
+            `width:${width}`,
+            `height:${height}`,
+            'border:0',
+            'opacity:0.01',
+            'pointer-events:none',
+            'z-index:-1',
+        ].join(';');
 
         return frame;
     };
@@ -1317,22 +1356,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const type = new URL(url, window.location.origin).searchParams.get('type') || 'front';
             if (type === 'side') {
-                return { width: '80mm', height: '40mm' };
+                return { width: mmToPx(80), height: mmToPx(40) };
             }
             if (type === 'both') {
-                return { width: '150mm', height: '200mm' };
+                return { width: mmToPx(150), height: mmToPx(200) };
             }
         } catch (_error) {
             // fall through to front size
         }
 
-        return { width: '150mm', height: '100mm' };
+        return { width: mmToPx(150), height: mmToPx(100) };
+    };
+
+    const sameOriginPrintUrl = (url) => {
+        try {
+            const parsed = new URL(url, window.location.origin);
+            // Always print against the host the user is on (ignore stale APP_URL absolutes).
+            return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+        } catch (_error) {
+            return url;
+        }
     };
 
     const waitForPrintFrameReady = (frame, timeoutMs = 3000) => {
         const doc = frame.contentDocument;
         if (! doc) {
-            return Promise.resolve();
+            // Cross-origin iframe: cannot inspect; caller should fall back to window.open.
+            return Promise.reject(new Error('print-frame-cross-origin'));
         }
 
         const images = [...doc.images];
@@ -1362,21 +1412,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const rackSign = trigger.dataset.storageLabelKind === 'rack';
         const frame = ensurePrintFrame('storage-label-print-frame', {
-            width: rackSign ? '210mm' : '80mm',
-            height: rackSign ? '297mm' : '40mm',
+            width: rackSign ? mmToPx(210) : mmToPx(80),
+            height: rackSign ? mmToPx(297) : mmToPx(40),
             title: 'Storage label print',
         });
 
-        const url = new URL(trigger.dataset.storageLabelPrintUrl, window.location.origin);
+        const url = new URL(
+            sameOriginPrintUrl(trigger.dataset.storageLabelPrintUrl || ''),
+            window.location.origin,
+        );
         url.searchParams.set('embed', '1');
         url.searchParams.set('_print', Date.now().toString());
         frame.onload = () => {
             waitForPrintFrameReady(frame).then(() => {
                 frame.contentWindow?.focus();
                 frame.contentWindow?.print();
+            }).catch(() => {
+                window.open(url.pathname + url.search, '_blank', 'noopener');
             });
         };
-        frame.src = url.href;
+        frame.src = url.pathname + url.search;
     });
 
     document.querySelectorAll('[data-file-label-modal]').forEach((modal) => {
@@ -1526,8 +1581,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         const printLabel = (url) => {
+            const href = sameOriginPrintUrl(url);
             const frame = ensurePrintFrame('file-label-print-frame', {
-                ...fileLabelPrintFrameSize(url),
+                ...fileLabelPrintFrameSize(href),
                 title: 'File label print',
             });
 
@@ -1537,11 +1593,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                         frame.contentWindow?.focus();
                         frame.contentWindow?.print();
                     } catch (error) {
-                        window.open(url, '_blank', 'noopener');
+                        window.open(href, '_blank', 'noopener');
                     }
+                }).catch(() => {
+                    window.open(href, '_blank', 'noopener');
                 });
             };
-            frame.src = url + (url.includes('?') ? '&' : '?') + '_print=' + Date.now();
+            frame.src = href + (href.includes('?') ? '&' : '?') + '_print=' + Date.now();
         };
 
         const queuePrintJob = async () => {
@@ -1789,10 +1847,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const previewUrlFor = (job) => {
             if (job.preview_url) {
-                return job.preview_url;
+                return sameOriginPrintUrl(job.preview_url);
             }
 
-            const printUrl = job.print_url || '';
+            const printUrl = sameOriginPrintUrl(job.print_url || '');
             if (! printUrl) {
                 return '';
             }
@@ -2034,8 +2092,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         const printViaFrame = (url) => new Promise((resolve) => {
+            const href = sameOriginPrintUrl(url);
             const frame = ensurePrintFrame('entry-print-station-frame', {
-                ...fileLabelPrintFrameSize(url),
+                ...fileLabelPrintFrameSize(href),
                 title: 'Entry print station',
             });
 
@@ -2049,25 +2108,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                 resolve();
             };
 
+            const openFallback = () => {
+                window.open(href, '_blank', 'noopener');
+                finish();
+            };
+
             frame.onload = () => {
                 waitForPrintFrameReady(frame).then(() => {
                     try {
+                        const label = frame.contentDocument?.querySelector('.file-label');
+                        if (! label) {
+                            openFallback();
+                            return;
+                        }
+
                         frame.contentWindow?.addEventListener('afterprint', finish);
                         frame.contentWindow?.focus();
                         frame.contentWindow?.print();
                         // Fallback if afterprint never fires (some mobile/desktop browsers).
                         window.setTimeout(finish, 60_000);
                     } catch (error) {
-                        window.open(url, '_blank', 'noopener');
-                        finish();
+                        openFallback();
                     }
                 }).catch(() => {
-                    window.open(url, '_blank', 'noopener');
-                    finish();
+                    openFallback();
                 });
             };
 
-            frame.src = url + (url.includes('?') ? '&' : '?') + '_print=' + Date.now();
+            frame.src = href + (href.includes('?') ? '&' : '?') + '_print=' + Date.now();
         });
 
         const printJobs = async (selected, { mark = true } = {}) => {

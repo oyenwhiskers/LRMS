@@ -134,14 +134,14 @@
 
                 @foreach ($jobs as $job)
                     @php
-                        $printUrl = route('entry.files.label', ['file' => $job->legal_file_id, 'type' => $job->type]);
+                        $printUrl = route('entry.files.label', ['file' => $job->legal_file_id, 'type' => $job->type], absolute: false);
                         $previewUrl = $printUrl.(str_contains($printUrl, '?') ? '&' : '?').'embed=1';
                         $pending = $job->isPending();
                         $typeLabel = $job->type === 'side' ? 'Sisi' : 'Hadapan';
                         $ref = $job->legalFile?->reference_number ?? '—';
                         $operator = $job->requester?->name ?? '—';
                         $previewTitle = $ref.' · '.$typeLabel;
-                        $deleteUrl = route('entry.print-jobs.destroy', $job);
+                        $deleteUrl = route('entry.print-jobs.destroy', $job, absolute: false);
                     @endphp
                     <article
                         class="entry-print-station__card"
@@ -192,7 +192,7 @@
                     <tbody>
                         @foreach ($jobs as $job)
                             @php
-                                $printUrl = route('entry.files.label', ['file' => $job->legal_file_id, 'type' => $job->type]);
+                                $printUrl = route('entry.files.label', ['file' => $job->legal_file_id, 'type' => $job->type], absolute: false);
                                 $previewUrl = $printUrl.(str_contains($printUrl, '?') ? '&' : '?').'embed=1';
                                 $pending = $job->isPending();
                                 $typeLabel = $job->type === 'side' ? 'Sisi' : 'Hadapan';
@@ -205,7 +205,7 @@
                                 data-print-url="{{ $printUrl }}"
                                 data-preview-url="{{ $previewUrl }}"
                                 data-preview-title="{{ $previewTitle }}"
-                                data-delete-url="{{ route('entry.print-jobs.destroy', $job) }}"
+                                data-delete-url="{{ route('entry.print-jobs.destroy', $job, absolute: false) }}"
                             >
                                 <td class="entry-print-station__check">
                                     <input

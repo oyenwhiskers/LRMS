@@ -162,12 +162,12 @@ class EntryPrintStationTest extends TestCase
             ->getJson(route('entry.print-jobs.index'))
             ->assertOk()
             ->assertJsonPath('jobs.0.id', $job->id)
-            ->assertJsonPath('jobs.0.delete_url', route('entry.print-jobs.destroy', $job))
+            ->assertJsonPath('jobs.0.delete_url', route('entry.print-jobs.destroy', $job, absolute: false))
             ->assertJsonFragment(['preview_url' => route('entry.files.label', [
                 'file' => $file,
                 'type' => 'front',
                 'embed' => 1,
-            ])]);
+            ], absolute: false)]);
 
         $this->actingAs($station)
             ->get(route('entry.files.label', ['file' => $file, 'type' => 'front', 'embed' => 1]))
