@@ -151,7 +151,7 @@
                                 · {{ $scan->legalFile->purchaser ?: '—' }}
                             </p>
                             <p class="entry-card__shelf">
-                                {{ \App\Support\LocalDate::format($scan->created_at, 'Y-m-d H:i') }}
+                                {{ \App\Support\LocalDate::format($scan->created_at, 'd/m/Y H:i') }}
                                 @if ($scan->shelf)
                                     · {{ $scan->shelf->full_location }}
                                 @elseif ($scan->status === App\Models\EntryScan::STATUS_SAVED)
@@ -212,7 +212,7 @@
                                     @endif
                                 </td>
                                 <td class="entry-ops__when">
-                                    {{ \App\Support\LocalDate::format($scan->created_at, 'Y-m-d H:i') }}
+                                    {{ \App\Support\LocalDate::format($scan->created_at, 'd/m/Y H:i') }}
                                 </td>
                                 <td>
                                     <span class="entry-ops__badge entry-ops__badge--{{ $scan->status }}">

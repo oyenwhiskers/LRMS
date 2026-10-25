@@ -76,6 +76,7 @@
         <form class="space-y-6" method="POST" action="{{ $saveUrl }}" data-case-type-form data-entry-save-form>
             @csrf
             <input type="hidden" name="temp_path" value="" data-entry-temp-path>
+            <div data-entry-temp-paths></div>
             @include('entry.partials.case-form-fields', [
                 'categories' => $categories,
                 'suggestion' => [],
@@ -111,6 +112,7 @@
     const clearPagesBtn = root.querySelector('[data-entry-clear-pages]');
     const saveForm = root.querySelector('[data-entry-save-form]');
     const tempPathInput = root.querySelector('[data-entry-temp-path]');
+    const tempPathsBox = root.querySelector('[data-entry-temp-paths]');
     const warningEl = root.querySelector('[data-entry-ai-warning]');
     const stepLabel = root.querySelector('[data-entry-step-label]');
     const stepTitle = root.querySelector('[data-entry-step-title]');
@@ -342,6 +344,19 @@
             const payload = await response.json();
             if (payload.save_url) saveForm.action = payload.save_url;
             if (tempPathInput) tempPathInput.value = payload.temp_path || '';
+            if (tempPathsBox) {
+                tempPathsBox.innerHTML = '';
+                const paths = Array.isArray(payload.temp_paths) && payload.temp_paths.length
+                    ? payload.temp_paths
+                    : (payload.temp_path ? [payload.temp_path] : []);
+                paths.forEach((path) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'temp_paths[]';
+                    input.value = String(path || '');
+                    tempPathsBox.appendChild(input);
+                });
+            }
             fillDraft(payload.draft || {});
             if (warningEl) {
                 if (payload.warning) {

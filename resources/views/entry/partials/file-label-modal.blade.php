@@ -5,9 +5,7 @@
     /** @var \Illuminate\Support\Collection<int, \App\Models\CaseCategory>|null $categories */
     $scan = $scan ?? null;
     $categories = $categories ?? collect();
-    $hasDocument = $scan
-        && is_string($scan->document_path)
-        && $scan->document_path !== '';
+    $hasDocument = $scan !== null && $scan->documentPaths() !== [];
     $canEdit = $scan !== null && $categories->isNotEmpty();
     $openLabel = (string) session('open_file_label') === (string) $file->id
         || (string) old('_legal_file_id') === (string) $file->id;

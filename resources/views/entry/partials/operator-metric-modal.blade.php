@@ -54,7 +54,7 @@
                                 · {{ $scan->legalFile->purchaser ?: '—' }}
                             </p>
                             <p class="entry-ops-metric-modal__shelf">
-                                {{ \App\Support\LocalDate::format($scan->created_at, 'Y-m-d H:i') }}
+                                {{ \App\Support\LocalDate::format($scan->created_at, 'd/m/Y H:i') }}
                                 @if ($scan->shelf)
                                     · {{ $scan->shelf->full_location }}
                                 @elseif ($scan->status === App\Models\EntryScan::STATUS_SAVED)

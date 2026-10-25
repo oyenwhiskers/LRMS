@@ -165,7 +165,6 @@ class EntryController extends Controller
         ]);
 
         // Temporary images only — no EntryScan / draft row until user confirms save.
-        // Persist primary (first) page path for save; extras are AI-only then deleted.
         $stored = [];
         foreach ($data['documents'] as $file) {
             $path = $file->store('entry-scans/tmp/'.$request->user()->id, 'local');
@@ -184,12 +183,11 @@ class EntryController extends Controller
             $request->user()->id,
         );
 
-        foreach (array_slice($stored, 1) as $extra) {
-            Storage::disk('local')->delete($extra['path']);
-        }
+        $tempPaths = array_column($stored, 'path');
 
         return response()->json([
-            'temp_path' => $stored[0]['path'],
+            'temp_path' => $tempPaths[0],
+            'temp_paths' => $tempPaths,
             'draft' => $result['draft'],
             'warning' => $result['error'],
             'save_url' => route('entry.save'),
@@ -198,12 +196,12 @@ class EntryController extends Controller
 
     public function save(Request $request, RegisterEntryCase $register): RedirectResponse
     {
-        $tempPath = $this->validatedTempPath($request);
+        $tempPaths = $this->validatedTempPaths($request);
         $data = $this->validatedCase($request);
 
         $scan = EntryScan::create([
             'user_id' => $request->user()->id,
-            'document_path' => $tempPath,
+            'document_path' => $tempPaths[0],
             'ai_suggestion' => [
                 'reference_number' => $data['reference_number'],
                 'case_type' => $data['case_type'],
@@ -212,7 +210,7 @@ class EntryController extends Controller
             'status' => EntryScan::STATUS_DRAFT,
         ]);
 
-        $this->persistScanDocument($scan, $tempPath);
+        $this->persistScanDocuments($scan, $tempPaths);
         $register->handle($scan, $request->user(), $data);
 
         return redirect()
@@ -241,8 +239,10 @@ class EntryController extends Controller
     {
         $this->authorizeScan($request, $scan);
 
-        $path = (string) ($scan->document_path ?? '');
-        abort_if($path === '' || ! Storage::disk('local')->exists($path), 404);
+        $paths = $scan->documentPaths();
+        $page = max(1, (int) $request->query('page', 1));
+        $path = $paths[$page - 1] ?? null;
+        abort_if($path === null || ! Storage::disk('local')->exists($path), 404);
 
         return Storage::disk('local')->response($path);
     }
@@ -307,7 +307,7 @@ class EntryController extends Controller
         abort_unless(in_array($file->status, [LegalFile::STATUS_REGISTERED, LegalFile::STATUS_STORED], true), 422);
 
         $reference = $file->reference_number;
-        $documentPath = $scan->document_path;
+        $documentDir = $this->scanDocumentDirectory($scan);
 
         DB::transaction(function () use ($scan, $file): void {
             DB::table('legal_file_links')
@@ -322,8 +322,8 @@ class EntryController extends Controller
             $file->delete();
         });
 
-        if ($documentPath !== '' && $documentPath !== null) {
-            Storage::disk('local')->delete($documentPath);
+        if ($documentDir !== null) {
+            Storage::disk('local')->deleteDirectory($documentDir);
         }
 
         return redirect()
@@ -345,13 +345,32 @@ class EntryController extends Controller
         abort_unless($scan->isOwnedBy($user) || $user->isAdmin(), 403);
     }
 
-    private function persistScanDocument(EntryScan $scan, string $tempPath): void
+    /**
+     * @param  list<string>  $tempPaths
+     */
+    private function persistScanDocuments(EntryScan $scan, array $tempPaths): void
     {
-        $extension = pathinfo($tempPath, PATHINFO_EXTENSION) ?: 'jpg';
-        $destination = 'entry-scans/'.$scan->id.'/original.'.$extension;
+        $saved = [];
+        foreach (array_values($tempPaths) as $index => $tempPath) {
+            $extension = pathinfo($tempPath, PATHINFO_EXTENSION) ?: 'jpg';
+            $destination = 'entry-scans/'.$scan->id.'/page-'.($index + 1).'.'.$extension;
+            Storage::disk('local')->move($tempPath, $destination);
+            $saved[] = $destination;
+        }
 
-        Storage::disk('local')->move($tempPath, $destination);
-        $scan->update(['document_path' => $destination]);
+        $scan->update(['document_path' => $saved[0]]);
+    }
+
+    private function scanDocumentDirectory(EntryScan $scan): ?string
+    {
+        $primary = is_string($scan->document_path) ? trim($scan->document_path) : '';
+        if ($primary === '') {
+            return null;
+        }
+
+        $dir = dirname($primary);
+
+        return ($dir === '.' || $dir === '' || $dir === DIRECTORY_SEPARATOR) ? null : $dir;
     }
 
     private function authorizeEntryFile(Request $request, LegalFile $file): void
@@ -407,24 +426,39 @@ class EntryController extends Controller
         return $qrs;
     }
 
-    private function validatedTempPath(Request $request): string
+    /**
+     * @return list<string>
+     */
+    private function validatedTempPaths(Request $request): array
     {
-        $path = (string) $request->input('temp_path', '');
         $prefix = 'entry-scans/tmp/'.$request->user()->id.'/';
+        $raw = $request->input('temp_paths', $request->input('temp_path'));
+        $candidates = is_array($raw) ? $raw : [$raw];
 
-        if ($path === '' || ! str_starts_with($path, $prefix) || str_contains($path, '..')) {
+        $paths = [];
+        foreach ($candidates as $candidate) {
+            $path = is_string($candidate) ? trim($candidate) : '';
+            if ($path === '' || ! str_starts_with($path, $prefix) || str_contains($path, '..')) {
+                throw ValidationException::withMessages([
+                    'temp_path' => 'Sesi gambar tidak sah. Sila imbas semula.',
+                ]);
+            }
+            if (! Storage::disk('local')->exists($path)) {
+                throw ValidationException::withMessages([
+                    'temp_path' => 'Gambar tidak dijumpai. Sila imbas semula.',
+                ]);
+            }
+            $paths[] = $path;
+        }
+
+        $paths = array_values(array_unique($paths));
+        if ($paths === [] || count($paths) > 3) {
             throw ValidationException::withMessages([
                 'temp_path' => 'Sesi gambar tidak sah. Sila imbas semula.',
             ]);
         }
 
-        if (! Storage::disk('local')->exists($path)) {
-            throw ValidationException::withMessages([
-                'temp_path' => 'Gambar tidak dijumpai. Sila imbas semula.',
-            ]);
-        }
-
-        return $path;
+        return $paths;
     }
 
     /**

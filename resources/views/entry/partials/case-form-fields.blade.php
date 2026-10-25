@@ -19,6 +19,9 @@
     $borrowerCardClass = $isModalLayout
         ? 'entry-case-fields__party'
         : 'grid gap-3 rounded border border-[#12352f]/10 p-3';
+    $dateDisplay = function (string $key) use ($field): string {
+        return \App\Support\LocalDate::formatDate($field($key));
+    };
 @endphp
 
 <section class="{{ $sectionClass }}">
@@ -175,13 +178,21 @@
 
     <label class="{{ $fieldClass }}">
         <span class="form-label">Tarikh mula</span>
-        <input class="form-input" type="date" name="start_date" value="{{ $field('start_date') }}" data-entry-field="start_date">
+        @if ($readonly)
+            <p class="form-input form-input--readonly" data-entry-field="start_date">{{ $dateDisplay('start_date') }}</p>
+        @else
+            <input class="form-input" type="date" name="start_date" value="{{ $field('start_date') }}" data-entry-field="start_date">
+        @endif
     </label>
     <label class="{{ $fieldClass }}">
         <span class="form-label">Tarikh tamat</span>
-        <input class="form-input" type="date" name="end_date" value="{{ $field('end_date') }}" data-entry-field="end_date">
-        @if ($useOld)
-            @error('end_date')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+        @if ($readonly)
+            <p class="form-input form-input--readonly" data-entry-field="end_date">{{ $dateDisplay('end_date') }}</p>
+        @else
+            <input class="form-input" type="date" name="end_date" value="{{ $field('end_date') }}" data-entry-field="end_date">
+            @if ($useOld)
+                @error('end_date')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+            @endif
         @endif
     </label>
 </section>

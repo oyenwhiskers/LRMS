@@ -198,8 +198,13 @@ class EntryScanRegisterTest extends TestCase
             ->assertJsonPath('draft.property', 'Lot 9 from page 2');
 
         $tempPath = $response->json('temp_path');
+        $tempPaths = $response->json('temp_paths');
         $this->assertNotEmpty($tempPath);
-        Storage::disk('local')->assertExists($tempPath);
+        $this->assertIsArray($tempPaths);
+        $this->assertCount(2, $tempPaths);
+        foreach ($tempPaths as $path) {
+            Storage::disk('local')->assertExists($path);
+        }
 
         Http::assertSent(function ($request): bool {
             $parts = data_get($request->data(), 'contents.0.parts');
@@ -213,6 +218,31 @@ class EntryScanRegisterTest extends TestCase
 
             return count($images) === 2;
         });
+
+        $category = CaseCategory::query()->where('code', 'LOA')->firstOrFail();
+
+        $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_paths' => $tempPaths,
+                'reference_number' => 'LOA/2020/0011',
+                'case_type' => LegalFile::TYPE_LOAN,
+                'case_category_id' => $category->id,
+                'purchaser' => 'Page Two Borrower',
+                'bank' => 'Maybank',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $scan = EntryScan::firstOrFail();
+        $this->assertSame([
+            'entry-scans/'.$scan->id.'/page-1.jpg',
+            'entry-scans/'.$scan->id.'/page-2.jpg',
+        ], $scan->documentPaths());
+        $this->assertSame('entry-scans/'.$scan->id.'/page-1.jpg', $scan->document_path);
+
+        $this->actingAs($entry)
+            ->get(route('entry.scan.document', ['scan' => $scan, 'page' => 2]))
+            ->assertOk();
     }
 
     public function test_analyze_does_not_create_draft_until_confirm_save(): void
@@ -284,7 +314,7 @@ class EntryScanRegisterTest extends TestCase
         $this->assertSame(EntryScan::STATUS_SAVED, $scan->status);
         Storage::disk('local')->assertMissing($tempPath);
         Storage::disk('local')->assertExists($scan->document_path);
-        $this->assertSame('entry-scans/'.$scan->id.'/original.jpg', $scan->document_path);
+        $this->assertSame('entry-scans/'.$scan->id.'/page-1.jpg', $scan->document_path);
 
         $this->actingAs($entry)->get(route('entry.home'))
             ->assertOk()

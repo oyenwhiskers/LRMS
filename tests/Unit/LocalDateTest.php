@@ -33,4 +33,12 @@ class LocalDateTest extends TestCase
 
         $this->assertSame('23 Oct 2026, 08:57', LocalDate::format($misreadAsLocal));
     }
+
+    public function test_format_date_uses_dd_mm_yyyy_without_timezone_shift(): void
+    {
+        $this->assertSame('29/09/2025', LocalDate::formatDate('2025-09-29'));
+        $this->assertSame('01/01/2026', LocalDate::formatDate(Carbon::parse('2026-01-01')));
+        $this->assertSame('15/03/2024', LocalDate::formatDate('15/03/2024'));
+        $this->assertSame('—', LocalDate::formatDate(null));
+    }
 }

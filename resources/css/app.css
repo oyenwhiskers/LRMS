@@ -3019,6 +3019,380 @@ fieldset.file-label-modal__edit-form {
     min-width: 0;
 }
 
+.modal-panel.operator-review-modal {
+    max-width: min(40rem, calc(100vw - 2rem));
+    max-height: min(92vh, 56rem);
+    padding: 0;
+    overflow: hidden;
+}
+
+.modal-panel.operator-review-modal--split {
+    max-width: min(76rem, calc(100vw - 1.5rem));
+}
+
+.operator-review-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: min(92vh, 56rem);
+    max-height: inherit;
+}
+
+.operator-review-page__chrome {
+    flex-shrink: 0;
+}
+
+.operator-review-page__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1.15rem 1.25rem 0.85rem;
+    border-bottom: 1px solid var(--entry-line, #e7e5e4);
+}
+
+.operator-review-page__tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem;
+    padding: 0.65rem 1rem 0.75rem;
+    border-bottom: 1px solid var(--entry-line, #e7e5e4);
+    background: #fafaf9;
+}
+
+.operator-review-page__tab {
+    min-height: 2.6rem;
+    border: 1px solid #d6d3d1;
+    background: #fff;
+    color: #44403c;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.operator-review-page__tab.is-active {
+    border-color: var(--color-gold-600, #b45309);
+    background: color-mix(in srgb, var(--color-gold-500, #d4a017) 22%, white);
+    color: var(--color-gold-ink, #12352f);
+}
+
+.operator-review-page__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.operator-review-page__left {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+.operator-review-page__info {
+    display: flex;
+    flex-direction: column;
+    gap: 1.35rem;
+    padding: 1rem 1.25rem 1.35rem;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Mobile tabs: one pane at a time when document exists */
+.operator-review-modal[data-operator-review-tabs][data-operator-review-tab="maklumat"] [data-operator-review-pane="dokumen"],
+.operator-review-modal[data-operator-review-tabs][data-operator-review-tab="dokumen"] [data-operator-review-pane="maklumat"] {
+    display: none;
+}
+
+.operator-review-modal[data-operator-review-tabs][data-operator-review-tab="dokumen"] .operator-review-page__right {
+    flex: 1 1 auto;
+    min-height: 0;
+    border-top: 0;
+}
+
+.operator-review-modal[data-operator-review-tabs][data-operator-review-tab="dokumen"] .operator-review-doc-zoom__viewport {
+    max-height: none;
+    min-height: 0;
+}
+
+.operator-review-page__section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+}
+
+.operator-review-page__section-title {
+    margin: 0 0 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #78716c;
+}
+
+.operator-review-page__section-head .operator-review-page__section-title {
+    margin: 0;
+}
+
+.operator-review-page fieldset.file-label-modal__edit-form:disabled {
+    opacity: 1;
+}
+
+.operator-review-page .entry-case-fields--modal {
+    gap: 0.85rem;
+}
+
+.operator-review-page .entry-case-fields--modal .entry-case-fields__field {
+    gap: 0.3rem;
+}
+
+.operator-review-page .entry-case-fields--modal .form-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: #78716c;
+}
+
+.operator-review-page .entry-case-fields--modal .form-input,
+.operator-review-page .entry-case-fields--modal .form-input--readonly {
+    padding: 0.55rem 0.7rem;
+    font-size: 0.95rem;
+    line-height: 1.35;
+    background: #fafaf9;
+    border-color: #e7e5e4;
+    color: #1c1917;
+    opacity: 1;
+    cursor: default;
+}
+
+.operator-review-page .entry-case-fields--modal .form-input--readonly {
+    margin: 0;
+    min-height: 2.6rem;
+    display: flex;
+    align-items: center;
+}
+
+.operator-review-page .entry-case-fields--modal .entry-case-fields__party {
+    gap: 0.75rem;
+    padding-top: 0.85rem;
+}
+
+.operator-review-page .entry-case-fields--modal .entry-case-fields__party-title {
+    font-size: 0.8rem;
+}
+
+.entry-ops-shelf--review {
+    display: grid;
+    gap: 0;
+    padding: 0;
+    border: 1px solid var(--entry-line, #e7e5e4);
+    background: #fff;
+    overflow: hidden;
+}
+
+.entry-ops-shelf--review > div {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 0.65rem 0.85rem;
+    align-items: start;
+    padding: 0.7rem 0.85rem;
+    border-top: 1px solid #f5f5f4;
+}
+
+.entry-ops-shelf--review > div:first-child {
+    border-top: 0;
+}
+
+.entry-ops-shelf--review dt {
+    padding-top: 0.1rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+}
+
+.entry-ops-shelf--review dd {
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.entry-ops-shelf__code {
+    display: inline-block;
+    margin-right: 0.35rem;
+    font-weight: 700;
+    color: #12352f;
+}
+
+.entry-ops-shelf__name {
+    display: inline;
+    font-weight: 500;
+    color: #44403c;
+}
+
+.operator-review-page__right {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+    min-height: 0;
+    padding: 0.75rem;
+    border-top: 1px solid var(--entry-line, #e7e5e4);
+    background: #f5f5f4;
+}
+
+.operator-review-doc-zoom__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.operator-review-doc-zoom__caption {
+    margin-right: auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #57534e;
+}
+
+.operator-review-doc-pages {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.operator-review-doc-pages__label {
+    min-width: 3.5rem;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #57534e;
+    white-space: nowrap;
+}
+
+.operator-review-doc-zoom__btn {
+    min-height: 2.25rem;
+    min-width: 2.25rem;
+    border: 1px solid #d6d3d1;
+    background: #fff;
+    color: #1c1917;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0 0.55rem;
+    cursor: pointer;
+}
+
+.operator-review-doc-zoom__btn:hover:not(:disabled) {
+    border-color: var(--color-gold-600, #b45309);
+}
+
+.operator-review-doc-zoom__btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.operator-review-doc-zoom__btn--reset {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.operator-review-doc-zoom__label {
+    min-width: 3.25rem;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #57534e;
+}
+
+.operator-review-doc-zoom__viewport {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow: auto;
+    min-height: 16rem;
+    max-height: min(48vh, 24rem);
+    background: #e7e5e4;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+}
+
+.operator-review-doc-zoom__img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    max-height: 100%;
+    height: auto;
+    object-fit: contain;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+@media (min-width: 900px) {
+    .operator-review-page__tabs {
+        display: none;
+    }
+
+    /* Desktop ignores mobile tab hiding — always show both panes */
+    .operator-review-modal[data-operator-review-tabs][data-operator-review-tab="maklumat"] [data-operator-review-pane="dokumen"],
+    .operator-review-modal[data-operator-review-tabs][data-operator-review-tab="dokumen"] [data-operator-review-pane="maklumat"] {
+        display: flex;
+    }
+
+    .operator-review-modal--split .operator-review-page {
+        display: grid;
+        grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        height: min(92vh, 56rem);
+    }
+
+    .operator-review-modal--split .operator-review-page__chrome {
+        grid-column: 1;
+        grid-row: 1;
+        border-right: 1px solid var(--entry-line, #e7e5e4);
+    }
+
+    .operator-review-modal--split .operator-review-page__chrome .operator-review-page__header {
+        border-bottom-color: transparent;
+    }
+
+    .operator-review-modal--split .operator-review-page__body {
+        display: contents;
+    }
+
+    .operator-review-modal--split .operator-review-page__left {
+        grid-column: 1;
+        grid-row: 2;
+        max-width: none;
+        border-right: 1px solid var(--entry-line, #e7e5e4);
+    }
+
+    .operator-review-modal--split .operator-review-page__right {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        border-top: 0;
+        padding: 0.85rem;
+        min-height: 0;
+    }
+
+    .operator-review-doc-zoom__viewport {
+        max-height: none;
+        min-height: 0;
+    }
+}
+
 @media (min-width: 900px) {
     .entry-ops__metrics {
         grid-template-columns: repeat(4, minmax(0, 1fr));

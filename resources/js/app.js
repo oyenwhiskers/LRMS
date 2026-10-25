@@ -1553,7 +1553,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             previewWrap?.classList.toggle('file-label-modal__preview-wrap--form', isData);
 
-            if (isDocument) {
+            const overlayOpen = ! modal.closest('[data-modal]')?.classList.contains('hidden');
+            // Load scan image when visible: Dokumen tab, or operator review (always under data).
+            if (overlayOpen && (isDocument || (isData && modal.classList.contains('operator-review-modal')))) {
                 ensureDocumentLoaded();
             }
 
@@ -1669,6 +1671,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (overlay) {
             const modalObserver = new MutationObserver(() => {
                 if (! overlay.classList.contains('hidden')) {
+                    if (selectedType === 'document'
+                        || (selectedType === 'data' && modal.classList.contains('operator-review-modal'))) {
+                        ensureDocumentLoaded();
+                    }
                     requestAnimationFrame(fitVisiblePreview);
                 }
             });
@@ -1676,6 +1682,157 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         sync();
+    });
+
+    document.querySelectorAll('[data-operator-review-tabs]').forEach((modal) => {
+        const buttons = [...modal.querySelectorAll('[data-operator-review-tab-btn]')];
+        if (buttons.length === 0) {
+            return;
+        }
+
+        const setTab = (tab) => {
+            const next = tab === 'dokumen' ? 'dokumen' : 'maklumat';
+            modal.setAttribute('data-operator-review-tab', next);
+            buttons.forEach((button) => {
+                const active = button.getAttribute('data-operator-review-tab-btn') === next;
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+
+            if (next === 'dokumen') {
+                const img = modal.querySelector('[data-doc-zoom-img]');
+                const src = img?.getAttribute('data-src') || '';
+                if (img && src !== '' && ! img.getAttribute('src')) {
+                    img.setAttribute('src', src);
+                }
+                // Refit after the dokumen pane becomes visible.
+                requestAnimationFrame(() => {
+                    img?.dispatchEvent(new Event('load'));
+                });
+            }
+        };
+
+        buttons.forEach((button) => {
+            button.addEventListener('click', () => {
+                setTab(button.getAttribute('data-operator-review-tab-btn') || 'maklumat');
+            });
+        });
+    });
+
+    document.querySelectorAll('[data-doc-zoom]').forEach((root) => {
+        const viewport = root.querySelector('[data-doc-zoom-viewport]');
+        const img = root.querySelector('[data-doc-zoom-img]');
+        const label = root.querySelector('[data-doc-zoom-label]');
+        const zoomIn = root.querySelector('[data-doc-zoom-in]');
+        const zoomOut = root.querySelector('[data-doc-zoom-out]');
+        const zoomReset = root.querySelector('[data-doc-zoom-reset]');
+        const pagePrev = root.querySelector('[data-doc-page-prev]');
+        const pageNext = root.querySelector('[data-doc-page-next]');
+        const pageLabel = root.querySelector('[data-doc-page-label]');
+        if (! viewport || ! img) {
+            return;
+        }
+
+        let pages = [];
+        try {
+            const raw = root.getAttribute('data-doc-pages') || '[]';
+            const parsed = JSON.parse(raw);
+            pages = Array.isArray(parsed) ? parsed.filter((url) => typeof url === 'string' && url !== '') : [];
+        } catch (error) {
+            pages = [];
+        }
+        if (pages.length === 0) {
+            const fallback = img.getAttribute('data-src') || img.getAttribute('src') || '';
+            if (fallback) {
+                pages = [fallback];
+            }
+        }
+
+        const min = 1;
+        const max = 4;
+        const step = 0.25;
+        let scale = 1;
+        let pageIndex = 0;
+
+        const syncPageChrome = () => {
+            if (pageLabel) {
+                pageLabel.textContent = `${pageIndex + 1} / ${pages.length}`;
+            }
+            pagePrev?.toggleAttribute('disabled', pageIndex <= 0 || pages.length <= 1);
+            pageNext?.toggleAttribute('disabled', pageIndex >= pages.length - 1 || pages.length <= 1);
+        };
+
+        const apply = () => {
+            const natW = img.naturalWidth;
+            const natH = img.naturalHeight;
+            if (natW > 0 && natH > 0) {
+                const fit = Math.min(viewport.clientWidth / natW, viewport.clientHeight / natH) || 1;
+                const width = Math.max(1, natW * fit * scale);
+                img.style.width = `${width}px`;
+                img.style.height = 'auto';
+                img.style.maxWidth = 'none';
+                img.style.maxHeight = 'none';
+            }
+
+            if (label) {
+                label.textContent = scale <= 1 ? 'Muat' : `${Math.round(scale * 100)}%`;
+            }
+            zoomOut?.toggleAttribute('disabled', scale <= min);
+            zoomIn?.toggleAttribute('disabled', scale >= max);
+        };
+
+        const setScale = (next) => {
+            scale = Math.min(max, Math.max(min, Math.round(next / step) * step));
+            apply();
+        };
+
+        const showPage = (index) => {
+            if (pages.length === 0) {
+                return;
+            }
+            pageIndex = Math.min(pages.length - 1, Math.max(0, index));
+            const url = pages[pageIndex];
+            img.setAttribute('data-src', url);
+            if (img.getAttribute('src') !== url) {
+                img.setAttribute('src', url);
+            }
+            scale = 1;
+            viewport.scrollLeft = 0;
+            viewport.scrollTop = 0;
+            syncPageChrome();
+            if (img.complete && img.naturalWidth > 0) {
+                apply();
+            }
+        };
+
+        zoomIn?.addEventListener('click', () => setScale(scale + step));
+        zoomOut?.addEventListener('click', () => setScale(scale - step));
+        zoomReset?.addEventListener('click', () => {
+            setScale(1);
+            viewport.scrollLeft = 0;
+            viewport.scrollTop = 0;
+        });
+        pagePrev?.addEventListener('click', () => showPage(pageIndex - 1));
+        pageNext?.addEventListener('click', () => showPage(pageIndex + 1));
+
+        viewport.addEventListener('wheel', (event) => {
+            if (! (event.ctrlKey || event.metaKey)) {
+                return;
+            }
+            event.preventDefault();
+            setScale(scale + (event.deltaY < 0 ? step : -step));
+        }, { passive: false });
+
+        img.addEventListener('load', () => {
+            apply();
+        });
+
+        if (typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(() => apply()).observe(viewport);
+        }
+
+        syncPageChrome();
+        apply();
     });
 
     (() => {

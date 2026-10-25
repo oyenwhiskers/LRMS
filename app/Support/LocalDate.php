@@ -27,4 +27,26 @@ class LocalDate
             ->timezone(self::timezone())
             ->format($format);
     }
+
+    /** Calendar dates (no timezone shift) as dd/mm/yyyy. */
+    public static function formatDate(CarbonInterface|string|null $value): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        if ($value instanceof CarbonInterface) {
+            return $value->format('d/m/Y');
+        }
+
+        $raw = trim((string) $value);
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $raw, $parts) === 1) {
+            return $parts[3].'/'.$parts[2].'/'.$parts[1];
+        }
+        if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $raw) === 1) {
+            return $raw;
+        }
+
+        return Carbon::parse($raw)->format('d/m/Y');
+    }
 }

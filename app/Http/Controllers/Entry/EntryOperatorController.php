@@ -155,15 +155,17 @@ class EntryOperatorController extends Controller
         ]);
     }
 
-    public function document(EntryScan $scan): Response
+    public function document(Request $request, EntryScan $scan): Response
     {
         abort_unless(
             in_array($scan->status, [EntryScan::STATUS_SAVED, EntryScan::STATUS_STORED], true),
             404,
         );
 
-        $path = (string) ($scan->document_path ?? '');
-        abort_if($path === '' || ! Storage::disk('local')->exists($path), 404);
+        $paths = $scan->documentPaths();
+        $page = max(1, (int) $request->query('page', 1));
+        $path = $paths[$page - 1] ?? null;
+        abort_if($path === null || ! Storage::disk('local')->exists($path), 404);
 
         return Storage::disk('local')->response($path);
     }
