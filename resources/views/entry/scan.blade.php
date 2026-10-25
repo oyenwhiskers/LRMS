@@ -36,8 +36,8 @@
             <p class="entry-camera__status" data-entry-camera-status aria-live="polite">Halakan kamera ke dokumen.</p>
         </div>
         <div class="entry-camera__actions">
-            <button class="entry-auth__submit" type="button" data-entry-camera-shutter>Tangkap</button>
             <button class="entry-app__logout" type="button" data-entry-cancel-camera>Batal</button>
+            <button class="entry-auth__submit" type="button" data-entry-camera-shutter>Tangkap</button>
         </div>
     </div>
 
@@ -147,10 +147,16 @@
         Object.entries(panels).forEach(([key, panel]) => {
             panel?.classList.toggle('hidden', key !== name);
         });
+        const live = name === '1-live';
+        root.classList.toggle('entry-home--camera-live', live);
+        document.body.classList.toggle('entry-app--camera-live', live);
         const text = copy[name] || copy['1'];
         if (stepLabel) stepLabel.textContent = text.label;
         if (stepTitle) stepTitle.textContent = text.title;
         if (stepLede) stepLede.textContent = text.lede;
+        if (live) {
+            window.scrollTo(0, 0);
+        }
     };
 
     const stopCamera = () => {
@@ -437,6 +443,7 @@
 
     showStep('1');
     window.addEventListener('pagehide', () => {
+        document.body.classList.remove('entry-app--camera-live');
         stopCamera();
         clearPages();
     });
