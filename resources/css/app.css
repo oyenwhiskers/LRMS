@@ -2916,6 +2916,36 @@ button.entry-ops__metric:focus-visible {
     color: #047857;
 }
 
+.entry-ops__badge--review-pending {
+    background: #fafaf9;
+    border-color: #d6d3d1;
+    color: #78716c;
+}
+
+.entry-ops__badge--review-needs_correction {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #c2410c;
+}
+
+.entry-ops__badge--review-verified {
+    background: #ecfdf5;
+    border-color: #6ee7b7;
+    color: #047857;
+}
+
+.entry-pill--needs-correction {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #c2410c;
+}
+
+.entry-pill--verified {
+    background: #ecfdf5;
+    border-color: #6ee7b7;
+    color: #047857;
+}
+
 .entry-ops-metric-modal__lede {
     margin: 0.35rem 0 0;
     font-size: 0.85rem;
@@ -3127,6 +3157,40 @@ fieldset.file-label-modal__edit-form {
     justify-content: space-between;
     gap: 0.75rem;
     margin-bottom: 0.65rem;
+}
+
+.operator-review-page__badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.35rem;
+}
+
+.operator-review-page__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    flex-shrink: 0;
+    padding: 0.85rem 1rem 1rem;
+    border-top: 1px solid var(--entry-line, #e7e5e4);
+    background: #fff;
+}
+
+.operator-review-page__actions form {
+    flex: 1 1 10rem;
+    margin: 0;
+}
+
+.operator-review-page__actions .btn-primary,
+.operator-review-page__actions .btn-secondary {
+    width: 100%;
+    min-height: 2.75rem;
+}
+
+.operator-review-page__actions .btn-primary:disabled,
+.operator-review-page__actions .btn-secondary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .operator-review-page__section-title {
@@ -3707,6 +3771,19 @@ a.entry-card--action:focus-visible {
     gap: 0.65rem;
 }
 
+.entry-scan-save {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.entry-camera__actions--save {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+    margin: 0.5rem 0;
+    padding: 0;
+}
+
 /* Live capture: true fullscreen overlay — no page scroll, shutter always on screen. */
 .entry-app--camera-live {
     overflow: hidden;
@@ -3793,6 +3870,26 @@ a.entry-card--action:focus-visible {
 .entry-camera__actions > .entry-app__logout:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+}
+
+/* Save row: equal buttons with label truly centered (must follow rules above). */
+.entry-camera__actions--save > .btn-primary,
+.entry-camera__actions--save > .entry-app__logout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 3rem;
+    height: 3rem;
+    margin: 0;
+    padding: 0 0.75rem;
+    border-width: 1px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-align: center;
+    box-sizing: border-box;
 }
 
 .entry-camera__thumbs {
@@ -4660,6 +4757,24 @@ a.entry-card--action:focus-visible {
 
 .entry-print-station__actions .btn-primary {
     width: 100%;
+    grid-column: 1 / -1;
+}
+
+.entry-print-station__actions [data-print-station-mark-pending],
+.entry-print-station__actions [data-print-station-mark-printed] {
+    grid-column: span 1;
+}
+
+.entry-print-station__actions [data-print-station-refresh] {
+    grid-column: 1 / -1;
+}
+
+.entry-print-preview__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
 }
 
 .entry-print-station__count {
@@ -4976,17 +5091,23 @@ a.entry-card--action:focus-visible {
         grid-column: 2;
         grid-row: 1;
         display: flex;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         justify-content: flex-end;
     }
 
     .entry-print-station__actions .btn-primary {
         width: auto;
         min-width: 11rem;
+        grid-column: auto;
     }
 
     .entry-print-station__actions .btn-secondary {
         min-width: 7.5rem;
+        grid-column: auto;
+    }
+
+    .entry-print-station__actions [data-print-station-refresh] {
+        grid-column: auto;
     }
 
     .entry-print-station__cards {

@@ -1842,13 +1842,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const jobsUrl = station.getAttribute('data-jobs-url') || '';
-        const markUrl = station.getAttribute('data-mark-url') || '';
+        const statusUrl = station.getAttribute('data-status-url') || '';
+        const batchPrintUrl = station.getAttribute('data-batch-print-url') || '';
         const listEl = station.querySelector('[data-print-station-list]');
         const countEl = station.querySelector('[data-print-station-count]');
         const countLabelEl = station.querySelector('[data-print-station-count-label]');
         const pendingCountEl = station.querySelector('[data-print-station-pending-count]');
         const statusEl = station.querySelector('[data-print-station-status]');
         const printSelectedBtn = station.querySelector('[data-print-station-print-selected]');
+        const markPrintedBtn = station.querySelector('[data-print-station-mark-printed]');
+        const markPendingBtn = station.querySelector('[data-print-station-mark-pending]');
         const refreshBtn = station.querySelector('[data-print-station-refresh]');
         const searchInput = station.querySelector('[data-print-station-search]');
         const desktopStatusSelect = station.querySelector('[data-print-station-status-filter]');
@@ -1859,10 +1862,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const previewTitle = previewModal?.querySelector('[data-print-preview-title]');
         const previewPrintBtn = previewModal?.querySelector('[data-print-preview-print]');
         const previewDeleteBtn = previewModal?.querySelector('[data-print-preview-delete]');
+        const previewMarkStatusBtn = previewModal?.querySelector('[data-print-preview-mark-status]');
         const desktopFilterQuery = window.matchMedia('(min-width: 900px)');
         let jobs = [];
         let busy = false;
         let previewJob = null;
+
+        const jobIsPending = (job) => job?.is_pending !== false && job?.status !== 'printed';
 
         const statusFilter = () => desktopStatusSelect?.value
             || station.getAttribute('data-status-filter')
@@ -1922,6 +1928,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const checkedCount = boxes.filter((box) => box.checked).length;
             const allChecked = boxes.length > 0 && checkedCount === boxes.length;
             const indeterminate = checkedCount > 0 && checkedCount < boxes.length;
+            const selected = selectedJobs();
+            const hasPending = selected.some(jobIsPending);
+            const hasPrinted = selected.some((job) => ! jobIsPending(job));
 
             listEl?.querySelectorAll('[data-print-station-select-all]').forEach((selectAll) => {
                 selectAll.checked = allChecked;
@@ -1932,6 +1941,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 printSelectedBtn.disabled = checkedCount === 0 || busy;
                 printSelectedBtn.textContent = printSelectedLabel(statusFilter());
             }
+
+            if (markPrintedBtn) {
+                markPrintedBtn.disabled = ! hasPending || busy;
+            }
+
+            if (markPendingBtn) {
+                markPendingBtn.disabled = ! hasPrinted || busy;
+            }
+        };
+
+        const syncPreviewMarkStatus = () => {
+            if (! previewMarkStatusBtn || ! previewJob) {
+                return;
+            }
+
+            const pending = jobIsPending(previewJob);
+            previewMarkStatusBtn.textContent = pending ? 'Tanda dicetak' : 'Tanda belum dicetak';
+            previewMarkStatusBtn.disabled = busy;
         };
 
         const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -2032,6 +2059,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 previewDeleteBtn.disabled = busy || ! job.delete_url;
             }
 
+            syncPreviewMarkStatus();
+
             const frameWrap = previewModal.querySelector('.entry-print-preview__frame-wrap');
             if (frameWrap) {
                 frameWrap.style.aspectRatio = job.type === 'side' ? '2 / 1' : '3 / 2';
@@ -2091,7 +2120,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const rows = [];
 
             jobs.forEach((job) => {
-                const pending = job.is_pending !== false && job.status !== 'printed';
+                const pending = jobIsPending(job);
                 const badgeClass = pending ? 'pending' : 'printed';
                 const statusLabel = escapeHtml(job.status_label || (pending ? 'Belum dicetak' : 'Dicetak'));
                 const sentAt = escapeHtml(job.created_at || '—');
@@ -2227,12 +2256,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
         };
 
-        const markPrinted = async (ids) => {
-            if (! markUrl || ids.length === 0) {
-                return;
+        const setJobStatus = async (ids, status) => {
+            if (! statusUrl || ids.length === 0) {
+                return { marked: [] };
             }
 
-            const response = await fetch(markUrl, {
+            const response = await fetch(statusUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2240,11 +2269,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                     'X-CSRF-TOKEN': csrfToken(),
                     'X-Requested-With': 'XMLHttpRequest',
                 },
-                body: JSON.stringify({ ids }),
+                body: JSON.stringify({ ids, status }),
             });
 
+            const payload = await response.json().catch(() => ({}));
             if (! response.ok) {
-                throw new Error('Gagal menanda job sebagai dicetak.');
+                const label = status === 'printed' ? 'dicetak' : 'belum dicetak';
+                throw new Error(payload.message || `Gagal menanda job sebagai ${label}.`);
+            }
+
+            return payload;
+        };
+
+        const markSelectedStatus = async (status) => {
+            const selected = selectedJobs().filter((job) => (
+                status === 'printed' ? jobIsPending(job) : ! jobIsPending(job)
+            ));
+            if (busy || selected.length === 0) {
+                return;
+            }
+
+            busy = true;
+            syncSelectionUi();
+            syncPreviewMarkStatus();
+            const label = status === 'printed' ? 'dicetak' : 'belum dicetak';
+            setStatus(`Menanda ${selected.length} job sebagai ${label}…`);
+
+            try {
+                const payload = await setJobStatus(selected.map((job) => job.id), status);
+                const count = Array.isArray(payload.marked) ? payload.marked.length : selected.length;
+                setStatus(`${count} job ditanda ${label}`, 'ok');
+                await fetchJobs();
+            } catch (error) {
+                setStatus(error instanceof Error ? error.message : `Gagal menanda sebagai ${label}.`, 'error');
+            } finally {
+                busy = false;
+                syncSelectionUi();
+                syncPreviewMarkStatus();
             }
         };
 
@@ -2295,8 +2356,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             frame.src = href + (href.includes('?') ? '&' : '?') + '_print=' + Date.now();
         });
 
+        const batchPrintHref = (jobs, type) => {
+            if (! batchPrintUrl || jobs.length === 0) {
+                return '';
+            }
+
+            const url = new URL(batchPrintUrl, window.location.origin);
+            url.searchParams.set('ids', jobs.map((job) => job.id).join(','));
+            url.searchParams.set('type', type);
+
+            return sameOriginPrintUrl(url.pathname + url.search);
+        };
+
         const printJobs = async (selected, { mark = true } = {}) => {
             if (busy || selected.length === 0) {
+                return;
+            }
+
+            // Same sticker size → one print dialog. Mixed front/side → one dialog per size.
+            const groups = ['front', 'side']
+                .map((type) => ({
+                    type,
+                    jobs: selected.filter((job) => (job.type || 'front') === type && job.id),
+                }))
+                .filter((group) => group.jobs.length > 0);
+
+            if (groups.length === 0) {
+                setStatus('Tiada job sah untuk dicetak.', 'error');
                 return;
             }
 
@@ -2304,20 +2390,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             syncSelectionUi();
             setStatus(`Mencetak ${selected.length} job…`);
 
-            const printedIds = [];
             try {
-                for (const job of selected) {
-                    if (! job.print_url) {
+                for (const group of groups) {
+                    const href = batchPrintHref(group.jobs, group.type)
+                        || group.jobs[0]?.print_url
+                        || '';
+                    if (! href) {
                         continue;
                     }
-                    await printViaFrame(job.print_url);
-                    if (mark && (job.is_pending !== false && job.status !== 'printed')) {
-                        printedIds.push(job.id);
-                    }
+                    await printViaFrame(href);
                 }
 
-                if (mark && printedIds.length > 0) {
-                    await markPrinted(printedIds);
+                const printedIds = mark
+                    ? selected.filter(jobIsPending).map((job) => job.id)
+                    : [];
+
+                if (printedIds.length > 0) {
+                    await setJobStatus(printedIds, 'printed');
                     setStatus(`${printedIds.length} job ditanda dicetak`, 'ok');
                 } else {
                     setStatus(`${selected.length} job dicetak`, 'ok');
@@ -2398,15 +2487,51 @@ document.addEventListener('DOMContentLoaded', async () => {
             printJobs(selectedJobs());
         });
 
+        markPrintedBtn?.addEventListener('click', () => {
+            markSelectedStatus('printed');
+        });
+
+        markPendingBtn?.addEventListener('click', () => {
+            markSelectedStatus('pending');
+        });
+
         previewPrintBtn?.addEventListener('click', () => {
             if (! previewJob?.print_url || busy) {
                 return;
             }
 
             const job = previewJob;
-            const reprint = job.is_pending === false || job.status === 'printed';
+            const reprint = ! jobIsPending(job);
             closePreview();
             printJobs([job], { mark: ! reprint });
+        });
+
+        previewMarkStatusBtn?.addEventListener('click', async () => {
+            if (! previewJob || busy) {
+                return;
+            }
+
+            const job = previewJob;
+            const nextStatus = jobIsPending(job) ? 'printed' : 'pending';
+            const label = nextStatus === 'printed' ? 'dicetak' : 'belum dicetak';
+
+            busy = true;
+            syncSelectionUi();
+            syncPreviewMarkStatus();
+            setStatus(`Menanda job sebagai ${label}…`);
+
+            try {
+                await setJobStatus([job.id], nextStatus);
+                closePreview();
+                setStatus(`Job ditanda ${label}`, 'ok');
+                await fetchJobs();
+            } catch (error) {
+                setStatus(error instanceof Error ? error.message : `Gagal menanda sebagai ${label}.`, 'error');
+            } finally {
+                busy = false;
+                syncSelectionUi();
+                syncPreviewMarkStatus();
+            }
         });
 
         previewDeleteBtn?.addEventListener('click', () => {
@@ -2668,11 +2793,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.querySelectorAll('[data-case-type-form]').forEach((form) => {
         const select = form.querySelector('[data-case-type-select]');
-        const panels = Array.from(form.querySelectorAll('[data-case-type-panel]'));
+        // Only field panels — never <option data-case-type-*> (hiding those emptied the dropdown).
+        const panels = Array.from(form.querySelectorAll('div[data-case-type-panel], section[data-case-type-panel]'));
 
-        const syncCaseTypePanels = (type) => {
+        const resolvePanelType = () => {
+            if (! select) {
+                return panels.find((panel) => ! panel.classList.contains('hidden'))?.dataset.caseTypePanel || '';
+            }
+            const selected = select.selectedOptions?.[0];
+            const fromOption = selected?.dataset?.caseTypeFamily || selected?.dataset?.caseTypePanel;
+            if (fromOption) {
+                return fromOption;
+            }
+
+            return select.value || '';
+        };
+
+        const syncCaseTypePanels = (panelType) => {
             panels.forEach((panel) => {
-                const active = panel.dataset.caseTypePanel === type;
+                const active = panel.dataset.caseTypePanel === panelType;
                 panel.classList.toggle('hidden', ! active);
                 panel.querySelectorAll('input, textarea, select').forEach((field) => {
                     field.disabled = ! active;
@@ -2683,14 +2822,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         };
 
-        const initialType = select?.value
-            || panels.find((panel) => ! panel.classList.contains('hidden'))?.dataset.caseTypePanel
-            || '';
-
-        syncCaseTypePanels(initialType);
+        syncCaseTypePanels(resolvePanelType());
 
         select?.addEventListener('change', () => {
-            syncCaseTypePanels(select.value);
+            syncCaseTypePanels(resolvePanelType());
         });
 
         const borrowersRoot = form.querySelector('[data-borrowers-root]');

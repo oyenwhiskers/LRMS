@@ -62,8 +62,10 @@
                                 @endif
                             </p>
                         </div>
-                        <span class="entry-ops__badge entry-ops__badge--{{ $scan->status }}">
-                            {{ $scan->statusLabel() }}
+                        <span class="entry-ops__badge entry-ops__badge--review-{{ $scan->review_status ?: App\Models\EntryScan::REVIEW_PENDING }}">
+                            {{ $scan->review_status === App\Models\EntryScan::REVIEW_PENDING
+                                ? $scan->statusLabel()
+                                : $scan->reviewStatusLabel() }}
                         </span>
                     </button>
                 @empty

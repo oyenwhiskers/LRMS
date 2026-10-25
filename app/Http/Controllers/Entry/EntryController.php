@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Entry;
 
 use App\Domain\Entry\RegisterEntryCase;
+use App\Domain\Entry\SetEntryScanReviewStatus;
 use App\Domain\Entry\StoreEntryCaseOnShelf;
 use App\Domain\Entry\UpdateEntryCase;
 use App\Http\Controllers\Controller;
@@ -32,28 +33,39 @@ class EntryController extends Controller
     {
         $user = $request->user();
         $savedStatuses = [EntryScan::STATUS_SAVED, EntryScan::STATUS_STORED];
+        $scanWith = [
+            'legalFile:id,reference_number,case_type,case_category_id,purchaser,vendor,property,bank,title_number,suite_number,ic_number,start_date,end_date,file_identifier,qr_identifier',
+            'legalFile.parties',
+            'shelf.rack',
+        ];
 
         $storedCount = EntryScan::query()
             ->where('user_id', $user->id)
             ->whereIn('status', $savedStatuses)
             ->count();
 
+        $needsCorrection = EntryScan::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', $savedStatuses)
+            ->where('review_status', EntryScan::REVIEW_NEEDS_CORRECTION)
+            ->with($scanWith)
+            ->latest('reviewed_at')
+            ->latest()
+            ->get();
+
         $recent = EntryScan::query()
             ->where('user_id', $user->id)
             ->whereIn('status', $savedStatuses)
-            ->with([
-                'legalFile:id,reference_number,case_type,case_category_id,purchaser,vendor,property,bank,title_number,suite_number,ic_number,start_date,end_date,file_identifier,qr_identifier',
-                'legalFile.parties',
-                'shelf.rack',
-            ])
+            ->where('review_status', '!=', EntryScan::REVIEW_NEEDS_CORRECTION)
+            ->with($scanWith)
             ->latest()
             ->limit(10)
             ->get();
 
-        $labelQrs = $this->labelQrsForScans($recent);
+        $labelQrs = $this->labelQrsForScans($needsCorrection->concat($recent));
         $categories = $this->activeCategories();
 
-        return view('entry.home', compact('storedCount', 'recent', 'labelQrs', 'categories'));
+        return view('entry.home', compact('storedCount', 'needsCorrection', 'recent', 'labelQrs', 'categories'));
     }
 
     public function history(Request $request): View
@@ -218,8 +230,12 @@ class EntryController extends Controller
             ->with('success', 'Kes disimpan. Imbas QR rak tempat fail diletakkan.');
     }
 
-    public function update(Request $request, EntryScan $scan, UpdateEntryCase $updater): RedirectResponse
-    {
+    public function update(
+        Request $request,
+        EntryScan $scan,
+        UpdateEntryCase $updater,
+        SetEntryScanReviewStatus $reviewSetter,
+    ): RedirectResponse {
         $this->authorizeScan($request, $scan);
         abort_unless(in_array($scan->status, [EntryScan::STATUS_SAVED, EntryScan::STATUS_STORED], true), 422);
 
@@ -229,6 +245,10 @@ class EntryController extends Controller
 
         $data = $this->validatedCase($request, $file);
         $updater->handle($scan, $request->user(), $data);
+
+        if ($scan->review_status === EntryScan::REVIEW_NEEDS_CORRECTION) {
+            $reviewSetter->handle($scan, $request->user(), EntryScan::REVIEW_PENDING);
+        }
 
         return back()
             ->with('success', 'Maklumat fail dikemas kini.')
@@ -514,9 +534,9 @@ class EntryController extends Controller
         $data['purchaser'] = $data['borrowers'] !== []
             ? LegalFile::joinPartyNames(array_column($data['borrowers'], 'name'))
             : trim((string) ($data['purchaser'] ?? ''));
-        $data['vendor'] = $caseType === LegalFile::TYPE_SNP ? ($data['vendor'] ?? null) : null;
+        $data['vendor'] = LegalFile::isSnpType($caseType) ? ($data['vendor'] ?? null) : null;
         $data['bank'] = $caseType === LegalFile::TYPE_LOAN ? ($data['bank'] ?? null) : null;
-        $data['title_number'] = in_array($caseType, [LegalFile::TYPE_LOAN, LegalFile::TYPE_SNP], true)
+        $data['title_number'] = ($caseType === LegalFile::TYPE_LOAN || LegalFile::isSnpType($caseType))
             ? ($data['title_number'] ?? null)
             : null;
         $data['suite_number'] = $caseType === LegalFile::TYPE_LITIGATION ? ($data['suite_number'] ?? null) : null;

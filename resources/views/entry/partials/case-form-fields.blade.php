@@ -44,13 +44,27 @@
         @endif
     </label>
 
+    @php
+        $isSnpSelected = App\Models\LegalFile::isSnpType($selectedType);
+    @endphp
     <label class="{{ $fieldClass }}">
         <span class="form-label">Jenis kes</span>
         <select class="form-input" name="case_type" required data-case-type-select data-entry-field="case_type">
             <option value="">Pilih jenis kes</option>
-            <option value="{{ App\Models\LegalFile::TYPE_LOAN }}" @selected($selectedType === App\Models\LegalFile::TYPE_LOAN)>Pinjaman</option>
-            <option value="{{ App\Models\LegalFile::TYPE_SNP }}" @selected($selectedType === App\Models\LegalFile::TYPE_SNP)>Jual beli (S&amp;P)</option>
-            <option value="{{ App\Models\LegalFile::TYPE_LITIGATION }}" @selected($selectedType === App\Models\LegalFile::TYPE_LITIGATION)>Litigasi</option>
+            @foreach (App\Models\LegalFile::caseTypes() as $type)
+                @php
+                    $typeLabel = match ($type) {
+                        App\Models\LegalFile::TYPE_LOAN => 'Pinjaman',
+                        App\Models\LegalFile::TYPE_LITIGATION => 'Litigasi',
+                        default => App\Models\LegalFile::caseTypeLabelFor($type),
+                    };
+                @endphp
+                <option
+                    value="{{ $type }}"
+                    data-case-type-family="{{ App\Models\LegalFile::formPanel($type) }}"
+                    @selected($selectedType === $type)
+                >{{ $typeLabel }}</option>
+            @endforeach
         </select>
         @if ($useOld)
             @error('case_type')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
@@ -142,22 +156,22 @@
         </label>
     </div>
 
-    <div @class([$isModalLayout ? 'entry-case-fields__panel' : 'grid gap-4', 'hidden' => $selectedType !== App\Models\LegalFile::TYPE_SNP]) data-case-type-panel="snp">
+    <div @class([$isModalLayout ? 'entry-case-fields__panel' : 'grid gap-4', 'hidden' => ! $isSnpSelected]) data-case-type-panel="snp">
         <label class="{{ $fieldClass }}">
             <span class="form-label">Pembeli</span>
-            <input class="form-input" name="purchaser" value="{{ $field('purchaser') }}" data-entry-field="purchaser" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
+            <input class="form-input" name="purchaser" value="{{ $field('purchaser') }}" data-entry-field="purchaser" @disabled(! $isSnpSelected)>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">Penjual</span>
-            <input class="form-input" name="vendor" value="{{ $field('vendor') }}" data-entry-field="vendor" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
+            <input class="form-input" name="vendor" value="{{ $field('vendor') }}" data-entry-field="vendor" @disabled(! $isSnpSelected)>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">Alamat hartanah</span>
-            <textarea class="form-input min-h-24" name="property" data-entry-field="property" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>{{ $field('property') }}</textarea>
+            <textarea class="form-input min-h-24" name="property" data-entry-field="property" @disabled(! $isSnpSelected)>{{ $field('property') }}</textarea>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">No. hakmilik</span>
-            <input class="form-input" name="title_number" value="{{ $field('title_number') }}" data-entry-field="title_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
+            <input class="form-input" name="title_number" value="{{ $field('title_number') }}" data-entry-field="title_number" @disabled(! $isSnpSelected)>
         </label>
     </div>
 

@@ -63,6 +63,8 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/operators', [EntryOperatorController::class, 'index'])->name('operators.index');
         Route::get('/operators/scans/{scan}/document', [EntryOperatorController::class, 'document'])
             ->name('operators.document');
+        Route::post('/operators/scans/{scan}/review', [EntryOperatorController::class, 'setReview'])
+            ->name('operators.review');
         Route::get('/scan', [EntryController::class, 'create'])->name('scan');
         Route::post('/scan', [EntryController::class, 'store'])->name('scan.store');
         Route::post('/confirm', [EntryController::class, 'save'])->name('save');
@@ -78,7 +80,8 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/print-station', [EntryPrintStationController::class, 'index'])->name('print-station');
         Route::get('/print-jobs', [EntryPrintStationController::class, 'list'])->name('print-jobs.index');
         Route::post('/print-jobs', [EntryPrintStationController::class, 'store'])->name('print-jobs.store');
-        Route::post('/print-jobs/mark-printed', [EntryPrintStationController::class, 'markPrinted'])->name('print-jobs.mark-printed');
+        Route::post('/print-jobs/status', [EntryPrintStationController::class, 'setStatus'])->name('print-jobs.status');
+        Route::get('/print-jobs/batch-print', [EntryPrintStationController::class, 'batchPrint'])->name('print-jobs.batch-print');
         Route::delete('/print-jobs/{job}', [EntryPrintStationController::class, 'destroy'])->name('print-jobs.destroy');
 
         Route::get('/ai-usage/unlock', [AiTokenUsageController::class, 'unlockForm'])->name('ai-usage.unlock');

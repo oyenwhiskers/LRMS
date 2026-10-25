@@ -114,9 +114,13 @@ class EntryOperatorBrowseTest extends TestCase
             ->assertSee('data-doc-pages', false)
             ->assertSee('Rak &amp; shelf', false)
             ->assertSee('entry-ops-shelf--review', false)
+            ->assertSee('Tanda disahkan', false)
+            ->assertSee('Perlu pembetulan', false)
+            ->assertSee('operators/scans/'.$scanA->id.'/review', false)
             ->assertSee('Alpha Buyer', false)
             ->assertSee('Semua jenis', false)
             ->assertSee('Semua rak', false)
+            ->assertSee('Semua semakan', false)
             ->assertSee('entry-ops__table', false);
 
         $this->actingAs($viewer)
@@ -150,5 +154,256 @@ class EntryOperatorBrowseTest extends TestCase
         $this->actingAs($firm)
             ->get(route('entry.operators.index'))
             ->assertForbidden();
+    }
+
+    public function test_entry_peer_can_mark_verified_and_needs_correction(): void
+    {
+        $peer = User::factory()->entry()->create();
+        $owner = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2024/REV1',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Review Buyer',
+            'property' => 'Lot R',
+            'title_number' => 'PN R',
+            'status' => LegalFile::STATUS_STORED,
+            'created_by' => $owner->id,
+            'updated_by' => $owner->id,
+        ]);
+
+        $scan = EntryScan::create([
+            'user_id' => $owner->id,
+            'document_path' => 'entry-scans/rev.jpg',
+            'legal_file_id' => $file->id,
+            'status' => EntryScan::STATUS_STORED,
+            'review_status' => EntryScan::REVIEW_PENDING,
+        ]);
+
+        $this->actingAs($peer)
+            ->from(route('entry.operators.index'))
+            ->post(route('entry.operators.review', $scan), [
+                'review_status' => EntryScan::REVIEW_NEEDS_CORRECTION,
+            ])
+            ->assertRedirect(route('entry.operators.index'))
+            ->assertSessionHas('success');
+
+        $scan->refresh();
+        $this->assertSame(EntryScan::REVIEW_NEEDS_CORRECTION, $scan->review_status);
+        $this->assertSame($peer->id, $scan->reviewed_by);
+        $this->assertNotNull($scan->reviewed_at);
+
+        $this->actingAs($peer)
+            ->from(route('entry.operators.index'))
+            ->post(route('entry.operators.review', $scan), [
+                'review_status' => EntryScan::REVIEW_VERIFIED,
+            ])
+            ->assertRedirect(route('entry.operators.index'));
+
+        $scan->refresh();
+        $this->assertSame(EntryScan::REVIEW_VERIFIED, $scan->review_status);
+        $this->assertSame($peer->id, $scan->reviewed_by);
+    }
+
+    public function test_owner_sees_needs_correction_on_home_and_history(): void
+    {
+        $owner = User::factory()->entry()->create();
+        $other = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2024/FIX1',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Fix Buyer',
+            'property' => 'Lot F',
+            'title_number' => 'PN F',
+            'status' => LegalFile::STATUS_STORED,
+            'created_by' => $owner->id,
+            'updated_by' => $owner->id,
+        ]);
+
+        EntryScan::create([
+            'user_id' => $owner->id,
+            'document_path' => 'entry-scans/fix.jpg',
+            'legal_file_id' => $file->id,
+            'status' => EntryScan::STATUS_STORED,
+            'review_status' => EntryScan::REVIEW_NEEDS_CORRECTION,
+            'reviewed_by' => $other->id,
+            'reviewed_at' => now(),
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('entry.home'))
+            ->assertOk()
+            ->assertSee('Perlu kemas kini', false)
+            ->assertSee('CON/2024/FIX1', false)
+            ->assertSee('Perlu pembetulan', false);
+
+        $this->actingAs($owner)
+            ->get(route('entry.history'))
+            ->assertOk()
+            ->assertSee('CON/2024/FIX1', false)
+            ->assertSee('Perlu pembetulan', false);
+
+        $this->actingAs($other)
+            ->get(route('entry.home'))
+            ->assertOk()
+            ->assertDontSee('CON/2024/FIX1', false);
+    }
+
+    public function test_owner_update_resets_needs_correction_to_pending(): void
+    {
+        $owner = User::factory()->entry()->create();
+        $peer = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2024/RST1',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Old Name',
+            'property' => 'Lot Old',
+            'title_number' => 'PN OLD',
+            'status' => LegalFile::STATUS_STORED,
+            'created_by' => $owner->id,
+            'updated_by' => $owner->id,
+        ]);
+
+        $scan = EntryScan::create([
+            'user_id' => $owner->id,
+            'document_path' => 'entry-scans/rst.jpg',
+            'legal_file_id' => $file->id,
+            'status' => EntryScan::STATUS_STORED,
+            'review_status' => EntryScan::REVIEW_NEEDS_CORRECTION,
+            'reviewed_by' => $peer->id,
+            'reviewed_at' => now(),
+        ]);
+
+        $this->actingAs($owner)
+            ->from(route('entry.home'))
+            ->put(route('entry.scan.update', $scan), [
+                '_legal_file_id' => $file->id,
+                'reference_number' => 'CON/2024/RST1',
+                'case_type' => LegalFile::TYPE_SNP,
+                'case_category_id' => $category->id,
+                'purchaser' => 'Fixed Name',
+                'property' => 'Lot New',
+                'title_number' => 'PN NEW',
+            ])
+            ->assertRedirect(route('entry.home'))
+            ->assertSessionHas('success');
+
+        $scan->refresh();
+        $this->assertSame(EntryScan::REVIEW_PENDING, $scan->review_status);
+        $this->assertNull($scan->reviewed_by);
+        $this->assertNull($scan->reviewed_at);
+        $this->assertSame('Fixed Name', $file->fresh()->purchaser);
+    }
+
+    public function test_draft_scan_cannot_be_reviewed_and_invalid_status_rejected(): void
+    {
+        $peer = User::factory()->entry()->create();
+        $owner = User::factory()->entry()->create();
+
+        $draft = EntryScan::create([
+            'user_id' => $owner->id,
+            'document_path' => 'entry-scans/draft.jpg',
+            'status' => EntryScan::STATUS_DRAFT,
+        ]);
+
+        $this->actingAs($peer)
+            ->post(route('entry.operators.review', $draft), [
+                'review_status' => EntryScan::REVIEW_VERIFIED,
+            ])
+            ->assertNotFound();
+
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2024/BAD1',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Bad',
+            'property' => 'Lot B',
+            'title_number' => 'PN B',
+            'status' => LegalFile::STATUS_STORED,
+            'created_by' => $owner->id,
+            'updated_by' => $owner->id,
+        ]);
+        $scan = EntryScan::create([
+            'user_id' => $owner->id,
+            'document_path' => 'entry-scans/bad.jpg',
+            'legal_file_id' => $file->id,
+            'status' => EntryScan::STATUS_STORED,
+        ]);
+
+        $this->actingAs($peer)
+            ->from(route('entry.operators.index'))
+            ->post(route('entry.operators.review', $scan), [
+                'review_status' => 'nonsense',
+            ])
+            ->assertRedirect(route('entry.operators.index'))
+            ->assertSessionHasErrors('review_status');
+    }
+
+    public function test_review_status_filter_on_operator_browse(): void
+    {
+        $viewer = User::factory()->entry()->create();
+        $owner = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+
+        $pendingFile = LegalFile::create([
+            'reference_number' => 'CON/2024/PEND',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Pending',
+            'property' => 'Lot P',
+            'title_number' => 'PN P',
+            'status' => LegalFile::STATUS_STORED,
+            'created_by' => $owner->id,
+            'updated_by' => $owner->id,
+        ]);
+        $verifiedFile = LegalFile::create([
+            'reference_number' => 'CON/2024/VER',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Verified',
+            'property' => 'Lot V',
+            'title_number' => 'PN V',
+            'status' => LegalFile::STATUS_STORED,
+            'created_by' => $owner->id,
+            'updated_by' => $owner->id,
+        ]);
+
+        EntryScan::create([
+            'user_id' => $owner->id,
+            'document_path' => 'entry-scans/pend.jpg',
+            'legal_file_id' => $pendingFile->id,
+            'status' => EntryScan::STATUS_STORED,
+            'review_status' => EntryScan::REVIEW_PENDING,
+        ]);
+        EntryScan::create([
+            'user_id' => $owner->id,
+            'document_path' => 'entry-scans/ver.jpg',
+            'legal_file_id' => $verifiedFile->id,
+            'status' => EntryScan::STATUS_STORED,
+            'review_status' => EntryScan::REVIEW_VERIFIED,
+            'reviewed_by' => $viewer->id,
+            'reviewed_at' => now(),
+        ]);
+
+        $this->actingAs($viewer)
+            ->get(route('entry.operators.index', ['review_status' => EntryScan::REVIEW_VERIFIED]))
+            ->assertOk()
+            ->assertSee('CON/2024/VER', false)
+            ->assertDontSee('CON/2024/PEND', false);
     }
 }

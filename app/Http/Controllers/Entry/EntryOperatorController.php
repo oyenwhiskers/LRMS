@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Entry;
 
+use App\Domain\Entry\SetEntryScanReviewStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CaseCategory;
 use App\Models\EntryScan;
@@ -9,6 +10,7 @@ use App\Models\LegalFile;
 use App\Models\Rack;
 use App\Models\Shelf;
 use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +31,7 @@ class EntryOperatorController extends Controller
             'rack_id' => ['nullable', 'integer', 'exists:racks,id'],
             'shelf_id' => ['nullable', 'integer', 'exists:shelves,id'],
             'case_type' => ['nullable', Rule::in(LegalFile::caseTypes())],
+            'review_status' => ['nullable', Rule::in(EntryScan::reviewStatuses())],
         ]);
 
         $base = EntryScan::query()
@@ -151,8 +154,35 @@ class EntryOperatorController extends Controller
                 'rack_id' => $filters['rack_id'] ?? '',
                 'shelf_id' => $filters['shelf_id'] ?? '',
                 'case_type' => $filters['case_type'] ?? '',
+                'review_status' => $filters['review_status'] ?? '',
             ],
         ]);
+    }
+
+    public function setReview(
+        Request $request,
+        EntryScan $scan,
+        SetEntryScanReviewStatus $setter,
+    ): RedirectResponse {
+        abort_unless(
+            in_array($scan->status, [EntryScan::STATUS_SAVED, EntryScan::STATUS_STORED], true),
+            404,
+        );
+
+        $data = $request->validate([
+            'review_status' => ['required', Rule::in([
+                EntryScan::REVIEW_VERIFIED,
+                EntryScan::REVIEW_NEEDS_CORRECTION,
+            ])],
+        ]);
+
+        $setter->handle($scan, $request->user(), $data['review_status']);
+
+        $message = $data['review_status'] === EntryScan::REVIEW_VERIFIED
+            ? 'Fail ditanda disahkan.'
+            : 'Fail ditanda perlu pembetulan.';
+
+        return back()->with('success', $message);
     }
 
     public function document(Request $request, EntryScan $scan): Response
@@ -178,13 +208,18 @@ class EntryOperatorController extends Controller
      *     date_to?: string|null,
      *     rack_id?: int|string|null,
      *     shelf_id?: int|string|null,
-     *     case_type?: string|null
+     *     case_type?: string|null,
+     *     review_status?: string|null
      * }  $filters
      */
     private function applyBrowseFilters($query, array $filters, bool $includeSearch): void
     {
         if (! empty($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
+        }
+
+        if (! empty($filters['review_status'])) {
+            $query->where('review_status', $filters['review_status']);
         }
 
         if (! empty($filters['date_from'])) {

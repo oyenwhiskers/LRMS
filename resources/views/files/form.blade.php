@@ -5,6 +5,7 @@
 
 @php
     $selectedType = old('case_type', $file->case_type ?: App\Models\LegalFile::TYPE_SNP);
+    $isSnpSelected = App\Models\LegalFile::isSnpType($selectedType);
 @endphp
 
 @section('content')
@@ -60,9 +61,13 @@
                         <span class="form-row__control">
                             <select class="form-input" name="case_type" required autofocus data-case-type-select>
                                 <option value="">Select case type</option>
-                                <option value="{{ App\Models\LegalFile::TYPE_LOAN }}" @selected($selectedType === App\Models\LegalFile::TYPE_LOAN)>Loan</option>
-                                <option value="{{ App\Models\LegalFile::TYPE_SNP }}" @selected($selectedType === App\Models\LegalFile::TYPE_SNP)>S&amp;P</option>
-                                <option value="{{ App\Models\LegalFile::TYPE_LITIGATION }}" @selected($selectedType === App\Models\LegalFile::TYPE_LITIGATION)>Litigation</option>
+                                @foreach (App\Models\LegalFile::caseTypes() as $type)
+                                    <option
+                                        value="{{ $type }}"
+                                        data-case-type-family="{{ App\Models\LegalFile::formPanel($type) }}"
+                                        @selected($selectedType === $type)
+                                    >{{ App\Models\LegalFile::caseTypeLabelFor($type) }}</option>
+                                @endforeach
                             </select>
                             <span class="form-help">Controls which matter fields are required.</span>
                         </span>
@@ -115,33 +120,33 @@
                     </label>
                 </div>
 
-                {{-- S&P fields --}}
-                <div class="grid gap-5 {{ $selectedType === App\Models\LegalFile::TYPE_SNP ? '' : 'hidden' }}" data-case-type-panel="snp">
+                {{-- S&P-shaped fields (sales, MOT, DOA, gift, POA, etc.) --}}
+                <div class="grid gap-5 {{ $isSnpSelected ? '' : 'hidden' }}" data-case-type-panel="snp">
                     <label class="form-row">
                         <span class="form-label form-row__label">Purchaser</span>
                         <span class="form-row__control">
-                            <input class="form-input" name="purchaser" value="{{ old('purchaser', $file->purchaser) }}" data-case-type-required @required($selectedType === App\Models\LegalFile::TYPE_SNP) @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
+                            <input class="form-input" name="purchaser" value="{{ old('purchaser', $file->purchaser) }}" data-case-type-required @required($isSnpSelected) @disabled(! $isSnpSelected)>
                         </span>
                     </label>
 
                     <label class="form-row">
                         <span class="form-label form-row__label">Vendor</span>
                         <span class="form-row__control">
-                            <input class="form-input" name="vendor" value="{{ old('vendor', $file->vendor) }}" @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
+                            <input class="form-input" name="vendor" value="{{ old('vendor', $file->vendor) }}" @disabled(! $isSnpSelected)>
                         </span>
                     </label>
 
                     <label class="form-row form-row--textarea">
                         <span class="form-label form-row__label">Property address</span>
                         <span class="form-row__control">
-                            <textarea class="form-input min-h-24" name="property" data-case-type-required @required($selectedType === App\Models\LegalFile::TYPE_SNP) @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>{{ old('property', $file->property) }}</textarea>
+                            <textarea class="form-input min-h-24" name="property" data-case-type-required @required($isSnpSelected) @disabled(! $isSnpSelected)>{{ old('property', $file->property) }}</textarea>
                         </span>
                     </label>
 
                     <label class="form-row">
                         <span class="form-label form-row__label">Title number</span>
                         <span class="form-row__control">
-                            <input class="form-input" name="title_number" value="{{ old('title_number', $file->title_number) }}" data-case-type-required @required($selectedType === App\Models\LegalFile::TYPE_SNP) @disabled($selectedType !== App\Models\LegalFile::TYPE_SNP)>
+                            <input class="form-input" name="title_number" value="{{ old('title_number', $file->title_number) }}" data-case-type-required @required($isSnpSelected) @disabled(! $isSnpSelected)>
                             <span class="form-help">If there is no subsidiary title, enter the master title.</span>
                         </span>
                     </label>

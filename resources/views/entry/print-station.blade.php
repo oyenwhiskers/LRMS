@@ -17,7 +17,8 @@
     class="entry-print-station"
     data-entry-print-station
     data-jobs-url="{{ route('entry.print-jobs.index') }}"
-    data-mark-url="{{ route('entry.print-jobs.mark-printed') }}"
+    data-status-url="{{ route('entry.print-jobs.status') }}"
+    data-batch-print-url="{{ route('entry.print-jobs.batch-print') }}"
     data-requested-by="{{ $filters['requested_by'] }}"
     data-status-filter="{{ $statusFilter }}"
     data-q="{{ $filters['q'] }}"
@@ -102,6 +103,22 @@
 
         <div class="entry-print-station__actions">
             <button class="btn-secondary" type="button" data-print-station-refresh>Muat semula</button>
+            <button
+                class="btn-secondary"
+                type="button"
+                data-print-station-mark-pending
+                disabled
+            >
+                Tanda belum dicetak
+            </button>
+            <button
+                class="btn-secondary"
+                type="button"
+                data-print-station-mark-printed
+                disabled
+            >
+                Tanda dicetak
+            </button>
             <button
                 class="btn-primary"
                 type="button"
@@ -306,7 +323,12 @@
             <button class="btn-secondary entry-print-preview__delete" type="button" data-print-preview-delete>
                 Padam
             </button>
-            <button class="btn-primary" type="button" data-print-preview-print>Cetak</button>
+            <div class="entry-print-preview__actions">
+                <button class="btn-secondary" type="button" data-print-preview-mark-status>
+                    Tanda dicetak
+                </button>
+                <button class="btn-primary" type="button" data-print-preview-print>Cetak</button>
+            </div>
         </div>
     </div>
 </div>

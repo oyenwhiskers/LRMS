@@ -64,7 +64,21 @@
     <section class="entry-list">
         @forelse ($scans as $scan)
             @if ($scan->legalFile)
-                @if ($scan->status === App\Models\EntryScan::STATUS_SAVED)
+                @php
+                    $needsFix = $scan->review_status === App\Models\EntryScan::REVIEW_NEEDS_CORRECTION;
+                    $pillClass = match ($scan->review_status) {
+                        App\Models\EntryScan::REVIEW_NEEDS_CORRECTION => 'entry-pill entry-pill--needs-correction',
+                        App\Models\EntryScan::REVIEW_VERIFIED => 'entry-pill entry-pill--verified',
+                        default => 'entry-pill',
+                    };
+                    $pillLabel = in_array($scan->review_status, [
+                        App\Models\EntryScan::REVIEW_NEEDS_CORRECTION,
+                        App\Models\EntryScan::REVIEW_VERIFIED,
+                    ], true)
+                        ? $scan->reviewStatusLabel()
+                        : $scan->statusLabel();
+                @endphp
+                @if ($scan->status === App\Models\EntryScan::STATUS_SAVED && ! $needsFix)
                     <a
                         class="entry-card entry-card--action"
                         href="{{ route('entry.shelf', $scan) }}"
@@ -77,7 +91,7 @@
                                 · Belum di rak · imbas QR rak
                             </p>
                         </div>
-                        <span class="entry-pill">{{ $scan->statusLabel() }}</span>
+                        <span class="{{ $pillClass }}">{{ $pillLabel }}</span>
                     </a>
                 @else
                     <button
@@ -92,10 +106,12 @@
                                 {{ \App\Support\LocalDate::format($scan->created_at, 'Y-m-d H:i') }}
                                 @if ($scan->shelf)
                                     · {{ $scan->shelf->full_location }}
+                                @elseif ($scan->status === App\Models\EntryScan::STATUS_SAVED)
+                                    · Belum di rak
                                 @endif
                             </p>
                         </div>
-                        <span class="entry-pill">{{ $scan->statusLabel() }}</span>
+                        <span class="{{ $pillClass }}">{{ $pillLabel }}</span>
                     </button>
                 @endif
             @else
@@ -124,7 +140,10 @@
 @foreach ($scans as $scan)
     @if (
         $scan->legalFile
-        && $scan->status === App\Models\EntryScan::STATUS_STORED
+        && (
+            $scan->status === App\Models\EntryScan::STATUS_STORED
+            || $scan->review_status === App\Models\EntryScan::REVIEW_NEEDS_CORRECTION
+        )
         && isset($labelQrs[$scan->legalFile->id])
     )
         @include('entry.partials.file-label-modal', [

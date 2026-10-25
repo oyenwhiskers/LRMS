@@ -27,9 +27,23 @@ class LegalFile extends Model
 
     public const TYPE_LOAN = 'loan';
 
+    public const TYPE_LITIGATION = 'litigation';
+
     public const TYPE_SNP = 'snp';
 
-    public const TYPE_LITIGATION = 'litigation';
+    public const TYPE_MOT = 'mot';
+
+    public const TYPE_DOA = 'doa';
+
+    public const TYPE_DOA_POST = 'doa_post';
+
+    public const TYPE_DOG = 'dog';
+
+    public const TYPE_POA = 'poa';
+
+    public const TYPE_SUBLIST = 'sublist';
+
+    public const TYPE_COPY_TITLE = 'copy_title';
 
     protected $fillable = [
         'reference_number', 'purchaser', 'vendor', 'bank', 'property', 'title_number',
@@ -245,23 +259,72 @@ class LegalFile extends Model
             ?? '—';
     }
 
+    /**
+     * @return list<string>
+     */
     public static function caseTypes(): array
     {
         return [
             self::TYPE_LOAN,
-            self::TYPE_SNP,
             self::TYPE_LITIGATION,
+            ...self::snpTypes(),
         ];
+    }
+
+    /**
+     * Conveyancing / S&P-shaped case types (shared form fields).
+     *
+     * @return list<string>
+     */
+    public static function snpTypes(): array
+    {
+        return [
+            self::TYPE_SNP,
+            self::TYPE_MOT,
+            self::TYPE_DOA,
+            self::TYPE_DOA_POST,
+            self::TYPE_DOG,
+            self::TYPE_POA,
+            self::TYPE_SUBLIST,
+            self::TYPE_COPY_TITLE,
+        ];
+    }
+
+    public static function isSnpType(string $type): bool
+    {
+        return in_array($type, self::snpTypes(), true);
+    }
+
+    /** Form panel family: loan | litigation | snp */
+    public static function formPanel(string $type): string
+    {
+        return match (true) {
+            $type === self::TYPE_LOAN => self::TYPE_LOAN,
+            $type === self::TYPE_LITIGATION => self::TYPE_LITIGATION,
+            default => self::TYPE_SNP,
+        };
+    }
+
+    public static function caseTypeLabelFor(string $type): string
+    {
+        return match ($type) {
+            self::TYPE_LOAN => 'Loan',
+            self::TYPE_LITIGATION => 'Litigation',
+            self::TYPE_SNP => 'Sales and purchase',
+            self::TYPE_MOT => 'Memorandum of transfer',
+            self::TYPE_DOA => 'Deeds of assignment',
+            self::TYPE_DOA_POST => 'Deeds of assignment (P.O.S.T)',
+            self::TYPE_DOG => 'Deeds of gift',
+            self::TYPE_POA => 'Power of attorney',
+            self::TYPE_SUBLIST => 'Sublist agreement',
+            self::TYPE_COPY_TITLE => 'Copy title',
+            default => str($type)->headline()->toString(),
+        };
     }
 
     public function caseTypeLabel(): string
     {
-        return match ($this->case_type) {
-            self::TYPE_LOAN => 'Loan',
-            self::TYPE_SNP => 'S&P',
-            self::TYPE_LITIGATION => 'Litigation',
-            default => str($this->case_type)->headline()->toString(),
-        };
+        return self::caseTypeLabelFor((string) $this->case_type);
     }
 
     public function partyNameLabel(): string

@@ -39,13 +39,18 @@ class GeminiCaseDraftService
             ->implode("\n");
 
         $pageCount = count($images);
+        $caseTypeCodes = implode(' | ', array_map(
+            static fn (string $code): string => '"'.$code.'"',
+            LegalFile::caseTypes(),
+        ));
+        $snpTypeCodes = implode(', ', LegalFile::snpTypes());
         $prompt = <<<PROMPT
 You are extracting data from a Malaysian law-firm case document photo for case registration of OLDER physical files.
 You may receive 1–{$pageCount} ordered page photos of the same physical file (page 1 first). Merge fields across pages — later pages often hold property, title_number, IC, or party details missing from the cover.
 Return ONLY valid JSON with these keys:
 {
   "reference_number": string | null,
-  "case_type": "loan" | "snp" | "litigation",
+  "case_type": {$caseTypeCodes},
   "case_category_id": number | null,
   "case_category_code": string | null,
   "purchaser": string,
@@ -62,14 +67,24 @@ Return ONLY valid JSON with these keys:
 
 Rules:
 - reference_number is critical: read the existing file / matter / reference number printed on the document (e.g. THY/MW/ABMB/2024/02, CON/2019/0042, LOA/2018/0007, or other firm formats such as File Ref / Our Ref / Ref at the bottom). Copy it exactly as shown. Do NOT invent a new number. Use null only if none is visible.
-- case_type must be one of loan, snp, litigation.
+- case_type must be one of: {$caseTypeCodes}.
 - Prefer matching case_category_id / case_category_code from this list:
 {$categoryLines}
-- Document title drives case_type: Facility Agreement / Facilities Agreement / Loan Agreement / Financing-i / Murabahah / Deed of Assignment with a bank → loan. Sale & Purchase → snp. Court / writ / summons → litigation.
+- Document title drives case_type (pick the most specific match):
+  - Facility Agreement / Facilities Agreement / Loan Agreement / Financing-i / Murabahah / Deed of Assignment securing a bank loan or facility → loan.
+  - Court / writ / summons / statement of claim → litigation.
+  - Sale & Purchase / Sale and Purchase / SPA / Agreement for Sale → snp.
+  - Memorandum of Transfer / MOT → mot.
+  - Deed of Assignment (P.O.S.T) / POST / perfection of strata title assignment → doa_post.
+  - Deed of Assignment (absolute / without bank facility) → doa.
+  - Deed of Gift / Hibah → dog.
+  - Power of Attorney / POA → poa.
+  - Sublist agreement → sublist.
+  - Copy of Title / Copy Title / CT / title search copy → copy_title.
 - Bank financing / loan docs → prefer LOA (Loan Documentation). Do NOT treat bank codes or middle tokens inside a firm ref (e.g. CON in THY/YFT/CON/BRAKYAT/2025/18, or ABMB/MIB/UOB) as the case category.
 - Fill only what is clearly visible across the provided pages. Cover pages often lack property and title_number — leave those null unless a later page shows them. Do not invent or guess missing fields.
 - For loan: fill borrowers in document order — party (1) first (main), then (2), (3), …. Include each customer's NRIC in ic_number when printed. Do not drop co-borrowers. Also set purchaser to all borrower names joined with " & " (e.g. "LOOK KAR YANG & LIM PUI SHEE"). Fill bank and start_date if dated; property/title_number only if printed.
-- For snp: fill purchaser, vendor, property, title_number only if printed; borrowers may be empty.
+- For S&P-family types ({$snpTypeCodes}): fill purchaser, vendor, property, title_number only if printed; borrowers may be empty. Map transferor/assignor/donor → vendor and transferee/assignee/donee → purchaser when those labels appear.
 - For litigation: fill suite_number, purchaser (person name), ic_number when visible; leave property empty; borrowers may be empty.
 - Use null for unknown fields. Do not invent category codes outside the list.
 PROMPT;

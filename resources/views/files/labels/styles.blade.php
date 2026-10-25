@@ -311,6 +311,11 @@
         break-inside: avoid;
     }
 
+    .file-label + .file-label {
+        page-break-before: always;
+        break-before: page;
+    }
+
     .file-label__qr,
     .file-label--side__qr {
         -webkit-print-color-adjust: exact;

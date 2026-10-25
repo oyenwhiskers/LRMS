@@ -92,11 +92,13 @@ class EntryPrintStationTest extends TestCase
             ->assertSee('file-label--front', false);
 
         $this->actingAs($station)
-            ->postJson(route('entry.print-jobs.mark-printed'), [
+            ->postJson(route('entry.print-jobs.status'), [
                 'ids' => [$jobA->id],
+                'status' => EntryPrintJob::STATUS_PRINTED,
             ])
             ->assertOk()
-            ->assertJsonPath('marked.0', $jobA->id);
+            ->assertJsonPath('marked.0', $jobA->id)
+            ->assertJsonPath('status', EntryPrintJob::STATUS_PRINTED);
 
         $this->assertDatabaseHas('entry_print_jobs', [
             'id' => $jobA->id,
@@ -124,7 +126,108 @@ class EntryPrintStationTest extends TestCase
             ->assertOk()
             ->assertSee('Dicetak', false)
             ->assertSee('Cetak semula', false)
+            ->assertSee('Tanda belum dicetak', false)
+            ->assertSee('Tanda dicetak', false)
             ->assertSee('CON/2019/0101', false);
+
+        $this->actingAs($station)
+            ->postJson(route('entry.print-jobs.status'), [
+                'ids' => [$jobA->id, $jobB->id],
+                'status' => EntryPrintJob::STATUS_PENDING,
+            ])
+            ->assertOk()
+            ->assertJsonPath('marked.0', $jobA->id)
+            ->assertJsonPath('status', EntryPrintJob::STATUS_PENDING);
+
+        $this->assertDatabaseHas('entry_print_jobs', [
+            'id' => $jobA->id,
+            'status' => EntryPrintJob::STATUS_PENDING,
+            'printed_by' => null,
+            'printed_at' => null,
+        ]);
+
+        $this->actingAs($station)
+            ->postJson(route('entry.print-jobs.status'), [
+                'ids' => [$jobA->id, $jobB->id],
+                'status' => EntryPrintJob::STATUS_PRINTED,
+            ])
+            ->assertOk()
+            ->assertJsonCount(2, 'marked');
+
+        $this->assertDatabaseHas('entry_print_jobs', [
+            'id' => $jobA->id,
+            'status' => EntryPrintJob::STATUS_PRINTED,
+        ]);
+        $this->assertDatabaseHas('entry_print_jobs', [
+            'id' => $jobB->id,
+            'status' => EntryPrintJob::STATUS_PRINTED,
+        ]);
+    }
+
+    public function test_station_batch_print_combines_selected_jobs_of_same_type(): void
+    {
+        $operator = User::factory()->entry()->create();
+        $station = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $fileA = $this->makeFile($category, $operator, 'CON/2019/0505');
+        $fileB = $this->makeFile($category, $operator, 'CON/2019/0606');
+        $fileC = $this->makeFile($category, $operator, 'CON/2019/0707');
+
+        foreach ([$fileA, $fileB] as $file) {
+            $this->actingAs($operator)
+                ->postJson(route('entry.print-jobs.store'), [
+                    'legal_file_id' => $file->id,
+                    'type' => 'front',
+                ])
+                ->assertCreated();
+        }
+
+        $this->actingAs($operator)
+            ->postJson(route('entry.print-jobs.store'), [
+                'legal_file_id' => $fileC->id,
+                'type' => 'side',
+            ])
+            ->assertCreated();
+
+        $frontIds = EntryPrintJob::query()
+            ->where('type', EntryPrintJob::TYPE_FRONT)
+            ->orderBy('id')
+            ->pluck('id');
+        $sideId = EntryPrintJob::query()
+            ->where('type', EntryPrintJob::TYPE_SIDE)
+            ->value('id');
+
+        $frontHtml = $this->actingAs($station)
+            ->get(route('entry.print-jobs.batch-print', [
+                'ids' => $frontIds->implode(','),
+                'type' => 'front',
+            ]))
+            ->assertOk()
+            ->assertSee('size: 150mm 100mm', false)
+            ->assertSee('CON/2019/0505', false)
+            ->assertSee('CON/2019/0606', false)
+            ->assertDontSee('CON/2019/0707', false)
+            ->getContent();
+
+        $this->assertSame(2, substr_count($frontHtml, 'class="file-label file-label--front"'));
+        $this->assertSame(0, substr_count($frontHtml, 'class="file-label file-label--side"'));
+        $this->assertStringContainsString('page-break-before: always', $frontHtml);
+
+        $this->actingAs($station)
+            ->get(route('entry.print-jobs.batch-print', [
+                'ids' => $frontIds->implode(',').','.$sideId,
+                'type' => 'side',
+            ]))
+            ->assertOk()
+            ->assertSee('size: 80mm 40mm', false)
+            ->assertSee('CON/2019/0707', false)
+            ->assertDontSee('CON/2019/0505', false);
+
+        $this->actingAs($station)
+            ->get(route('entry.print-jobs.batch-print', [
+                'ids' => '0,abc',
+            ]))
+            ->assertStatus(422);
     }
 
     public function test_entry_cannot_enqueue_label_for_file_they_do_not_own(): void
@@ -176,7 +279,10 @@ class EntryPrintStationTest extends TestCase
             ->assertDontSee('<div class="file-label-actions">', false);
 
         $this->actingAs($station)
-            ->postJson(route('entry.print-jobs.mark-printed'), ['ids' => [$job->id]])
+            ->postJson(route('entry.print-jobs.status'), [
+                'ids' => [$job->id],
+                'status' => EntryPrintJob::STATUS_PRINTED,
+            ])
             ->assertOk();
 
         // Station desk must still preview/reprint after the job is marked printed.

@@ -73,7 +73,7 @@
     {{-- Step 3: form --}}
     <div class="entry-camera__panel hidden" data-entry-step="3">
         <p class="entry-app__flash entry-app__flash--warn hidden" data-entry-ai-warning></p>
-        <form class="space-y-6" method="POST" action="{{ $saveUrl }}" data-case-type-form data-entry-save-form>
+        <form class="entry-scan-save" method="POST" action="{{ $saveUrl }}" data-case-type-form data-entry-save-form>
             @csrf
             <input type="hidden" name="temp_path" value="" data-entry-temp-path>
             <div data-entry-temp-paths></div>
@@ -82,7 +82,10 @@
                 'suggestion' => [],
                 'selectedType' => $selectedType,
             ])
-            <button class="btn-primary min-h-14 w-full" type="submit">Simpan kes</button>
+            <div class="entry-camera__actions entry-camera__actions--save">
+                <button class="entry-app__logout" type="button" data-entry-back-form>Kembali</button>
+                <button class="btn-primary w-full" type="submit">Simpan kes</button>
+            </div>
         </form>
     </div>
 </div>
@@ -105,6 +108,7 @@
     const cancelCamera = root.querySelector('[data-entry-cancel-camera]');
     const fallbackBtn = root.querySelector('[data-entry-camera-fallback-btn]');
     const backIdle = root.querySelector('[data-entry-back-idle]');
+    const backForm = root.querySelector('[data-entry-back-form]');
     const thumbsEl = root.querySelector('[data-entry-page-thumbs]');
     const pageCountEl = root.querySelector('[data-entry-page-count]');
     const analyzeBtn = root.querySelector('[data-entry-analyze]');
@@ -400,6 +404,7 @@
         goIdle();
     });
     backIdle?.addEventListener('click', (e) => { e.preventDefault(); goIdle(); });
+    backForm?.addEventListener('click', (e) => { e.preventDefault(); goIdle(); });
     analyzeBtn?.addEventListener('click', (e) => { e.preventDefault(); processWithAi(); });
     addPageBtn?.addEventListener('click', (e) => {
         e.preventDefault();

@@ -389,9 +389,9 @@ class LegalFileController extends Controller
     private function normalizeCaseTypeFields(array $data, string $caseType): array
     {
         $data['case_type'] = $caseType;
-        $data['vendor'] = $caseType === LegalFile::TYPE_SNP ? ($data['vendor'] ?? null) : null;
+        $data['vendor'] = LegalFile::isSnpType($caseType) ? ($data['vendor'] ?? null) : null;
         $data['bank'] = $caseType === LegalFile::TYPE_LOAN ? ($data['bank'] ?? null) : null;
-        $data['title_number'] = in_array($caseType, [LegalFile::TYPE_LOAN, LegalFile::TYPE_SNP], true)
+        $data['title_number'] = ($caseType === LegalFile::TYPE_LOAN || LegalFile::isSnpType($caseType))
             ? ($data['title_number'] ?? null)
             : null;
         $data['suite_number'] = $caseType === LegalFile::TYPE_LITIGATION ? ($data['suite_number'] ?? null) : null;

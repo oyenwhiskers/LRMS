@@ -16,6 +16,12 @@ class EntryScan extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const REVIEW_PENDING = 'pending';
+
+    public const REVIEW_NEEDS_CORRECTION = 'needs_correction';
+
+    public const REVIEW_VERIFIED = 'verified';
+
     protected $fillable = [
         'user_id',
         'document_path',
@@ -23,18 +29,27 @@ class EntryScan extends Model
         'legal_file_id',
         'shelf_id',
         'status',
+        'review_status',
+        'reviewed_by',
+        'reviewed_at',
     ];
 
     protected function casts(): array
     {
         return [
             'ai_suggestion' => 'array',
+            'reviewed_at' => 'datetime',
         ];
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function reviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
     }
 
     public function legalFile(): BelongsTo
@@ -61,6 +76,28 @@ class EntryScan extends Model
             self::STATUS_FAILED => 'Gagal',
             default => $this->status,
         };
+    }
+
+    public function reviewStatusLabel(): string
+    {
+        return match ($this->review_status) {
+            self::REVIEW_PENDING => 'Belum semak',
+            self::REVIEW_NEEDS_CORRECTION => 'Perlu pembetulan',
+            self::REVIEW_VERIFIED => 'Disahkan',
+            default => $this->review_status ?? self::REVIEW_PENDING,
+        };
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function reviewStatuses(): array
+    {
+        return [
+            self::REVIEW_PENDING,
+            self::REVIEW_NEEDS_CORRECTION,
+            self::REVIEW_VERIFIED,
+        ];
     }
 
     /**

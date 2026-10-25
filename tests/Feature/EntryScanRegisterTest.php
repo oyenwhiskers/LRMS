@@ -358,6 +358,38 @@ class EntryScanRegisterTest extends TestCase
         $this->assertNull($file->title_number);
     }
 
+    public function test_entry_save_accepts_mot_case_type_with_snp_fields(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $tempPath = 'entry-scans/tmp/'.$entry->id.'/mot.jpg';
+        Storage::disk('local')->put($tempPath, 'fake');
+
+        $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'reference_number' => 'CON/2019/0888',
+                'case_type' => LegalFile::TYPE_MOT,
+                'case_category_id' => $category->id,
+                'purchaser' => 'Transferee Sdn Bhd',
+                'vendor' => 'Transferor Sdn Bhd',
+                'property' => 'Lot 88, Kota Kinabalu',
+                'title_number' => 'PN 88888',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('reference_number', 'CON/2019/0888')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_MOT, $file->case_type);
+        $this->assertSame('Transferee Sdn Bhd', $file->purchaser);
+        $this->assertSame('Transferor Sdn Bhd', $file->vendor);
+        $this->assertSame('Lot 88, Kota Kinabalu', $file->property);
+        $this->assertSame('PN 88888', $file->title_number);
+        $this->assertNull($file->bank);
+        $this->assertNull($file->suite_number);
+    }
+
     public function test_entry_save_stores_each_loan_borrower_with_primary(): void
     {
         Storage::fake('local');

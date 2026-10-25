@@ -7,6 +7,7 @@ use App\Models\EntryPrintJob;
 use App\Models\EntryScan;
 use App\Models\LegalFile;
 use App\Models\User;
+use App\Support\LegalFileQr;
 use App\Support\LocalDate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -106,29 +107,102 @@ class EntryPrintStationController extends Controller
         ], 201);
     }
 
-    public function markPrinted(Request $request): JsonResponse
+    public function batchPrint(Request $request): View
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'string', 'max:2000'],
+            'type' => ['nullable', Rule::in([EntryPrintJob::TYPE_FRONT, EntryPrintJob::TYPE_SIDE])],
+        ]);
+
+        $ids = collect(explode(',', $data['ids']))
+            ->map(fn (string $id): int => (int) trim($id))
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        abort_if($ids->isEmpty(), 422);
+
+        $jobs = EntryPrintJob::query()
+            ->whereIn('id', $ids)
+            ->whereIn('status', [
+                EntryPrintJob::STATUS_PENDING,
+                EntryPrintJob::STATUS_PRINTED,
+            ])
+            ->with('legalFile')
+            ->get()
+            ->sortBy(fn (EntryPrintJob $job) => $ids->search($job->id))
+            ->values();
+
+        if (isset($data['type'])) {
+            $jobs = $jobs->where('type', $data['type'])->values();
+        }
+
+        $jobs = $jobs->filter(fn (EntryPrintJob $job) => $job->legalFile !== null)->values();
+        abort_if($jobs->isEmpty(), 404);
+
+        $labels = $jobs->map(fn (EntryPrintJob $job): array => [
+            'file' => $job->legalFile,
+            'type' => $job->type,
+            'qr' => LegalFileQr::dataUri($job->legalFile),
+        ])->all();
+
+        $type = $data['type']
+            ?? (collect($labels)->every(fn (array $label) => $label['type'] === EntryPrintJob::TYPE_SIDE)
+                ? EntryPrintJob::TYPE_SIDE
+                : EntryPrintJob::TYPE_FRONT);
+
+        return view('entry.print-jobs.batch', [
+            'labels' => $labels,
+            'type' => $type,
+        ]);
+    }
+
+    public function setStatus(Request $request): JsonResponse
     {
         $data = $request->validate([
             'ids' => ['required', 'array', 'min:1'],
             'ids.*' => ['integer', 'distinct', 'exists:entry_print_jobs,id'],
+            'status' => ['required', Rule::in([
+                EntryPrintJob::STATUS_PENDING,
+                EntryPrintJob::STATUS_PRINTED,
+            ])],
         ]);
 
         $jobs = EntryPrintJob::query()
             ->whereIn('id', $data['ids'])
-            ->where('status', EntryPrintJob::STATUS_PENDING)
+            ->whereIn('status', [
+                EntryPrintJob::STATUS_PENDING,
+                EntryPrintJob::STATUS_PRINTED,
+            ])
             ->get();
 
         $now = now();
+        $marked = [];
         foreach ($jobs as $job) {
-            $job->update([
-                'status' => EntryPrintJob::STATUS_PRINTED,
-                'printed_at' => $now,
-                'printed_by' => $request->user()->id,
-            ]);
+            if ($job->status === $data['status']) {
+                continue;
+            }
+
+            if ($data['status'] === EntryPrintJob::STATUS_PRINTED) {
+                $job->update([
+                    'status' => EntryPrintJob::STATUS_PRINTED,
+                    'printed_at' => $now,
+                    'printed_by' => $request->user()->id,
+                ]);
+            } else {
+                $job->update([
+                    'status' => EntryPrintJob::STATUS_PENDING,
+                    'printed_at' => null,
+                    'printed_by' => null,
+                ]);
+            }
+
+            $marked[] = $job->id;
         }
 
         return response()->json([
-            'marked' => $jobs->pluck('id')->values(),
+            'marked' => $marked,
+            'status' => $data['status'],
         ]);
     }
 

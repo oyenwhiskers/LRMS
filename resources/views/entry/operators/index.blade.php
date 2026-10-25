@@ -9,6 +9,7 @@
         $filters['rack_id'] ?? null,
         $filters['shelf_id'] ?? null,
         $filters['case_type'] ?? null,
+        $filters['review_status'] ?? null,
     ])->filter(fn ($value) => filled($value))->isNotEmpty();
 
     $selectedOperator = filled($filters['user_id'])
@@ -22,6 +23,7 @@
         'rack_id' => $filters['rack_id'] ?: null,
         'shelf_id' => $filters['shelf_id'] ?: null,
         'case_type' => $filters['case_type'] ?: null,
+        'review_status' => $filters['review_status'] ?: null,
     ], fn ($value) => $value !== null && $value !== '');
 @endphp
 
@@ -69,6 +71,7 @@
             <input type="hidden" name="date_to" value="{{ $filters['date_to'] }}">
             <input type="hidden" name="rack_id" value="{{ $filters['rack_id'] }}">
             <input type="hidden" name="shelf_id" value="{{ $filters['shelf_id'] }}">
+            <input type="hidden" name="review_status" value="{{ $filters['review_status'] }}">
 
             <label class="entry-ops__select entry-ops__select--operator">
                 <span>Operator</span>
@@ -86,9 +89,16 @@
                 <span>Jenis</span>
                 <select name="case_type" onchange="this.form.submit()">
                     <option value="">Semua jenis</option>
-                    <option value="{{ App\Models\LegalFile::TYPE_LOAN }}" @selected($filters['case_type'] === App\Models\LegalFile::TYPE_LOAN)>Pinjaman</option>
-                    <option value="{{ App\Models\LegalFile::TYPE_SNP }}" @selected($filters['case_type'] === App\Models\LegalFile::TYPE_SNP)>Jual beli (S&amp;P)</option>
-                    <option value="{{ App\Models\LegalFile::TYPE_LITIGATION }}" @selected($filters['case_type'] === App\Models\LegalFile::TYPE_LITIGATION)>Litigasi</option>
+                    @foreach (App\Models\LegalFile::caseTypes() as $type)
+                        @php
+                            $typeLabel = match ($type) {
+                                App\Models\LegalFile::TYPE_LOAN => 'Pinjaman',
+                                App\Models\LegalFile::TYPE_LITIGATION => 'Litigasi',
+                                default => App\Models\LegalFile::caseTypeLabelFor($type),
+                            };
+                        @endphp
+                        <option value="{{ $type }}" @selected($filters['case_type'] === $type)>{{ $typeLabel }}</option>
+                    @endforeach
                 </select>
             </label>
 
@@ -159,7 +169,15 @@
                                 @endif
                             </p>
                         </div>
-                        <span class="entry-pill">{{ $scan->statusLabel() }}</span>
+                        <span class="entry-pill">
+                            @if ($scan->review_status === App\Models\EntryScan::REVIEW_NEEDS_CORRECTION)
+                                Perlu pembetulan
+                            @elseif ($scan->review_status === App\Models\EntryScan::REVIEW_VERIFIED)
+                                Disahkan
+                            @else
+                                {{ $scan->statusLabel() }}
+                            @endif
+                        </span>
                     </button>
                 @endif
             @empty
@@ -190,6 +208,7 @@
                             <th scope="col">Lokasi</th>
                             <th scope="col">Tarikh</th>
                             <th scope="col">Status</th>
+                            <th scope="col">Semakan</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -217,6 +236,11 @@
                                 <td>
                                     <span class="entry-ops__badge entry-ops__badge--{{ $scan->status }}">
                                         {{ $scan->statusLabel() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="entry-ops__badge entry-ops__badge--review-{{ $scan->review_status ?: App\Models\EntryScan::REVIEW_PENDING }}">
+                                        {{ $scan->reviewStatusLabel() }}
                                     </span>
                                 </td>
                             </tr>
@@ -300,9 +324,26 @@
                     <span>Jenis kes</span>
                     <select name="case_type">
                         <option value="">Semua jenis</option>
-                        <option value="{{ App\Models\LegalFile::TYPE_LOAN }}" @selected($filters['case_type'] === App\Models\LegalFile::TYPE_LOAN)>Pinjaman</option>
-                        <option value="{{ App\Models\LegalFile::TYPE_SNP }}" @selected($filters['case_type'] === App\Models\LegalFile::TYPE_SNP)>Jual beli (S&amp;P)</option>
-                        <option value="{{ App\Models\LegalFile::TYPE_LITIGATION }}" @selected($filters['case_type'] === App\Models\LegalFile::TYPE_LITIGATION)>Litigasi</option>
+                        @foreach (App\Models\LegalFile::caseTypes() as $type)
+                            @php
+                                $typeLabel = match ($type) {
+                                    App\Models\LegalFile::TYPE_LOAN => 'Pinjaman',
+                                    App\Models\LegalFile::TYPE_LITIGATION => 'Litigasi',
+                                    default => App\Models\LegalFile::caseTypeLabelFor($type),
+                                };
+                            @endphp
+                            <option value="{{ $type }}" @selected($filters['case_type'] === $type)>{{ $typeLabel }}</option>
+                        @endforeach
+                    </select>
+                </label>
+
+                <label class="entry-filters__field">
+                    <span>Semakan</span>
+                    <select name="review_status">
+                        <option value="">Semua semakan</option>
+                        <option value="{{ App\Models\EntryScan::REVIEW_PENDING }}" @selected($filters['review_status'] === App\Models\EntryScan::REVIEW_PENDING)>Belum semak</option>
+                        <option value="{{ App\Models\EntryScan::REVIEW_NEEDS_CORRECTION }}" @selected($filters['review_status'] === App\Models\EntryScan::REVIEW_NEEDS_CORRECTION)>Perlu pembetulan</option>
+                        <option value="{{ App\Models\EntryScan::REVIEW_VERIFIED }}" @selected($filters['review_status'] === App\Models\EntryScan::REVIEW_VERIFIED)>Disahkan</option>
                     </select>
                 </label>
 

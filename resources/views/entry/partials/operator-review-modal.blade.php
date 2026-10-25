@@ -108,9 +108,14 @@
                         <section class="operator-review-page__section" aria-labelledby="operator-review-shelf-{{ $scan->id }}">
                             <div class="operator-review-page__section-head">
                                 <h3 id="operator-review-shelf-{{ $scan->id }}" class="operator-review-page__section-title">Rak &amp; shelf</h3>
-                                <span class="entry-ops__badge entry-ops__badge--{{ $scan->status }}">
-                                    {{ $scan->statusLabel() }}
-                                </span>
+                                <div class="operator-review-page__badges">
+                                    <span class="entry-ops__badge entry-ops__badge--{{ $scan->status }}">
+                                        {{ $scan->statusLabel() }}
+                                    </span>
+                                    <span class="entry-ops__badge entry-ops__badge--review-{{ $scan->review_status ?: App\Models\EntryScan::REVIEW_PENDING }}">
+                                        {{ $scan->reviewStatusLabel() }}
+                                    </span>
+                                </div>
                             </div>
                             <dl class="entry-ops-shelf entry-ops-shelf--review">
                                 <div>
@@ -186,6 +191,27 @@
                         </div>
                     </div>
                 @endif
+            </div>
+
+            <div class="operator-review-page__actions">
+                <form method="POST" action="{{ route('entry.operators.review', $scan) }}">
+                    @csrf
+                    <input type="hidden" name="review_status" value="{{ App\Models\EntryScan::REVIEW_NEEDS_CORRECTION }}">
+                    <button
+                        class="btn-secondary"
+                        type="submit"
+                        @disabled($scan->review_status === App\Models\EntryScan::REVIEW_NEEDS_CORRECTION)
+                    >Perlu pembetulan</button>
+                </form>
+                <form method="POST" action="{{ route('entry.operators.review', $scan) }}">
+                    @csrf
+                    <input type="hidden" name="review_status" value="{{ App\Models\EntryScan::REVIEW_VERIFIED }}">
+                    <button
+                        class="btn-primary"
+                        type="submit"
+                        @disabled($scan->review_status === App\Models\EntryScan::REVIEW_VERIFIED)
+                    >Tanda disahkan</button>
+                </form>
             </div>
         </div>
     </div>
