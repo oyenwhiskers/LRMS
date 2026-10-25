@@ -176,6 +176,16 @@ class EntryPrintStationTest extends TestCase
             ->assertDontSee('<div class="file-label-actions">', false);
 
         $this->actingAs($station)
+            ->postJson(route('entry.print-jobs.mark-printed'), ['ids' => [$job->id]])
+            ->assertOk();
+
+        // Station desk must still preview/reprint after the job is marked printed.
+        $this->actingAs($station)
+            ->get(route('entry.files.label', ['file' => $file, 'type' => 'front', 'embed' => 1]))
+            ->assertOk()
+            ->assertSee('file-label--front', false);
+
+        $this->actingAs($station)
             ->deleteJson(route('entry.print-jobs.destroy', $job))
             ->assertOk()
             ->assertJsonPath('id', $job->id);

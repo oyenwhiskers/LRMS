@@ -363,12 +363,13 @@ class EntryController extends Controller
             ->whereIn('status', [EntryScan::STATUS_SAVED, EntryScan::STATUS_STORED])
             ->exists();
 
-        $queued = EntryPrintJob::query()
+        // Station desk is not the scan owner; allow any job still listed there.
+        $onStation = EntryPrintJob::query()
             ->where('legal_file_id', $file->id)
-            ->where('status', EntryPrintJob::STATUS_PENDING)
+            ->whereIn('status', [EntryPrintJob::STATUS_PENDING, EntryPrintJob::STATUS_PRINTED])
             ->exists();
 
-        abort_unless($owns || $queued || $user->isAdmin(), 403);
+        abort_unless($owns || $onStation || $user->isAdmin(), 403);
     }
 
     /**
