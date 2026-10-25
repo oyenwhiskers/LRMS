@@ -5056,15 +5056,17 @@ a.entry-card--action:focus-visible {
     }
 
     .entry-print-station__toolbar {
-        grid-template-columns: minmax(20rem, 1fr) auto;
+        display: flex;
+        flex-wrap: wrap;
         align-items: end;
         gap: 0.75rem 1rem;
     }
 
     .entry-print-station__filterbar {
-        grid-column: 1;
+        flex: 1 1 22rem;
+        min-width: 0;
         display: grid;
-        grid-template-columns: minmax(12rem, 1.3fr) minmax(9rem, 0.75fr) minmax(10rem, 0.9fr);
+        grid-template-columns: minmax(0, 1.4fr) minmax(7.5rem, 0.7fr) minmax(8rem, 0.85fr);
         align-items: end;
         gap: 0.65rem;
     }
@@ -5072,12 +5074,15 @@ a.entry-card--action:focus-visible {
     .entry-print-station__inline-filter {
         display: grid;
         gap: 0.35rem;
+        min-width: 0;
         font-size: 0.8rem;
         font-weight: 600;
         color: var(--entry-muted);
     }
 
     .entry-print-station__inline-filter select {
+        width: 100%;
+        min-width: 0;
         min-height: 2.85rem;
         border: 1px solid color-mix(in srgb, #12352f 16%, transparent);
         background: #fff;
@@ -5088,21 +5093,19 @@ a.entry-card--action:focus-visible {
     }
 
     .entry-print-station__actions {
-        grid-column: 2;
-        grid-row: 1;
+        flex: 1 1 auto;
         display: flex;
         flex-wrap: wrap;
         justify-content: flex-end;
+        gap: 0.5rem;
     }
 
     .entry-print-station__actions .btn-primary {
         width: auto;
-        min-width: 11rem;
         grid-column: auto;
     }
 
     .entry-print-station__actions .btn-secondary {
-        min-width: 7.5rem;
         grid-column: auto;
     }
 
