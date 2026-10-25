@@ -1365,11 +1365,13 @@
 
     .data-table tr.table-row-link {
         @apply cursor-pointer;
+        user-select: none;
+        -webkit-user-select: none;
     }
 
     .data-table tr.table-row-link:hover,
     .data-table tr.table-row-link:focus-visible {
-        @apply bg-stone-50 outline-none;
+        @apply bg-stone-50 text-stone-900 outline-none;
     }
 
     .data-table.history-table {
@@ -2207,6 +2209,12 @@
     background: var(--entry-bg);
 }
 
+/* Keep selected text readable when the OS accent is a dark teal/navy. */
+.entry-app ::selection {
+    background: #d5e0dd;
+    color: #12352f;
+}
+
 .entry-app__shell {
     display: flex;
     min-height: 100vh;
@@ -2768,10 +2776,23 @@ button.entry-ops__metric:focus-visible {
 
 .entry-ops__table tbody tr {
     cursor: pointer;
+    /* Rows open a modal; OS selection highlight can hide ink-colored text. */
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-.entry-ops__table tbody tr:hover td {
+.entry-ops__table tbody tr:hover td,
+.entry-ops__table tbody tr:focus-visible td {
+    background: #f0f4f3;
     background: color-mix(in srgb, var(--entry-ink) 4%, #fff);
+    color: var(--entry-ink);
+}
+
+.entry-ops__table tbody tr:hover .entry-ops__ref,
+.entry-ops__table tbody tr:hover .entry-ops__when,
+.entry-ops__table tbody tr:focus-visible .entry-ops__ref,
+.entry-ops__table tbody tr:focus-visible .entry-ops__when {
+    color: var(--entry-ink);
 }
 
 .entry-ops__table tbody tr:last-child td {
@@ -4180,10 +4201,15 @@ a.entry-card--action:focus-visible {
 
 .entry-print-station__table tbody tr {
     cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-.entry-print-station__table tbody tr:hover td {
-    background: #fafaf9;
+.entry-print-station__table tbody tr:hover td,
+.entry-print-station__table tbody tr:focus-visible td {
+    background: #f0f4f3;
+    background: color-mix(in srgb, var(--entry-ink) 4%, #fff);
+    color: var(--entry-ink);
 }
 
 .entry-print-station__table tbody tr:last-child td {

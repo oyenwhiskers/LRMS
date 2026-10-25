@@ -289,6 +289,8 @@
         margin: 0 !important;
         padding: 0 !important;
         background: #fff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 
     .file-label-actions {
@@ -298,8 +300,15 @@
     .file-label {
         margin: 0;
         border: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 
+    .file-label__qr,
+    .file-label--side__qr {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
 }
 @endif
 

@@ -1296,32 +1296,85 @@ document.addEventListener('DOMContentLoaded', async () => {
         openModal(document.querySelector(`[data-modal="${trigger.dataset.modalOpen}"]`));
     });
 
+    // Chrome on some devices prints blank from width/height 0 (or display:none) iframes —
+    // keep a real layout box off-screen. visibility:hidden still lays out; opacity:0 alone is flaky.
+    const ensurePrintFrame = (id, { width, height, title = 'Print' } = {}) => {
+        let frame = document.getElementById(id);
+        if (! frame) {
+            frame = document.createElement('iframe');
+            frame.id = id;
+            frame.title = title;
+            frame.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(frame);
+        }
+
+        frame.style.cssText = `position:fixed;left:-10000px;top:0;width:${width};height:${height};border:0;visibility:hidden;pointer-events:none;`;
+
+        return frame;
+    };
+
+    const fileLabelPrintFrameSize = (url) => {
+        try {
+            const type = new URL(url, window.location.origin).searchParams.get('type') || 'front';
+            if (type === 'side') {
+                return { width: '80mm', height: '40mm' };
+            }
+            if (type === 'both') {
+                return { width: '150mm', height: '200mm' };
+            }
+        } catch (_error) {
+            // fall through to front size
+        }
+
+        return { width: '150mm', height: '100mm' };
+    };
+
+    const waitForPrintFrameReady = (frame, timeoutMs = 3000) => {
+        const doc = frame.contentDocument;
+        if (! doc) {
+            return Promise.resolve();
+        }
+
+        const images = [...doc.images];
+        const imagesReady = Promise.all(images.map((img) => {
+            if (img.complete) {
+                return Promise.resolve();
+            }
+
+            return new Promise((resolve) => {
+                img.addEventListener('load', resolve, { once: true });
+                img.addEventListener('error', resolve, { once: true });
+            });
+        }));
+
+        // ponytail: 3s ceiling so a hung QR never blocks the print dialog forever.
+        return Promise.race([
+            imagesReady,
+            new Promise((resolve) => window.setTimeout(resolve, timeoutMs)),
+        ]);
+    };
+
     document.addEventListener('click', (event) => {
         const trigger = event.target.closest('[data-storage-label-print-url]');
         if (! trigger) {
             return;
         }
 
-        let frame = document.getElementById('storage-label-print-frame');
-        if (! frame) {
-            frame = document.createElement('iframe');
-            frame.id = 'storage-label-print-frame';
-            frame.title = 'Storage label print';
-            frame.setAttribute('aria-hidden', 'true');
-            frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:80mm;height:40mm;border:0;opacity:0;pointer-events:none;';
-            document.body.appendChild(frame);
-        }
-
         const rackSign = trigger.dataset.storageLabelKind === 'rack';
-        frame.style.width = rackSign ? '210mm' : '80mm';
-        frame.style.height = rackSign ? '297mm' : '40mm';
+        const frame = ensurePrintFrame('storage-label-print-frame', {
+            width: rackSign ? '210mm' : '80mm',
+            height: rackSign ? '297mm' : '40mm',
+            title: 'Storage label print',
+        });
 
         const url = new URL(trigger.dataset.storageLabelPrintUrl, window.location.origin);
         url.searchParams.set('embed', '1');
         url.searchParams.set('_print', Date.now().toString());
         frame.onload = () => {
-            frame.contentWindow?.focus();
-            frame.contentWindow?.print();
+            waitForPrintFrameReady(frame).then(() => {
+                frame.contentWindow?.focus();
+                frame.contentWindow?.print();
+            });
         };
         frame.src = url.href;
     });
@@ -1473,25 +1526,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         const printLabel = (url) => {
-            let frame = document.getElementById('file-label-print-frame');
-            if (! frame) {
-                frame = document.createElement('iframe');
-                frame.id = 'file-label-print-frame';
-                frame.setAttribute('aria-hidden', 'true');
-                frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
-                document.body.appendChild(frame);
-            }
+            const frame = ensurePrintFrame('file-label-print-frame', {
+                ...fileLabelPrintFrameSize(url),
+                title: 'File label print',
+            });
 
-            const runPrint = () => {
-                try {
-                    frame.contentWindow?.focus();
-                    frame.contentWindow?.print();
-                } catch (error) {
-                    window.open(url, '_blank', 'noopener');
-                }
+            frame.onload = () => {
+                waitForPrintFrameReady(frame).then(() => {
+                    try {
+                        frame.contentWindow?.focus();
+                        frame.contentWindow?.print();
+                    } catch (error) {
+                        window.open(url, '_blank', 'noopener');
+                    }
+                });
             };
-
-            frame.onload = runPrint;
             frame.src = url + (url.includes('?') ? '&' : '?') + '_print=' + Date.now();
         };
 
@@ -1985,14 +2034,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         const printViaFrame = (url) => new Promise((resolve) => {
-            let frame = document.getElementById('entry-print-station-frame');
-            if (! frame) {
-                frame = document.createElement('iframe');
-                frame.id = 'entry-print-station-frame';
-                frame.setAttribute('aria-hidden', 'true');
-                frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
-                document.body.appendChild(frame);
-            }
+            const frame = ensurePrintFrame('entry-print-station-frame', {
+                ...fileLabelPrintFrameSize(url),
+                title: 'Entry print station',
+            });
 
             let settled = false;
             const finish = () => {
@@ -2005,16 +2050,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
 
             frame.onload = () => {
-                try {
-                    frame.contentWindow?.addEventListener('afterprint', finish);
-                    frame.contentWindow?.focus();
-                    frame.contentWindow?.print();
-                    // Fallback if afterprint never fires (some mobile/desktop browsers).
-                    window.setTimeout(finish, 1500);
-                } catch (error) {
+                waitForPrintFrameReady(frame).then(() => {
+                    try {
+                        frame.contentWindow?.addEventListener('afterprint', finish);
+                        frame.contentWindow?.focus();
+                        frame.contentWindow?.print();
+                        // Fallback if afterprint never fires (some mobile/desktop browsers).
+                        window.setTimeout(finish, 60_000);
+                    } catch (error) {
+                        window.open(url, '_blank', 'noopener');
+                        finish();
+                    }
+                }).catch(() => {
                     window.open(url, '_blank', 'noopener');
                     finish();
-                }
+                });
             };
 
             frame.src = url + (url.includes('?') ? '&' : '?') + '_print=' + Date.now();
