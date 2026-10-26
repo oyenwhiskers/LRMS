@@ -15,7 +15,7 @@ return [
     'ai_usage_password' => env('LRMS_AI_USAGE_PASSWORD', 'YKN@2026'),
 
     // Session unlock for /entry/manage-operators (cleared on logout).
-    'manage_operator_password' => env('LRMS_MANAGE_OPERATOR_PASSWORD', 'YKN@2026'),
+    'manage_operator_password' => 'YKN@2026',
 
     // USD → MYR for AI cost display (Google bills in USD).
     'ai_usage_usd_myr' => (float) env('LRMS_USD_MYR_RATE', 4.20),
