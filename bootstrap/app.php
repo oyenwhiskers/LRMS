@@ -3,6 +3,7 @@
 use App\Http\Middleware\EnsureAccountIsApproved;
 use App\Http\Middleware\EnsureAiTokenUsageUnlocked;
 use App\Http\Middleware\EnsureEntryAccess;
+use App\Http\Middleware\EnsureManageOperatorUnlocked;
 use App\Http\Middleware\RedirectEntryOperators;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
@@ -32,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'approved' => EnsureAccountIsApproved::class,
             'ai_usage' => EnsureAiTokenUsageUnlocked::class,
             'entry' => EnsureEntryAccess::class,
+            'manage_operator' => EnsureManageOperatorUnlocked::class,
             'not_entry' => RedirectEntryOperators::class,
         ]);
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('entry', 'entry/*')

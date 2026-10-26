@@ -15,6 +15,7 @@ use App\Http\Controllers\Entry\EntryOperatorController;
 use App\Http\Controllers\Entry\EntryPrintStationController;
 use App\Http\Controllers\ImportExportController;
 use App\Http\Controllers\LegalFileController;
+use App\Http\Controllers\Entry\ManageOperatorController;
 use App\Http\Controllers\MovementController;
 use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\StaffController;
@@ -91,6 +92,18 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/ai-usage', [AiTokenUsageController::class, 'index'])
             ->middleware('ai_usage')
             ->name('ai-usage.index');
+
+        Route::prefix('manage-operators')->name('manage-operators.')->group(function (): void {
+            Route::get('/unlock', [ManageOperatorController::class, 'unlockForm'])->name('unlock');
+            Route::post('/unlock', [ManageOperatorController::class, 'unlock'])
+                ->middleware('throttle:8,1')
+                ->name('unlock.store');
+            Route::middleware('manage_operator')->group(function (): void {
+                Route::get('/', [ManageOperatorController::class, 'index'])->name('index');
+                Route::get('/{user}/password', [ManageOperatorController::class, 'editPassword'])->name('password.edit');
+                Route::put('/{user}/password', [ManageOperatorController::class, 'updatePassword'])->name('password.update');
+            });
+        });
     });
 
     Route::middleware(['approved', 'not_entry'])->group(function (): void {
