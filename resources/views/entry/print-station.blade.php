@@ -5,13 +5,16 @@
 @section('content')
 @php
     $statusFilter = $filters['status'] ?? 'pending';
+    $reviewFilter = $filters['review'] ?? 'all';
     $countLabel = match ($statusFilter) {
         'printed' => 'dicetak',
         'all' => 'job',
         default => 'belum dicetak',
     };
     $printSelectedLabel = $statusFilter === 'printed' ? 'Cetak semula dipilih' : 'Cetak dipilih';
-    $advancedActive = $statusFilter !== 'pending' || filled($filters['requested_by'] ?? null);
+    $advancedActive = $statusFilter !== 'pending'
+        || $reviewFilter !== 'all'
+        || filled($filters['requested_by'] ?? null);
 @endphp
 <div
     class="entry-print-station"
@@ -21,6 +24,7 @@
     data-batch-print-url="{{ route('entry.print-jobs.batch-print') }}"
     data-requested-by="{{ $filters['requested_by'] }}"
     data-status-filter="{{ $statusFilter }}"
+    data-review-filter="{{ $reviewFilter }}"
     data-q="{{ $filters['q'] }}"
 >
     <div class="entry-print-station__intro">
@@ -40,6 +44,7 @@
     <div class="entry-print-station__toolbar">
         <form class="entry-print-station__filterbar" method="GET" action="{{ route('entry.print-station') }}">
             <input type="hidden" name="status" value="{{ $statusFilter }}" data-print-station-mobile-filter>
+            <input type="hidden" name="review" value="{{ $reviewFilter }}" data-print-station-mobile-filter>
             <input type="hidden" name="requested_by" value="{{ $filters['requested_by'] }}" data-print-station-mobile-filter>
 
             <label class="entry-searchbar__field">
@@ -78,6 +83,15 @@
                     <option value="pending" @selected($statusFilter === 'pending')>Belum dicetak</option>
                     <option value="printed" @selected($statusFilter === 'printed')>Dicetak</option>
                     <option value="all" @selected($statusFilter === 'all')>Semua</option>
+                </select>
+            </label>
+
+            <label class="entry-print-station__inline-filter">
+                <span>Pengesahan</span>
+                <select name="review" data-print-station-review-filter data-print-station-desktop-filter>
+                    <option value="all" @selected($reviewFilter === 'all')>Semua</option>
+                    <option value="verified" @selected($reviewFilter === 'verified')>Disahkan</option>
+                    <option value="unverified" @selected($reviewFilter === 'unverified')>Belum disahkan</option>
                 </select>
             </label>
 
@@ -159,6 +173,9 @@
                         $operator = $job->requester?->name ?? '—';
                         $previewTitle = $ref.' · '.$typeLabel;
                         $deleteUrl = route('entry.print-jobs.destroy', $job, absolute: false);
+                        $scan = $job->legalFile?->entryScan;
+                        $reviewStatus = $scan?->review_status ?: App\Models\EntryScan::REVIEW_PENDING;
+                        $reviewLabel = $scan?->reviewStatusLabel() ?? 'Belum semak';
                     @endphp
                     <article
                         class="entry-print-station__card"
@@ -185,7 +202,10 @@
                                     {{ $job->statusLabel() }}
                                 </span>
                             </div>
-                            <p class="entry-print-station__card-meta">{{ $operator }} · {{ $typeLabel }}</p>
+                            <p class="entry-print-station__card-meta">
+                                {{ $operator }} · {{ $typeLabel }}
+                                · <span class="entry-ops__badge entry-ops__badge--review-{{ $reviewStatus }}">{{ $reviewLabel }}</span>
+                            </p>
                         </div>
                     </article>
                 @endforeach
@@ -200,6 +220,7 @@
                             </th>
                             <th scope="col">Rujukan</th>
                             <th scope="col">Status</th>
+                            <th scope="col">Pengesahan</th>
                             <th scope="col">Operator</th>
                             <th scope="col">Jenis</th>
                             <th scope="col">Dihantar</th>
@@ -215,6 +236,9 @@
                                 $typeLabel = $job->type === 'side' ? 'Sisi' : 'Hadapan';
                                 $ref = $job->legalFile?->reference_number ?? '—';
                                 $previewTitle = $ref.' · '.$typeLabel;
+                                $scan = $job->legalFile?->entryScan;
+                                $reviewStatus = $scan?->review_status ?: App\Models\EntryScan::REVIEW_PENDING;
+                                $reviewLabel = $scan?->reviewStatusLabel() ?? 'Belum semak';
                             @endphp
                             <tr
                                 data-print-job-id="{{ $job->id }}"
@@ -238,6 +262,11 @@
                                 <td>
                                     <span class="entry-print-station__badge entry-print-station__badge--{{ $pending ? 'pending' : 'printed' }}">
                                         {{ $job->statusLabel() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="entry-ops__badge entry-ops__badge--review-{{ $reviewStatus }}">
+                                        {{ $reviewLabel }}
                                     </span>
                                 </td>
                                 <td>{{ $job->requester?->name ?? '—' }}</td>
@@ -277,6 +306,15 @@
                         <option value="pending" @selected($statusFilter === 'pending')>Belum dicetak</option>
                         <option value="printed" @selected($statusFilter === 'printed')>Dicetak</option>
                         <option value="all" @selected($statusFilter === 'all')>Semua</option>
+                    </select>
+                </label>
+
+                <label class="entry-filters__field">
+                    <span>Pengesahan</span>
+                    <select name="review">
+                        <option value="all" @selected($reviewFilter === 'all')>Semua</option>
+                        <option value="verified" @selected($reviewFilter === 'verified')>Disahkan</option>
+                        <option value="unverified" @selected($reviewFilter === 'unverified')>Belum disahkan</option>
                     </select>
                 </label>
 

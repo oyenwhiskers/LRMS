@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -44,6 +45,8 @@ class LegalFile extends Model
     public const TYPE_SUBLIST = 'sublist';
 
     public const TYPE_COPY_TITLE = 'copy_title';
+
+    public const TYPE_RECEIPT_REASSIGNMENT = 'receipt_reassignment';
 
     protected $fillable = [
         'reference_number', 'purchaser', 'vendor', 'bank', 'property', 'title_number',
@@ -136,6 +139,11 @@ class LegalFile extends Model
     public function parties(): HasMany
     {
         return $this->hasMany(LegalFileParty::class)->orderBy('sort_order');
+    }
+
+    public function entryScan(): HasOne
+    {
+        return $this->hasOne(EntryScan::class)->latestOfMany();
     }
 
     /**
@@ -287,6 +295,7 @@ class LegalFile extends Model
             self::TYPE_POA,
             self::TYPE_SUBLIST,
             self::TYPE_COPY_TITLE,
+            self::TYPE_RECEIPT_REASSIGNMENT,
         ];
     }
 
@@ -318,6 +327,7 @@ class LegalFile extends Model
             self::TYPE_POA => 'Power of attorney',
             self::TYPE_SUBLIST => 'Sublist agreement',
             self::TYPE_COPY_TITLE => 'Copy title',
+            self::TYPE_RECEIPT_REASSIGNMENT => 'Receipt and Reassignment',
             default => str($type)->headline()->toString(),
         };
     }

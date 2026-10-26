@@ -200,6 +200,7 @@ class EntryController extends Controller
         return response()->json([
             'temp_path' => $tempPaths[0],
             'temp_paths' => $tempPaths,
+            'pages' => count($tempPaths),
             'draft' => $result['draft'],
             'warning' => $result['error'],
             'save_url' => route('entry.save'),

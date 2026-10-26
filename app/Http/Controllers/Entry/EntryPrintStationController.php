@@ -22,6 +22,7 @@ class EntryPrintStationController extends Controller
         $jobs = $this->jobsQuery($filters)
             ->with([
                 'legalFile:id,reference_number,purchaser,file_identifier,qr_identifier',
+                'legalFile.entryScan',
                 'requester:id,name',
             ])
             ->get();
@@ -40,6 +41,7 @@ class EntryPrintStationController extends Controller
                 'q' => $filters['q'],
                 'requested_by' => $filters['requested_by'] !== null ? (string) $filters['requested_by'] : '',
                 'status' => $filters['status'],
+                'review' => $filters['review'],
             ],
             'pendingCount' => EntryPrintJob::query()->where('status', EntryPrintJob::STATUS_PENDING)->count(),
         ]);
@@ -52,6 +54,7 @@ class EntryPrintStationController extends Controller
         $jobs = $this->jobsQuery($filters)
             ->with([
                 'legalFile:id,reference_number,purchaser,file_identifier',
+                'legalFile.entryScan',
                 'requester:id,name',
             ])
             ->get()
@@ -85,6 +88,7 @@ class EntryPrintStationController extends Controller
                 'already_queued' => true,
                 'job' => $this->jobPayload($existing->loadMissing([
                     'legalFile:id,reference_number,purchaser,file_identifier',
+                    'legalFile.entryScan',
                     'requester:id,name',
                 ])),
             ]);
@@ -102,6 +106,7 @@ class EntryPrintStationController extends Controller
             'already_queued' => false,
             'job' => $this->jobPayload($job->load([
                 'legalFile:id,reference_number,purchaser,file_identifier',
+                'legalFile.entryScan',
                 'requester:id,name',
             ])),
         ], 201);
@@ -219,7 +224,7 @@ class EntryPrintStationController extends Controller
     }
 
     /**
-     * @return array{q: string, status: string, requested_by: int|null}
+     * @return array{q: string, status: string, review: string, requested_by: int|null}
      */
     private function validatedFilters(Request $request): array
     {
@@ -227,17 +232,19 @@ class EntryPrintStationController extends Controller
             'q' => ['nullable', 'string', 'max:120'],
             'requested_by' => ['nullable', 'integer', 'exists:users,id'],
             'status' => ['nullable', Rule::in(['pending', 'printed', 'all'])],
+            'review' => ['nullable', Rule::in(['all', 'verified', 'unverified'])],
         ]);
 
         return [
             'q' => trim((string) ($filters['q'] ?? '')),
             'status' => $filters['status'] ?? 'pending',
+            'review' => $filters['review'] ?? 'all',
             'requested_by' => $filters['requested_by'] ?? null,
         ];
     }
 
     /**
-     * @param  array{q: string, status: string, requested_by: int|null}  $filters
+     * @param  array{q: string, status: string, review: string, requested_by: int|null}  $filters
      * @return \Illuminate\Database\Eloquent\Builder<EntryPrintJob>
      */
     private function jobsQuery(array $filters)
@@ -262,6 +269,20 @@ class EntryPrintStationController extends Controller
             ->when(
                 filled($filters['requested_by']),
                 fn ($builder) => $builder->where('requested_by', $filters['requested_by']),
+            )
+            ->when(
+                $filters['review'] === 'verified',
+                fn ($builder) => $builder->whereHas(
+                    'legalFile.entryScan',
+                    fn ($scan) => $scan->where('review_status', EntryScan::REVIEW_VERIFIED),
+                ),
+            )
+            ->when(
+                $filters['review'] === 'unverified',
+                fn ($builder) => $builder->whereDoesntHave(
+                    'legalFile.entryScan',
+                    fn ($scan) => $scan->where('review_status', EntryScan::REVIEW_VERIFIED),
+                ),
             )
             ->when(
                 $filters['q'] !== '',
@@ -295,6 +316,9 @@ class EntryPrintStationController extends Controller
             'type' => $job->type,
         ], absolute: false);
 
+        $scan = $job->legalFile?->entryScan;
+        $reviewStatus = $scan?->review_status ?: EntryScan::REVIEW_PENDING;
+
         return [
             'id' => $job->id,
             'type' => $job->type,
@@ -302,6 +326,9 @@ class EntryPrintStationController extends Controller
             'status' => $job->status,
             'status_label' => $job->statusLabel(),
             'is_pending' => $job->isPending(),
+            'review_status' => $reviewStatus,
+            'review_status_label' => $scan?->reviewStatusLabel() ?? 'Belum semak',
+            'is_verified' => $reviewStatus === EntryScan::REVIEW_VERIFIED,
             'created_at' => LocalDate::format($job->created_at),
             'printed_at' => $job->printed_at ? LocalDate::format($job->printed_at) : null,
             'requested_by' => $job->requested_by,

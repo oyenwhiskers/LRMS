@@ -84,7 +84,40 @@ class EntryPrintStationTest extends TestCase
             ->assertJsonPath('jobs.0.operator', 'Operator A')
             ->assertJsonPath('jobs.0.status', EntryPrintJob::STATUS_PENDING)
             ->assertJsonPath('jobs.0.status_label', 'Belum dicetak')
+            ->assertJsonPath('jobs.0.review_status', EntryScan::REVIEW_PENDING)
+            ->assertJsonPath('jobs.0.review_status_label', 'Belum semak')
+            ->assertJsonPath('jobs.0.is_verified', false)
             ->assertJsonMissing(['id' => $jobB->id]);
+
+        EntryScan::query()->where('legal_file_id', $fileA->id)->update([
+            'review_status' => EntryScan::REVIEW_VERIFIED,
+        ]);
+
+        $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index', ['requested_by' => $operatorA->id]))
+            ->assertOk()
+            ->assertJsonPath('jobs.0.review_status', EntryScan::REVIEW_VERIFIED)
+            ->assertJsonPath('jobs.0.review_status_label', 'Disahkan')
+            ->assertJsonPath('jobs.0.is_verified', true);
+
+        $this->actingAs($station)
+            ->get(route('entry.print-station', ['requested_by' => $operatorA->id]))
+            ->assertOk()
+            ->assertSee('Pengesahan', false)
+            ->assertSee('Disahkan', false)
+            ->assertSee('Belum disahkan', false);
+
+        $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index', ['review' => 'verified']))
+            ->assertOk()
+            ->assertJsonCount(1, 'jobs')
+            ->assertJsonPath('jobs.0.id', $jobA->id);
+
+        $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index', ['review' => 'unverified']))
+            ->assertOk()
+            ->assertJsonCount(1, 'jobs')
+            ->assertJsonPath('jobs.0.id', $jobB->id);
 
         $this->actingAs($station)
             ->get(route('entry.files.label', ['file' => $fileA, 'type' => 'front']))

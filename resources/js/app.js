@@ -1855,6 +1855,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const refreshBtn = station.querySelector('[data-print-station-refresh]');
         const searchInput = station.querySelector('[data-print-station-search]');
         const desktopStatusSelect = station.querySelector('[data-print-station-status-filter]');
+        const desktopReviewSelect = station.querySelector('[data-print-station-review-filter]');
         const desktopOperatorSelect = station.querySelector('[data-print-station-operator]');
         const mobileFilterInputs = station.querySelectorAll('[data-print-station-mobile-filter]');
         const previewModal = document.querySelector('[data-modal="entry-print-preview"]');
@@ -1988,6 +1989,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             return station.getAttribute('data-requested-by') || '';
         };
 
+        const reviewFilter = () => {
+            if (desktopReviewSelect && desktopFilterQuery.matches) {
+                return desktopReviewSelect.value || 'all';
+            }
+
+            return station.getAttribute('data-review-filter') || 'all';
+        };
+
         const searchQuery = () => {
             const fromInput = searchInput?.value?.trim() || '';
             if (fromInput !== '') {
@@ -2002,7 +2011,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             mobileFilterInputs.forEach((input) => {
                 input.disabled = desktop;
             });
-            [desktopStatusSelect, desktopOperatorSelect].forEach((select) => {
+            [desktopStatusSelect, desktopReviewSelect, desktopOperatorSelect].forEach((select) => {
                 if (select) {
                     select.disabled = ! desktop;
                 }
@@ -2015,6 +2024,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const hiddenStatus = station.querySelector('[data-print-station-mobile-filter][name="status"]');
                 if (hiddenStatus) {
                     hiddenStatus.value = desktopStatusSelect.value;
+                }
+            }
+
+            if (desktopReviewSelect) {
+                station.setAttribute('data-review-filter', desktopReviewSelect.value);
+                const hiddenReview = station.querySelector('[data-print-station-mobile-filter][name="review"]');
+                if (hiddenReview) {
+                    hiddenReview.value = desktopReviewSelect.value;
                 }
             }
 
@@ -2123,6 +2140,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const pending = jobIsPending(job);
                 const badgeClass = pending ? 'pending' : 'printed';
                 const statusLabel = escapeHtml(job.status_label || (pending ? 'Belum dicetak' : 'Dicetak'));
+                const reviewStatus = escapeHtml(job.review_status || 'pending');
+                const reviewLabel = escapeHtml(job.review_status_label || 'Belum semak');
                 const sentAt = escapeHtml(job.created_at || '—');
                 const printedAt = escapeHtml(job.printed_at || '—');
                 const ref = escapeHtml(job.reference_number || '—');
@@ -2134,6 +2153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const deleteUrl = escapeHtml(job.delete_url || '');
                 const checked = previouslySelected.has(job.id) ? ' checked' : '';
                 const status = escapeHtml(job.status || (pending ? 'pending' : 'printed'));
+                const reviewBadge = `<span class="entry-ops__badge entry-ops__badge--review-${reviewStatus}">${reviewLabel}</span>`;
                 const attrs = `
                     data-print-job-id="${job.id}"
                     data-job-status="${status}"
@@ -2158,7 +2178,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <p class="entry-print-station__ref">${ref}</p>
                             <span class="entry-print-station__badge entry-print-station__badge--${badgeClass}">${statusLabel}</span>
                         </div>
-                        <p class="entry-print-station__card-meta">${operator} · ${typeLabel}</p>
+                        <p class="entry-print-station__card-meta">${operator} · ${typeLabel} · ${reviewBadge}</p>
                     </div>
                 </article>
                 `);
@@ -2177,6 +2197,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td>
                         <span class="entry-print-station__badge entry-print-station__badge--${badgeClass}">${statusLabel}</span>
                     </td>
+                    <td>${reviewBadge}</td>
                     <td>${operator}</td>
                     <td>${typeLabel}</td>
                     <td class="entry-print-station__when-cell">${sentAt}</td>
@@ -2209,6 +2230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 </th>
                                 <th scope="col">Rujukan</th>
                                 <th scope="col">Status</th>
+                                <th scope="col">Pengesahan</th>
                                 <th scope="col">Operator</th>
                                 <th scope="col">Jenis</th>
                                 <th scope="col">Dihantar</th>
@@ -2229,9 +2251,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const url = new URL(jobsUrl, window.location.origin);
             const requestedBy = requestedByParam();
+            const review = reviewFilter();
             const q = searchQuery();
             if (requestedBy) {
                 url.searchParams.set('requested_by', requestedBy);
+            }
+            if (review && review !== 'all') {
+                url.searchParams.set('review', review);
             }
             if (q) {
                 url.searchParams.set('q', q);
@@ -2480,6 +2506,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         desktopStatusSelect?.addEventListener('change', applyDesktopFilters);
+        desktopReviewSelect?.addEventListener('change', applyDesktopFilters);
         desktopOperatorSelect?.addEventListener('change', applyDesktopFilters);
         refreshBtn?.addEventListener('click', reloadJobs);
 

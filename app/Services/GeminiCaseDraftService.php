@@ -46,7 +46,7 @@ class GeminiCaseDraftService
         $snpTypeCodes = implode(', ', LegalFile::snpTypes());
         $prompt = <<<PROMPT
 You are extracting data from a Malaysian law-firm case document photo for case registration of OLDER physical files.
-You may receive 1–{$pageCount} ordered page photos of the same physical file (page 1 first). Merge fields across pages — later pages often hold property, title_number, IC, or party details missing from the cover.
+You may receive 1–{$pageCount} ordered page photos of the same physical file (page 1 first). You MUST read EVERY page and merge into one JSON — do not stop after the cover. Later pages often hold property address, title_number, IC, or party details missing from the cover.
 Return ONLY valid JSON with these keys:
 {
   "reference_number": string | null,
@@ -75,6 +75,7 @@ Rules:
   - Court / writ / summons / statement of claim → litigation.
   - Sale & Purchase / Sale and Purchase / SPA / Agreement for Sale → snp.
   - Memorandum of Transfer / MOT → mot.
+  - Receipt and Reassignment / Receipt & Reassignment → receipt_reassignment. This is NOT doa and NOT doa_post — use only when the title is Receipt and Reassignment.
   - Deed of Assignment (P.O.S.T) / POST / perfection of strata title assignment → doa_post.
   - Deed of Assignment (absolute / without bank facility) → doa.
   - Deed of Gift / Hibah → dog.
@@ -83,7 +84,8 @@ Rules:
   - Copy of Title / Copy Title / CT / title search copy → copy_title.
 - Bank financing / loan docs → prefer LOA (Loan Documentation). Do NOT treat bank codes or middle tokens inside a firm ref (e.g. CON in THY/YFT/CON/BRAKYAT/2025/18, or ABMB/MIB/UOB) as the case category.
 - Fill only what is clearly visible across the provided pages. Cover pages often lack property and title_number — leave those null unless a later page shows them. Do not invent or guess missing fields.
-- For loan: fill borrowers in document order — party (1) first (main), then (2), (3), …. Include each customer's NRIC in ic_number when printed. Do not drop co-borrowers. Also set purchaser to all borrower names joined with " & " (e.g. "LOOK KAR YANG & LIM PUI SHEE"). Fill bank and start_date if dated; property/title_number only if printed.
+- property: put the charged / subject property description OR postal / site address when printed (labels such as Property, Address, Alamat, Schedule of Property, Parcel, Lot, HS(D), Geran, PN, description of land). Prefer the property address from later pages over a letterhead office address. Copy the full address block into property when that is what the page shows.
+- For loan: fill borrowers in document order — party (1) first (main), then (2), (3), …. Include each customer's NRIC in ic_number when printed. Do not drop co-borrowers. Also set purchaser to all borrower names joined with " & " (e.g. "LOOK KAR YANG & LIM PUI SHEE"). Fill bank and start_date if dated; property/title_number from any page if printed.
 - For S&P-family types ({$snpTypeCodes}): fill purchaser, vendor, property, title_number only if printed; borrowers may be empty. Map transferor/assignor/donor → vendor and transferee/assignee/donee → purchaser when those labels appear.
 - For litigation: fill suite_number, purchaser (person name), ic_number when visible; leave property empty; borrowers may be empty.
 - Use null for unknown fields. Do not invent category codes outside the list.
@@ -91,15 +93,19 @@ PROMPT;
 
         try {
             $parts = [['text' => $prompt]];
-            foreach ($images as $image) {
+            foreach ($images as $index => $image) {
                 $bytes = file_get_contents($image['path']);
                 if ($bytes === false) {
                     throw new RuntimeException('Unable to read document image.');
                 }
+                $parts[] = ['text' => 'Page '.($index + 1).' of '.$pageCount.' (read this page for any fields still missing):'];
                 $parts[] = [
-                    'inline_data' => [
-                        'mime_type' => ($image['mime'] ?? '') !== '' ? $image['mime'] : 'image/jpeg',
+                    'inlineData' => [
+                        'mimeType' => ($image['mime'] ?? '') !== '' ? $image['mime'] : 'image/jpeg',
                         'data' => base64_encode($bytes),
+                    ],
+                    'mediaResolution' => [
+                        'level' => 'media_resolution_high',
                     ],
                 ];
             }
@@ -169,9 +175,19 @@ PROMPT;
                     return ['draft' => $this->emptyDraft(), 'error' => 'Jawapan AI tidak sah. Sila isi borang sendiri.'];
                 }
 
+                $draft = $this->normalizeDraft($decoded, $categories);
                 $this->recordUsage($json, $model, $userId, $lastStatus, true);
+                Log::info('Gemini draft extracted', [
+                    'pages' => $pageCount,
+                    'model' => $model,
+                    'reference_number' => $draft['reference_number'],
+                    'case_type' => $draft['case_type'],
+                    'property' => $draft['property'],
+                    'title_number' => $draft['title_number'],
+                    'purchaser' => $draft['purchaser'] !== '' ? $draft['purchaser'] : null,
+                ]);
 
-                return ['draft' => $this->normalizeDraft($decoded, $categories), 'error' => null];
+                return ['draft' => $draft, 'error' => null];
             }
 
             Log::warning('Gemini draft failed after retries', [
@@ -290,8 +306,7 @@ PROMPT;
     private function normalizeDraft(array $decoded, $categories): array
     {
         $draft = $this->emptyDraft();
-        $caseType = (string) ($decoded['case_type'] ?? LegalFile::TYPE_SNP);
-        $draft['case_type'] = in_array($caseType, LegalFile::caseTypes(), true) ? $caseType : LegalFile::TYPE_SNP;
+        $draft['case_type'] = $this->normalizeCaseType((string) ($decoded['case_type'] ?? LegalFile::TYPE_SNP));
 
         foreach (['reference_number', 'purchaser', 'vendor', 'bank', 'property', 'title_number', 'suite_number', 'ic_number', 'start_date', 'end_date'] as $field) {
             $value = $decoded[$field] ?? null;
@@ -321,6 +336,23 @@ PROMPT;
         $draft['case_category_code'] = $match?->code;
 
         return $draft;
+    }
+
+    private function normalizeCaseType(string $raw): string
+    {
+        $type = strtolower(trim($raw));
+        if (in_array($type, LegalFile::caseTypes(), true)) {
+            return $type;
+        }
+
+        foreach (LegalFile::caseTypes() as $code) {
+            $label = strtolower(LegalFile::caseTypeLabelFor($code));
+            if ($type === $label || $type === str_replace(' and ', ' & ', $label)) {
+                return $code;
+            }
+        }
+
+        return LegalFile::TYPE_SNP;
     }
 
     /**

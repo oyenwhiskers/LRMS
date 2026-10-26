@@ -5068,7 +5068,7 @@ a.entry-card--action:focus-visible {
         flex: 1 1 22rem;
         min-width: 0;
         display: grid;
-        grid-template-columns: minmax(0, 1.4fr) minmax(7.5rem, 0.7fr) minmax(8rem, 0.85fr);
+        grid-template-columns: minmax(0, 1.3fr) minmax(7rem, 0.65fr) minmax(7.5rem, 0.75fr) minmax(7.5rem, 0.8fr);
         align-items: end;
         gap: 0.65rem;
     }

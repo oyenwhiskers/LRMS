@@ -213,11 +213,17 @@ class EntryScanRegisterTest extends TestCase
             }
             $images = array_values(array_filter(
                 $parts,
-                fn ($part): bool => is_array($part) && isset($part['inline_data']['data']),
+                fn ($part): bool => is_array($part) && isset($part['inlineData']['data']),
             ));
+            if (count($images) !== 2) {
+                return false;
+            }
 
-            return count($images) === 2;
+            return collect($images)->every(
+                fn ($part): bool => data_get($part, 'mediaResolution.level') === 'media_resolution_high',
+            );
         });
+        $response->assertJsonPath('pages', 2);
 
         $category = CaseCategory::query()->where('code', 'LOA')->firstOrFail();
 
@@ -388,6 +394,81 @@ class EntryScanRegisterTest extends TestCase
         $this->assertSame('PN 88888', $file->title_number);
         $this->assertNull($file->bank);
         $this->assertNull($file->suite_number);
+    }
+
+    public function test_analyze_accepts_receipt_and_reassignment_case_type_from_gemini(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'text' => json_encode([
+                                'reference_number' => 'CON/2021/0101',
+                                'case_type' => 'Receipt and Reassignment',
+                                'case_category_code' => 'CON',
+                                'purchaser' => 'AI Assignee',
+                                'vendor' => 'AI Assignor',
+                            ]),
+                        ]],
+                    ],
+                ]],
+            ]),
+        ]);
+
+        config([
+            'services.gemini.key' => 'test-key',
+            'services.gemini.model' => 'gemini-3.1-flash-lite',
+        ]);
+
+        $entry = User::factory()->entry()->create();
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('receipt.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_RECEIPT_REASSIGNMENT)
+            ->assertJsonPath('draft.purchaser', 'AI Assignee');
+
+        Http::assertSent(function ($request): bool {
+            $prompt = (string) data_get($request->data(), 'contents.0.parts.0.text');
+
+            return str_contains($prompt, '"receipt_reassignment"')
+                && str_contains($prompt, 'Receipt and Reassignment')
+                && str_contains($prompt, 'receipt_reassignment');
+        });
+    }
+
+    public function test_entry_save_accepts_receipt_and_reassignment_case_type(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $tempPath = 'entry-scans/tmp/'.$entry->id.'/receipt-reassignment.jpg';
+        Storage::disk('local')->put($tempPath, 'fake');
+
+        $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'reference_number' => 'CON/2020/0999',
+                'case_type' => LegalFile::TYPE_RECEIPT_REASSIGNMENT,
+                'case_category_id' => $category->id,
+                'purchaser' => 'Assignee Sdn Bhd',
+                'vendor' => 'Assignor Sdn Bhd',
+                'property' => 'Lot 99, Kota Kinabalu',
+                'title_number' => 'PN 99999',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('reference_number', 'CON/2020/0999')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_RECEIPT_REASSIGNMENT, $file->case_type);
+        $this->assertSame('Receipt and Reassignment', $file->caseTypeLabel());
+        $this->assertSame('Assignee Sdn Bhd', $file->purchaser);
+        $this->assertSame('Assignor Sdn Bhd', $file->vendor);
+        $this->assertNull($file->bank);
     }
 
     public function test_entry_save_stores_each_loan_borrower_with_primary(): void
