@@ -196,7 +196,6 @@
             </p>
             <form class="mt-6 flex justify-end gap-3" method="POST" action="{{ route('entry.scan.destroy', $scan) }}">
                 @csrf
-                @method('DELETE')
                 <button class="btn-secondary" type="button" data-modal-close>Batal</button>
                 <button class="btn-danger" type="submit">Padam</button>
             </form>

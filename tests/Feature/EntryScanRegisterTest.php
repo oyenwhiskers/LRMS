@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\CaseCategory;
+use App\Models\EntryPrintJob;
 use App\Models\EntryScan;
+use App\Models\FileMovement;
 use App\Models\LegalFile;
+use App\Models\LegalFileParty;
 use App\Models\Rack;
 use App\Models\Shelf;
 use App\Models\User;
@@ -974,11 +977,11 @@ class EntryScanRegisterTest extends TestCase
             ->assertSee(route('entry.scan.destroy', $scan), false);
 
         $this->actingAs($other)
-            ->delete(route('entry.scan.destroy', $scan))
+            ->post(route('entry.scan.destroy', $scan))
             ->assertForbidden();
 
         $this->actingAs($entry)
-            ->delete(route('entry.scan.destroy', $scan))
+            ->post(route('entry.scan.destroy', $scan))
             ->assertRedirect(route('entry.home'))
             ->assertSessionHas('success');
 
@@ -991,6 +994,65 @@ class EntryScanRegisterTest extends TestCase
             ->assertOk()
             ->assertSee('class="entry-stat__value">0</p>', false)
             ->assertSee('Belum ada fail', false);
+    }
+
+    public function test_entry_user_can_delete_stored_scan_with_related_rows(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $rack = Rack::create(['code' => 'DEL', 'name' => 'Delete Bay']);
+        $shelf = Shelf::create(['rack_id' => $rack->id, 'code' => 'S1', 'name' => 'Shelf']);
+        $path = 'entry-scans/99/page-1.jpg';
+        Storage::disk('local')->put($path, 'x');
+
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2019/9999',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'X',
+            'property' => 'Lot X',
+            'status' => LegalFile::STATUS_STORED,
+            'shelf_id' => $shelf->id,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+        LegalFileParty::create([
+            'legal_file_id' => $file->id,
+            'name' => 'A',
+            'sort_order' => 0,
+            'is_primary' => true,
+        ]);
+        FileMovement::create([
+            'legal_file_id' => $file->id,
+            'type' => 'stored',
+            'processed_by' => $entry->id,
+            'shelf_id' => $shelf->id,
+            'previous_status' => LegalFile::STATUS_REGISTERED,
+            'new_status' => LegalFile::STATUS_STORED,
+            'occurred_at' => now(),
+        ]);
+        EntryPrintJob::create([
+            'legal_file_id' => $file->id,
+            'requested_by' => $entry->id,
+            'type' => EntryPrintJob::TYPE_FRONT,
+            'status' => EntryPrintJob::STATUS_PENDING,
+        ]);
+        $scan = EntryScan::create([
+            'user_id' => $entry->id,
+            'document_path' => $path,
+            'legal_file_id' => $file->id,
+            'shelf_id' => $shelf->id,
+            'status' => EntryScan::STATUS_STORED,
+        ]);
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.destroy', $scan))
+            ->assertRedirect(route('entry.home'));
+
+        $this->assertDatabaseMissing('entry_scans', ['id' => $scan->id]);
+        $this->assertDatabaseMissing('legal_files', ['id' => $file->id]);
     }
 
     public function test_pic_intake_still_requires_completed_status(): void

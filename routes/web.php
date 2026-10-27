@@ -74,7 +74,8 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/scan/{scan}/shelf', [EntryController::class, 'storeShelf'])->name('shelf.store');
         Route::get('/scan/{scan}/document', [EntryController::class, 'document'])->name('scan.document');
         Route::put('/scan/{scan}', [EntryController::class, 'update'])->name('scan.update');
-        Route::delete('/scan/{scan}', [EntryController::class, 'destroy'])->name('scan.destroy');
+        // POST path (not DELETE verb): proxies in front of the app have been 404'ing spoofed DELETE.
+        Route::post('/scan/{scan}/delete', [EntryController::class, 'destroy'])->name('scan.destroy');
         Route::get('/files/{file}/label', [EntryController::class, 'label'])->name('files.label');
         Route::get('/files/{file}/label.pdf', [EntryController::class, 'labelPdf'])->name('files.label.pdf');
 
