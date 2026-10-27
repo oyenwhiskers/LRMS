@@ -9,7 +9,7 @@ use Illuminate\Validation\ValidationException;
 
 class SetEntryScanReviewStatus
 {
-    public function handle(EntryScan $scan, User $user, string $reviewStatus): EntryScan
+    public function handle(EntryScan $scan, User $user, string $reviewStatus, ?string $notes = null): EntryScan
     {
         if (! in_array($reviewStatus, EntryScan::reviewStatuses(), true)) {
             throw ValidationException::withMessages([
@@ -23,7 +23,12 @@ class SetEntryScanReviewStatus
             ]);
         }
 
-        return DB::transaction(function () use ($scan, $user, $reviewStatus): EntryScan {
+        $notes = is_string($notes) ? trim($notes) : null;
+        if ($notes === '') {
+            $notes = null;
+        }
+
+        return DB::transaction(function () use ($scan, $user, $reviewStatus, $notes): EntryScan {
             $locked = EntryScan::query()->whereKey($scan->id)->lockForUpdate()->firstOrFail();
 
             if ($reviewStatus === EntryScan::REVIEW_PENDING) {
@@ -31,12 +36,21 @@ class SetEntryScanReviewStatus
                     'review_status' => EntryScan::REVIEW_PENDING,
                     'reviewed_by' => null,
                     'reviewed_at' => null,
+                    'review_notes' => null,
+                ]);
+            } elseif ($reviewStatus === EntryScan::REVIEW_NEEDS_CORRECTION) {
+                $locked->update([
+                    'review_status' => $reviewStatus,
+                    'reviewed_by' => $user->id,
+                    'reviewed_at' => now(),
+                    'review_notes' => $notes,
                 ]);
             } else {
                 $locked->update([
                     'review_status' => $reviewStatus,
                     'reviewed_by' => $user->id,
                     'reviewed_at' => now(),
+                    'review_notes' => null,
                 ]);
             }
 

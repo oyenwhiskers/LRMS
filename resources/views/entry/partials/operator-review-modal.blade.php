@@ -194,24 +194,41 @@
             </div>
 
             <div class="operator-review-page__actions">
-                <form method="POST" action="{{ route('entry.operators.review', $scan) }}">
-                    @csrf
-                    <input type="hidden" name="review_status" value="{{ App\Models\EntryScan::REVIEW_NEEDS_CORRECTION }}">
-                    <button
-                        class="btn-secondary"
-                        type="submit"
-                        @disabled($scan->review_status === App\Models\EntryScan::REVIEW_NEEDS_CORRECTION)
-                    >Perlu pembetulan</button>
-                </form>
-                <form method="POST" action="{{ route('entry.operators.review', $scan) }}">
-                    @csrf
-                    <input type="hidden" name="review_status" value="{{ App\Models\EntryScan::REVIEW_VERIFIED }}">
-                    <button
-                        class="btn-primary"
-                        type="submit"
-                        @disabled($scan->review_status === App\Models\EntryScan::REVIEW_VERIFIED)
-                    >Tanda disahkan</button>
-                </form>
+                <label class="operator-review-page__notes">
+                    <span class="operator-review-page__notes-label">Catatan pembetulan</span>
+                    <textarea
+                        class="form-input"
+                        form="operator-correction-{{ $scan->id }}"
+                        name="review_notes"
+                        rows="3"
+                        maxlength="1000"
+                        required
+                        placeholder="Apa yang perlu dibetulkan oleh operator?"
+                    >{{ old('review_notes', $scan->review_notes) }}</textarea>
+                </label>
+                <div class="operator-review-page__action-row">
+                    <form
+                        id="operator-correction-{{ $scan->id }}"
+                        method="POST"
+                        action="{{ route('entry.operators.review', $scan) }}"
+                    >
+                        @csrf
+                        <input type="hidden" name="review_status" value="{{ App\Models\EntryScan::REVIEW_NEEDS_CORRECTION }}">
+                        <button
+                            class="btn-secondary"
+                            type="submit"
+                        >Perlu pembetulan</button>
+                    </form>
+                    <form method="POST" action="{{ route('entry.operators.review', $scan) }}">
+                        @csrf
+                        <input type="hidden" name="review_status" value="{{ App\Models\EntryScan::REVIEW_VERIFIED }}">
+                        <button
+                            class="btn-primary"
+                            type="submit"
+                            @disabled($scan->review_status === App\Models\EntryScan::REVIEW_VERIFIED)
+                        >Tanda disahkan</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

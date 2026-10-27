@@ -160,6 +160,12 @@
                                 {{ $scan->user?->name ?: '—' }}
                                 · {{ $scan->legalFile->purchaser ?: '—' }}
                             </p>
+                            @if (
+                                $scan->review_status === App\Models\EntryScan::REVIEW_NEEDS_CORRECTION
+                                && filled($scan->review_notes)
+                            )
+                                <p class="entry-card__note">{{ $scan->review_notes }}</p>
+                            @endif
                             <p class="entry-card__shelf">
                                 {{ \App\Support\LocalDate::format($scan->created_at, 'd/m/Y H:i') }}
                                 @if ($scan->shelf)

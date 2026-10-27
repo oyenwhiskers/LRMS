@@ -26,6 +26,9 @@
                     <div class="entry-card__body">
                         <p class="entry-card__title">{{ $scan->legalFile->reference_number }}</p>
                         <p class="entry-card__meta">{{ $scan->legalFile->purchaser ?: '—' }}</p>
+                        @if (filled($scan->review_notes))
+                            <p class="entry-card__note">{{ $scan->review_notes }}</p>
+                        @endif
                         <p class="entry-card__shelf">
                             @if ($scan->shelf)
                                 {{ $scan->shelf->full_location }}

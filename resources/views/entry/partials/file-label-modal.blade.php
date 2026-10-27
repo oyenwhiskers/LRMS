@@ -125,6 +125,15 @@
                         @csrf
                         @method('PUT')
                         <input type="hidden" name="_legal_file_id" value="{{ $file->id }}">
+                        @if (
+                            $scan->review_status === App\Models\EntryScan::REVIEW_NEEDS_CORRECTION
+                            && filled($scan->review_notes)
+                        )
+                            <aside class="entry-review-note" role="status">
+                                <p class="entry-review-note__label">Perlu pembetulan</p>
+                                <p class="entry-review-note__copy">{{ $scan->review_notes }}</p>
+                            </aside>
+                        @endif
                         @include('entry.partials.case-form-fields', [
                             'categories' => $categories,
                             'suggestion' => $suggestion,

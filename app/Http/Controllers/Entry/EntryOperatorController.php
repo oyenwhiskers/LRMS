@@ -174,9 +174,20 @@ class EntryOperatorController extends Controller
                 EntryScan::REVIEW_VERIFIED,
                 EntryScan::REVIEW_NEEDS_CORRECTION,
             ])],
+            'review_notes' => [
+                Rule::requiredIf($request->input('review_status') === EntryScan::REVIEW_NEEDS_CORRECTION),
+                'nullable',
+                'string',
+                'max:1000',
+            ],
         ]);
 
-        $setter->handle($scan, $request->user(), $data['review_status']);
+        $setter->handle(
+            $scan,
+            $request->user(),
+            $data['review_status'],
+            $data['review_notes'] ?? null,
+        );
 
         $message = $data['review_status'] === EntryScan::REVIEW_VERIFIED
             ? 'Fail ditanda disahkan.'

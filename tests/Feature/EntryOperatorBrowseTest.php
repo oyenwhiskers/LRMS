@@ -189,12 +189,22 @@ class EntryOperatorBrowseTest extends TestCase
                 'review_status' => EntryScan::REVIEW_NEEDS_CORRECTION,
             ])
             ->assertRedirect(route('entry.operators.index'))
+            ->assertSessionHasErrors('review_notes');
+
+        $this->actingAs($peer)
+            ->from(route('entry.operators.index'))
+            ->post(route('entry.operators.review', $scan), [
+                'review_status' => EntryScan::REVIEW_NEEDS_CORRECTION,
+                'review_notes' => 'Nama pembeli salah eja',
+            ])
+            ->assertRedirect(route('entry.operators.index'))
             ->assertSessionHas('success');
 
         $scan->refresh();
         $this->assertSame(EntryScan::REVIEW_NEEDS_CORRECTION, $scan->review_status);
         $this->assertSame($peer->id, $scan->reviewed_by);
         $this->assertNotNull($scan->reviewed_at);
+        $this->assertSame('Nama pembeli salah eja', $scan->review_notes);
 
         $this->actingAs($peer)
             ->from(route('entry.operators.index'))
@@ -206,6 +216,7 @@ class EntryOperatorBrowseTest extends TestCase
         $scan->refresh();
         $this->assertSame(EntryScan::REVIEW_VERIFIED, $scan->review_status);
         $this->assertSame($peer->id, $scan->reviewed_by);
+        $this->assertNull($scan->review_notes);
     }
 
     public function test_owner_sees_needs_correction_on_home_and_history(): void
@@ -235,6 +246,7 @@ class EntryOperatorBrowseTest extends TestCase
             'review_status' => EntryScan::REVIEW_NEEDS_CORRECTION,
             'reviewed_by' => $other->id,
             'reviewed_at' => now(),
+            'review_notes' => 'Sila betulkan nombor geran',
         ]);
 
         $this->actingAs($owner)
@@ -242,13 +254,15 @@ class EntryOperatorBrowseTest extends TestCase
             ->assertOk()
             ->assertSee('Perlu kemas kini', false)
             ->assertSee('CON/2024/FIX1', false)
-            ->assertSee('Perlu pembetulan', false);
+            ->assertSee('Perlu pembetulan', false)
+            ->assertSee('Sila betulkan nombor geran', false);
 
         $this->actingAs($owner)
             ->get(route('entry.history'))
             ->assertOk()
             ->assertSee('CON/2024/FIX1', false)
-            ->assertSee('Perlu pembetulan', false);
+            ->assertSee('Perlu pembetulan', false)
+            ->assertSee('Sila betulkan nombor geran', false);
 
         $this->actingAs($other)
             ->get(route('entry.home'))
@@ -283,6 +297,7 @@ class EntryOperatorBrowseTest extends TestCase
             'review_status' => EntryScan::REVIEW_NEEDS_CORRECTION,
             'reviewed_by' => $peer->id,
             'reviewed_at' => now(),
+            'review_notes' => 'Tukar nama pembeli',
         ]);
 
         $this->actingAs($owner)
@@ -303,6 +318,7 @@ class EntryOperatorBrowseTest extends TestCase
         $this->assertSame(EntryScan::REVIEW_PENDING, $scan->review_status);
         $this->assertNull($scan->reviewed_by);
         $this->assertNull($scan->reviewed_at);
+        $this->assertNull($scan->review_notes);
         $this->assertSame('Fixed Name', $file->fresh()->purchaser);
     }
 

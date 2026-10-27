@@ -1781,8 +1781,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             zoomIn?.toggleAttribute('disabled', scale >= max);
         };
 
-        const setScale = (next) => {
-            scale = Math.min(max, Math.max(min, Math.round(next / step) * step));
+        const setScale = (next, snap = true) => {
+            const clamped = Math.min(max, Math.max(min, next));
+            scale = snap ? Math.round(clamped / step) * step : clamped;
+            scale = Math.min(max, Math.max(min, scale));
             apply();
         };
 
@@ -1805,6 +1807,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         };
 
+        const touchDistance = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+        let pinchStartDistance = 0;
+        let pinchStartScale = 1;
+        let usingGestureEvents = false;
+
         zoomIn?.addEventListener('click', () => setScale(scale + step));
         zoomOut?.addEventListener('click', () => setScale(scale - step));
         zoomReset?.addEventListener('click', () => {
@@ -1822,6 +1830,49 @@ document.addEventListener('DOMContentLoaded', async () => {
             event.preventDefault();
             setScale(scale + (event.deltaY < 0 ? step : -step));
         }, { passive: false });
+
+        // Mobile: pinch-to-zoom (page viewport is locked with maximum-scale=1).
+        viewport.addEventListener('touchstart', (event) => {
+            if (usingGestureEvents || event.touches.length !== 2) {
+                return;
+            }
+            pinchStartDistance = touchDistance(event.touches[0], event.touches[1]);
+            pinchStartScale = scale;
+        }, { passive: true });
+
+        viewport.addEventListener('touchmove', (event) => {
+            if (usingGestureEvents || event.touches.length !== 2 || pinchStartDistance <= 0) {
+                return;
+            }
+            event.preventDefault();
+            const distance = touchDistance(event.touches[0], event.touches[1]);
+            setScale(pinchStartScale * (distance / pinchStartDistance), false);
+        }, { passive: false });
+
+        viewport.addEventListener('touchend', (event) => {
+            if (usingGestureEvents || event.touches.length >= 2 || pinchStartDistance <= 0) {
+                return;
+            }
+            pinchStartDistance = 0;
+            setScale(scale, true);
+        }, { passive: true });
+
+        // iOS Safari: prefer gesture* (has event.scale) so touch + gesture don't double-apply.
+        viewport.addEventListener('gesturestart', (event) => {
+            event.preventDefault();
+            usingGestureEvents = true;
+            pinchStartDistance = 0;
+            pinchStartScale = scale;
+        }, { passive: false });
+
+        viewport.addEventListener('gesturechange', (event) => {
+            event.preventDefault();
+            setScale(pinchStartScale * event.scale, false);
+        }, { passive: false });
+
+        viewport.addEventListener('gestureend', () => {
+            setScale(scale, true);
+        }, { passive: true });
 
         img.addEventListener('load', () => {
             apply();

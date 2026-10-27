@@ -32,6 +32,7 @@ class EntryScan extends Model
         'review_status',
         'reviewed_by',
         'reviewed_at',
+        'review_notes',
     ];
 
     protected function casts(): array

@@ -102,6 +102,9 @@
                         <div class="entry-card__body">
                             <p class="entry-card__title">{{ $scan->legalFile->reference_number }}</p>
                             <p class="entry-card__meta">{{ $scan->legalFile->purchaser ?: '—' }}</p>
+                            @if ($needsFix && filled($scan->review_notes))
+                                <p class="entry-card__note">{{ $scan->review_notes }}</p>
+                            @endif
                             <p class="entry-card__shelf">
                                 {{ \App\Support\LocalDate::format($scan->created_at, 'Y-m-d H:i') }}
                                 @if ($scan->shelf)
