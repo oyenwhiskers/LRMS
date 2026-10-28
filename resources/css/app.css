@@ -1041,6 +1041,12 @@
         --tw-ring-color: color-mix(in srgb, var(--color-gold-600) 88%, transparent);
     }
 
+    /* Grow with content instead of an inner scrollbar */
+    textarea.form-input[name="property"] {
+        field-sizing: content;
+        resize: none;
+    }
+
     .form-help {
         @apply mt-1.5 text-xs leading-5 text-stone-500;
     }
