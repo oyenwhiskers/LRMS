@@ -122,7 +122,8 @@ PROMPT;
             $lastBody = null;
             $lastModel = null;
             $busy = false;
-            $timeout = count($images) > 1 ? 90 : 60;
+            // ponytail: ~30s/page beyond the first; raise if large multi-page drafts time out
+            $timeout = min(300, 60 + (30 * max(0, count($images) - 1)));
 
             foreach ($this->candidateModels() as $model) {
                 $url = sprintf(

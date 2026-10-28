@@ -10,12 +10,11 @@
     class="entry-home"
     data-entry-flow
     data-analyze-url="{{ route('entry.scan.store') }}"
-    data-max-pages="3"
 >
     <div data-entry-heading>
         <p class="entry-stat__label" data-entry-step-label>Langkah 1 / 3</p>
         <h1 class="entry-page-title" data-entry-step-title>Ambil gambar</h1>
-        <p class="entry-page-lede" data-entry-step-lede>Ambil gambar dengan kamera, atau muat naik gambar dokumen. Boleh sampai 3 muka surat.</p>
+        <p class="entry-page-lede" data-entry-step-lede>Ambil gambar dengan kamera, atau muat naik gambar dokumen. Tambah muka surat jika perlu.</p>
     </div>
 
     <input type="file" accept="image/*" capture="environment" hidden data-entry-camera-input>
@@ -97,7 +96,6 @@
     root.dataset.bound = '1';
 
     const analyzeUrl = root.getAttribute('data-analyze-url');
-    const maxPages = Math.max(1, Number(root.getAttribute('data-max-pages') || 3));
     const cameraInput = root.querySelector('[data-entry-camera-input]');
     const uploadInput = root.querySelector('[data-entry-upload-input]');
     const video = root.querySelector('[data-entry-camera-video]');
@@ -139,7 +137,7 @@
     let pages = [];
 
     const copy = {
-        '1': { label: 'Langkah 1 / 3', title: 'Ambil gambar', lede: 'Ambil gambar dengan kamera, atau muat naik gambar dokumen. Boleh sampai 3 muka surat.' },
+        '1': { label: 'Langkah 1 / 3', title: 'Ambil gambar', lede: 'Ambil gambar dengan kamera, atau muat naik gambar dokumen. Tambah muka surat jika perlu.' },
         '1-live': { label: 'Langkah 1 / 3', title: 'Ambil gambar', lede: 'Halakan kamera ke dokumen, kemudian tekan Tangkap.' },
         '1-fallback': { label: 'Langkah 1 / 3', title: 'Ambil gambar', lede: 'Kamera tidak dapat dibuka. Muat naik gambar dokumen, atau cuba lagi melalui telefon.' },
         '1-pages': { label: 'Langkah 1 / 3', title: 'Semak muka surat', lede: 'Tambah muka surat jika maklumat tidak lengkap pada muka pertama, kemudian baca dengan AI.' },
@@ -203,11 +201,10 @@
             thumbsEl.appendChild(li);
         });
         if (pageCountEl) {
-            pageCountEl.textContent = pages.length >= maxPages
-                ? `${pages.length} / ${maxPages} muka surat (maksimum).`
-                : `${pages.length} / ${maxPages} muka surat. Tambah lagi jika perlu.`;
+            pageCountEl.textContent = pages.length === 1
+                ? '1 muka surat. Tambah lagi jika perlu.'
+                : `${pages.length} muka surat. Tambah lagi jika perlu.`;
         }
-        if (addPageBtn) addPageBtn.disabled = pages.length >= maxPages;
         if (analyzeBtn) analyzeBtn.disabled = pages.length === 0;
     };
 
@@ -220,7 +217,6 @@
     const addFiles = (fileList) => {
         const incoming = Array.from(fileList || []).filter((f) => f && f.type.startsWith('image/'));
         for (const file of incoming) {
-            if (pages.length >= maxPages) break;
             pages.push({ file, url: URL.createObjectURL(file) });
         }
         if (pages.length === 0) return;
@@ -408,7 +404,6 @@
     analyzeBtn?.addEventListener('click', (e) => { e.preventDefault(); processWithAi(); });
     addPageBtn?.addEventListener('click', (e) => {
         e.preventDefault();
-        if (pages.length >= maxPages) return;
         startCamera();
     });
     clearPagesBtn?.addEventListener('click', (e) => { e.preventDefault(); goIdle(); });
@@ -416,10 +411,6 @@
         e.preventDefault();
         if (!video.videoWidth) {
             if (status) status.textContent = 'Kamera belum sedia. Cuba lagi.';
-            return;
-        }
-        if (pages.length >= maxPages) {
-            showPages();
             return;
         }
         const canvas = document.createElement('canvas');

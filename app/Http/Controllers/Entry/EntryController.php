@@ -172,7 +172,7 @@ class EntryController extends Controller
     public function store(Request $request, GeminiCaseDraftService $gemini): JsonResponse
     {
         $data = $request->validate([
-            'documents' => ['required', 'array', 'min:1', 'max:3'],
+            'documents' => ['required', 'array', 'min:1'],
             'documents.*' => ['required', 'file', 'image', 'max:10240'],
         ]);
 

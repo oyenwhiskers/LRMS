@@ -118,7 +118,7 @@ class EntryScanRegisterTest extends TestCase
             ->assertSee('data-entry-open-upload', false)
             ->assertSee('data-entry-upload-input', false)
             ->assertSee('data-entry-analyze', false)
-            ->assertSee('data-max-pages="3"', false)
+            ->assertSee('data-entry-add-page', false)
             ->assertSee('Muat naik dokumen', false);
     }
 
