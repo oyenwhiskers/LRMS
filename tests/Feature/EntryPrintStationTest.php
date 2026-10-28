@@ -159,8 +159,9 @@ class EntryPrintStationTest extends TestCase
             ->assertOk()
             ->assertSee('Dicetak', false)
             ->assertSee('Cetak semula', false)
-            ->assertSee('Tanda belum dicetak', false)
+            ->assertSee('Tanda belum', false)
             ->assertSee('Tanda dicetak', false)
+            ->assertSee('Muat semula', false)
             ->assertSee('CON/2019/0101', false);
 
         $this->actingAs($station)

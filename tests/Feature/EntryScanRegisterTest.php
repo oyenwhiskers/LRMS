@@ -910,6 +910,7 @@ class EntryScanRegisterTest extends TestCase
             ->assertOk()
             ->assertSee('data-file-label-type="document"', false)
             ->assertSee(route('entry.scan.document', $scan), false)
+            ->assertSee('data-doc-zoom', false)
             ->assertSee('Dokumen', false);
 
         $response = $this->actingAs($owner)

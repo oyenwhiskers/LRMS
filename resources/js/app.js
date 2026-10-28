@@ -1552,11 +1552,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             showPreview(selectedType);
 
             previewWrap?.classList.toggle('file-label-modal__preview-wrap--form', isData);
+            previewWrap?.classList.toggle('file-label-modal__preview-wrap--document', isDocument);
 
             const overlayOpen = ! modal.closest('[data-modal]')?.classList.contains('hidden');
             // Load scan image when visible: Dokumen tab, or operator review (always under data).
             if (overlayOpen && (isDocument || (isData && modal.classList.contains('operator-review-modal')))) {
                 ensureDocumentLoaded();
+                if (isDocument) {
+                    // Refit zoom after the dokumen pane becomes visible.
+                    requestAnimationFrame(() => {
+                        documentImage?.dispatchEvent(new Event('load'));
+                    });
+                }
             }
 
             if (printButton) {
@@ -1812,6 +1819,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         let pinchStartDistance = 0;
         let pinchStartScale = 1;
         let usingGestureEvents = false;
+        let panLastX = 0;
+        let panLastY = 0;
+        let panning = false;
+        let panMoved = false;
+        let lastTapAt = 0;
+
+        const endPan = () => {
+            panning = false;
+            viewport.classList.remove('is-panning');
+        };
 
         zoomIn?.addEventListener('click', () => setScale(scale + step));
         zoomOut?.addEventListener('click', () => setScale(scale - step));
@@ -1823,38 +1840,135 @@ document.addEventListener('DOMContentLoaded', async () => {
         pagePrev?.addEventListener('click', () => showPage(pageIndex - 1));
         pageNext?.addEventListener('click', () => showPage(pageIndex + 1));
 
+        // Wheel / trackpad over the image zooms (no Ctrl required).
         viewport.addEventListener('wheel', (event) => {
-            if (! (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            if (event.ctrlKey || event.metaKey) {
+                setScale(scale * Math.exp(-event.deltaY * 0.01), false);
                 return;
             }
-            event.preventDefault();
             setScale(scale + (event.deltaY < 0 ? step : -step));
         }, { passive: false });
 
-        // Mobile: pinch-to-zoom (page viewport is locked with maximum-scale=1).
-        viewport.addEventListener('touchstart', (event) => {
-            if (usingGestureEvents || event.touches.length !== 2) {
+        viewport.addEventListener('dblclick', (event) => {
+            event.preventDefault();
+            if (scale > 1) {
+                setScale(1);
+                viewport.scrollLeft = 0;
+                viewport.scrollTop = 0;
+            } else {
+                setScale(2);
+            }
+        });
+
+        viewport.addEventListener('pointerdown', (event) => {
+            if (event.pointerType === 'touch' || event.button !== 0) {
                 return;
             }
-            pinchStartDistance = touchDistance(event.touches[0], event.touches[1]);
-            pinchStartScale = scale;
+            panning = true;
+            panMoved = false;
+            panLastX = event.clientX;
+            panLastY = event.clientY;
+            viewport.classList.add('is-panning');
+            viewport.setPointerCapture?.(event.pointerId);
+        });
+
+        viewport.addEventListener('pointermove', (event) => {
+            if (! panning || event.pointerType === 'touch') {
+                return;
+            }
+            const dx = event.clientX - panLastX;
+            const dy = event.clientY - panLastY;
+            if (dx !== 0 || dy !== 0) {
+                panMoved = true;
+            }
+            panLastX = event.clientX;
+            panLastY = event.clientY;
+            viewport.scrollLeft -= dx;
+            viewport.scrollTop -= dy;
+        });
+
+        viewport.addEventListener('pointerup', endPan);
+        viewport.addEventListener('pointercancel', endPan);
+
+        // Mobile: pinch-to-zoom + one-finger pan (page zoom locked with maximum-scale=1).
+        viewport.addEventListener('touchstart', (event) => {
+            if (usingGestureEvents) {
+                return;
+            }
+            if (event.touches.length === 2) {
+                panning = false;
+                panMoved = false;
+                pinchStartDistance = touchDistance(event.touches[0], event.touches[1]);
+                pinchStartScale = scale;
+                return;
+            }
+            if (event.touches.length === 1) {
+                pinchStartDistance = 0;
+                panning = true;
+                panMoved = false;
+                panLastX = event.touches[0].clientX;
+                panLastY = event.touches[0].clientY;
+            }
         }, { passive: true });
 
         viewport.addEventListener('touchmove', (event) => {
-            if (usingGestureEvents || event.touches.length !== 2 || pinchStartDistance <= 0) {
+            if (usingGestureEvents) {
                 return;
             }
-            event.preventDefault();
-            const distance = touchDistance(event.touches[0], event.touches[1]);
-            setScale(pinchStartScale * (distance / pinchStartDistance), false);
+            if (event.touches.length === 2 && pinchStartDistance > 0) {
+                event.preventDefault();
+                const distance = touchDistance(event.touches[0], event.touches[1]);
+                setScale(pinchStartScale * (distance / pinchStartDistance), false);
+                return;
+            }
+            if (event.touches.length === 1 && panning) {
+                event.preventDefault();
+                const x = event.touches[0].clientX;
+                const y = event.touches[0].clientY;
+                const dx = x - panLastX;
+                const dy = y - panLastY;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+                    panMoved = true;
+                }
+                panLastX = x;
+                panLastY = y;
+                viewport.scrollLeft -= dx;
+                viewport.scrollTop -= dy;
+            }
         }, { passive: false });
 
         viewport.addEventListener('touchend', (event) => {
-            if (usingGestureEvents || event.touches.length >= 2 || pinchStartDistance <= 0) {
+            if (usingGestureEvents) {
                 return;
             }
-            pinchStartDistance = 0;
-            setScale(scale, true);
+            if (event.touches.length >= 2) {
+                return;
+            }
+            if (pinchStartDistance > 0) {
+                pinchStartDistance = 0;
+                setScale(scale, true);
+                panning = false;
+                return;
+            }
+            const wasPan = panMoved;
+            panning = false;
+            if (wasPan || event.changedTouches.length !== 1) {
+                return;
+            }
+            const now = Date.now();
+            if (now - lastTapAt < 320) {
+                lastTapAt = 0;
+                if (scale > 1) {
+                    setScale(1);
+                    viewport.scrollLeft = 0;
+                    viewport.scrollTop = 0;
+                } else {
+                    setScale(2);
+                }
+            } else {
+                lastTapAt = now;
+            }
         }, { passive: true });
 
         // iOS Safari: prefer gesture* (has event.scale) so touch + gesture don't double-apply.
@@ -1862,6 +1976,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             event.preventDefault();
             usingGestureEvents = true;
             pinchStartDistance = 0;
+            panning = false;
             pinchStartScale = scale;
         }, { passive: false });
 
@@ -1871,6 +1986,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, { passive: false });
 
         viewport.addEventListener('gestureend', () => {
+            usingGestureEvents = false;
             setScale(scale, true);
         }, { passive: true });
 
@@ -1938,7 +2054,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         const printSelectedLabel = (filter) => (
-            filter === 'printed' ? 'Cetak semula dipilih' : 'Cetak dipilih'
+            filter === 'printed' ? 'Cetak semula' : 'Cetak'
         );
 
         const allSelectBoxes = () => [...(listEl?.querySelectorAll('[data-print-station-select]') || [])];

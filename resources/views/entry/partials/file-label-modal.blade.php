@@ -5,7 +5,12 @@
     /** @var \Illuminate\Support\Collection<int, \App\Models\CaseCategory>|null $categories */
     $scan = $scan ?? null;
     $categories = $categories ?? collect();
-    $hasDocument = $scan !== null && $scan->documentPaths() !== [];
+    $documentPaths = $scan !== null ? $scan->documentPaths() : [];
+    $hasDocument = $documentPaths !== [];
+    $documentUrls = array_map(
+        fn (int $index): string => route('entry.scan.document', $scan).'?page='.($index + 1),
+        array_keys($documentPaths),
+    );
     $canEdit = $scan !== null && $categories->isNotEmpty();
     $openLabel = (string) session('open_file_label') === (string) $file->id
         || (string) old('_legal_file_id') === (string) $file->id;
@@ -100,6 +105,7 @@
             @class([
                 'file-label-modal__preview-wrap',
                 'file-label-modal__preview-wrap--form' => $initialType === 'data',
+                'file-label-modal__preview-wrap--document' => $initialType === 'document',
             ])
             data-file-label-preview-wrap
         >
@@ -146,12 +152,35 @@
                 </div>
             @endif
             @if ($hasDocument)
-                <div @class(['file-label-modal__preview', 'file-label-modal__preview--document', 'hidden' => $initialType !== 'document']) data-file-label-preview="document">
-                    <img
-                        alt="Gambar asal imbasan {{ $file->reference_number }}"
-                        data-file-label-document
-                        data-src="{{ route('entry.scan.document', $scan) }}"
-                    >
+                <div
+                    @class(['file-label-modal__preview', 'file-label-modal__preview--document', 'hidden' => $initialType !== 'document'])
+                    data-file-label-preview="document"
+                    data-doc-zoom
+                    data-doc-pages='@json($documentUrls)'
+                >
+                    <div class="operator-review-doc-zoom__toolbar" role="group" aria-label="Zum dokumen">
+                        <span class="operator-review-doc-zoom__caption">Dokumen</span>
+                        @if (count($documentUrls) > 1)
+                            <div class="operator-review-doc-pages" role="group" aria-label="Muka surat">
+                                <button type="button" class="operator-review-doc-zoom__btn" data-doc-page-prev aria-label="Muka sebelumnya">‹</button>
+                                <span class="operator-review-doc-pages__label" data-doc-page-label>1 / {{ count($documentUrls) }}</span>
+                                <button type="button" class="operator-review-doc-zoom__btn" data-doc-page-next aria-label="Muka seterusnya">›</button>
+                            </div>
+                        @endif
+                        <button type="button" class="operator-review-doc-zoom__btn" data-doc-zoom-out aria-label="Zum keluar">−</button>
+                        <span class="operator-review-doc-zoom__label" data-doc-zoom-label>Muat</span>
+                        <button type="button" class="operator-review-doc-zoom__btn" data-doc-zoom-in aria-label="Zum masuk">+</button>
+                        <button type="button" class="operator-review-doc-zoom__btn operator-review-doc-zoom__btn--reset" data-doc-zoom-reset>Reset</button>
+                    </div>
+                    <div class="operator-review-doc-zoom__viewport" data-doc-zoom-viewport>
+                        <img
+                            class="operator-review-doc-zoom__img"
+                            alt="Gambar asal imbasan {{ $file->reference_number }}"
+                            data-file-label-document
+                            data-doc-zoom-img
+                            data-src="{{ $documentUrls[0] }}"
+                        >
+                    </div>
                 </div>
             @endif
             <p @class(['file-label-modal__hint', 'hidden' => ! in_array($initialType, ['front', 'side'], true)]) data-file-label-hint-for="label">Pratonton · saiz sebenar semasa cetak / PDF</p>

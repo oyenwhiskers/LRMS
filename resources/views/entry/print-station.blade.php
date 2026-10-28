@@ -11,7 +11,7 @@
         'all' => 'job',
         default => 'belum dicetak',
     };
-    $printSelectedLabel = $statusFilter === 'printed' ? 'Cetak semula dipilih' : 'Cetak dipilih';
+    $printSelectedLabel = $statusFilter === 'printed' ? 'Cetak semula' : 'Cetak';
     $advancedActive = $statusFilter !== 'pending'
         || $reviewFilter !== 'all'
         || filled($filters['requested_by'] ?? null);
@@ -116,19 +116,32 @@
         @endif
 
         <div class="entry-print-station__actions">
-            <button class="btn-secondary" type="button" data-print-station-refresh>Muat semula</button>
+            <button
+                class="entry-print-station__icon-btn"
+                type="button"
+                data-print-station-refresh
+                aria-label="Muat semula"
+                title="Muat semula"
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0 1 12.7-5.4M19.5 12a7.5 7.5 0 0 1-12.7 5.4"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.2 4.8V8.5h-3.7M7.8 19.2v-3.7h3.7"/>
+                </svg>
+            </button>
             <button
                 class="btn-secondary"
                 type="button"
                 data-print-station-mark-pending
+                title="Tanda pilihan sebagai belum dicetak"
                 disabled
             >
-                Tanda belum dicetak
+                Tanda belum
             </button>
             <button
                 class="btn-secondary"
                 type="button"
                 data-print-station-mark-printed
+                title="Tanda pilihan sebagai dicetak"
                 disabled
             >
                 Tanda dicetak
