@@ -264,6 +264,58 @@ class EntryPrintStationTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_print_station_paginates_jobs(): void
+    {
+        $operator = User::factory()->entry()->create();
+        $station = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+
+        $files = [];
+        for ($i = 1; $i <= 21; $i++) {
+            $files[] = $this->makeFile($category, $operator, sprintf('CON/2019/%04d', $i));
+        }
+
+        foreach ($files as $file) {
+            EntryPrintJob::create([
+                'legal_file_id' => $file->id,
+                'requested_by' => $operator->id,
+                'type' => EntryPrintJob::TYPE_FRONT,
+                'status' => EntryPrintJob::STATUS_PENDING,
+            ]);
+        }
+
+        $this->actingAs($station)
+            ->get(route('entry.print-station'))
+            ->assertOk()
+            ->assertSee('CON/2019/0001', false)
+            ->assertSee('CON/2019/0020', false)
+            ->assertDontSee('CON/2019/0021', false)
+            ->assertSee('?page=2', false);
+
+        $this->actingAs($station)
+            ->get(route('entry.print-station', ['page' => 2]))
+            ->assertOk()
+            ->assertSee('CON/2019/0021', false)
+            ->assertDontSee('CON/2019/0001', false);
+
+        $pageOne = $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index'))
+            ->assertOk()
+            ->assertJsonCount(20, 'jobs')
+            ->assertJsonPath('total', 21)
+            ->assertJsonPath('current_page', 1)
+            ->assertJsonPath('last_page', 2);
+
+        $this->assertNotSame('', $pageOne->json('pagination'));
+
+        $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index', ['page' => 2]))
+            ->assertOk()
+            ->assertJsonCount(1, 'jobs')
+            ->assertJsonPath('jobs.0.reference_number', 'CON/2019/0021')
+            ->assertJsonPath('current_page', 2);
+    }
+
     public function test_entry_cannot_enqueue_label_for_file_they_do_not_own(): void
     {
         $owner = User::factory()->entry()->create();

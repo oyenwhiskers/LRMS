@@ -2032,9 +2032,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const previewDeleteBtn = previewModal?.querySelector('[data-print-preview-delete]');
         const previewMarkStatusBtn = previewModal?.querySelector('[data-print-preview-mark-status]');
         const desktopFilterQuery = window.matchMedia('(min-width: 900px)');
+        const pagerEl = station.querySelector('[data-print-station-pager]');
         let jobs = [];
         let busy = false;
         let previewJob = null;
+        let currentPage = Number(new URLSearchParams(window.location.search).get('page')) || 1;
+        if (! Number.isFinite(currentPage) || currentPage < 1) {
+            currentPage = 1;
+        }
 
         const jobIsPending = (job) => job?.is_pending !== false && job?.status !== 'printed';
 
@@ -2210,6 +2215,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
+            currentPage = 1;
             reloadJobs();
         };
 
@@ -2264,7 +2270,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         };
 
-        const renderJobs = (nextJobs, pendingCount = null) => {
+        const renderPager = (html = '') => {
+            if (! pagerEl) {
+                return;
+            }
+
+            pagerEl.innerHTML = html || '';
+        };
+
+        const renderJobs = (nextJobs, pendingCount = null, total = null, paginationHtml = '') => {
             const previouslySelected = new Set(
                 rowCheckboxes()
                     .filter((box) => box.checked)
@@ -2273,7 +2287,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             jobs = nextJobs;
             const filter = statusFilter();
             if (countEl) {
-                countEl.textContent = String(jobs.length);
+                countEl.textContent = String(total ?? jobs.length);
             }
             if (countLabelEl) {
                 countLabelEl.textContent = countLabelFor(filter);
@@ -2281,6 +2295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (pendingCountEl && pendingCount !== null) {
                 pendingCountEl.textContent = String(pendingCount);
             }
+            renderPager(paginationHtml);
 
             if (! listEl) {
                 return;
@@ -2430,6 +2445,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 url.searchParams.set('q', q);
             }
             url.searchParams.set('status', statusFilter());
+            if (currentPage > 1) {
+                url.searchParams.set('page', String(currentPage));
+            }
 
             const response = await fetch(url.pathname + url.search, {
                 headers: {
@@ -2443,9 +2461,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const payload = await response.json();
+            if (typeof payload.current_page === 'number' && payload.current_page > 0) {
+                currentPage = payload.current_page;
+            }
             renderJobs(
                 Array.isArray(payload.jobs) ? payload.jobs : [],
                 typeof payload.pending_count === 'number' ? payload.pending_count : null,
+                typeof payload.total === 'number' ? payload.total : null,
+                typeof payload.pagination === 'string' ? payload.pagination : '',
             );
         };
 

@@ -16,16 +16,16 @@ use Illuminate\View\View;
 
 class EntryPrintStationController extends Controller
 {
+    private const PER_PAGE = 20;
+
     public function index(Request $request): View
     {
         $filters = $this->validatedFilters($request);
-        $jobs = $this->jobsQuery($filters)
-            ->with([
-                'legalFile:id,reference_number,purchaser,file_identifier,qr_identifier',
-                'legalFile.entryScan',
-                'requester:id,name',
-            ])
-            ->get();
+        $jobs = $this->paginatedJobs($filters, [
+            'legalFile:id,reference_number,purchaser,file_identifier,qr_identifier',
+            'legalFile.entryScan',
+            'requester:id,name',
+        ]);
 
         $operators = User::query()
             ->whereIn('id', EntryPrintJob::query()
@@ -51,18 +51,21 @@ class EntryPrintStationController extends Controller
     {
         $filters = $this->validatedFilters($request);
 
-        $jobs = $this->jobsQuery($filters)
-            ->with([
-                'legalFile:id,reference_number,purchaser,file_identifier',
-                'legalFile.entryScan',
-                'requester:id,name',
-            ])
-            ->get()
-            ->map(fn (EntryPrintJob $job) => $this->jobPayload($job));
+        $jobs = $this->paginatedJobs($filters, [
+            'legalFile:id,reference_number,purchaser,file_identifier',
+            'legalFile.entryScan',
+            'requester:id,name',
+        ]);
 
         return response()->json([
-            'jobs' => $jobs,
+            'jobs' => $jobs->getCollection()
+                ->map(fn (EntryPrintJob $job) => $this->jobPayload($job))
+                ->values(),
             'pending_count' => EntryPrintJob::query()->where('status', EntryPrintJob::STATUS_PENDING)->count(),
+            'total' => $jobs->total(),
+            'current_page' => $jobs->currentPage(),
+            'last_page' => $jobs->lastPage(),
+            'pagination' => $jobs->hasPages() ? (string) $jobs->links() : '',
         ]);
     }
 
@@ -296,13 +299,37 @@ class EntryPrintStationController extends Controller
             );
 
         return match ($status) {
-            'printed' => $query->orderByDesc('printed_at')->limit(50),
+            'printed' => $query->orderByDesc('printed_at'),
             'all' => $query
                 ->orderByRaw("case when status = ? then 0 else 1 end", [EntryPrintJob::STATUS_PENDING])
-                ->orderByDesc('updated_at')
-                ->limit(100),
+                ->orderByDesc('updated_at'),
             default => $query->orderBy('created_at'),
         };
+    }
+
+    /**
+     * @param  array{q: string, status: string, review: string, requested_by: int|null}  $filters
+     * @param  list<string>  $with
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator<int, EntryPrintJob>
+     */
+    private function paginatedJobs(array $filters, array $with)
+    {
+        $paginator = $this->jobsQuery($filters)
+            ->with($with)
+            ->paginate(self::PER_PAGE)
+            ->withPath(route('entry.print-station'))
+            ->withQueryString();
+
+        // After mark/print, the current page can become empty — snap back.
+        if ($paginator->isEmpty() && $paginator->currentPage() > 1 && $paginator->lastPage() >= 1) {
+            $paginator = $this->jobsQuery($filters)
+                ->with($with)
+                ->paginate(self::PER_PAGE, ['*'], 'page', $paginator->lastPage())
+                ->withPath(route('entry.print-station'))
+                ->withQueryString();
+        }
+
+        return $paginator;
     }
 
     /**

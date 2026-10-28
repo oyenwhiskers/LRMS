@@ -4926,6 +4926,14 @@ a.entry-card--action:focus-visible {
     min-width: 0;
 }
 
+.entry-print-station__pager {
+    margin-top: 0.75rem;
+}
+
+.entry-print-station__pager:empty {
+    display: none;
+}
+
 .entry-print-station__cards {
     display: grid;
     gap: 0.55rem;

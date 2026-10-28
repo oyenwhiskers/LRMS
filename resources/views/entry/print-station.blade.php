@@ -33,7 +33,7 @@
             <p class="entry-page-lede">Job label dari operator Entry. Tapis, tandakan, lalu cetak atau cetak semula.</p>
         </div>
         <p class="entry-print-station__count">
-            <span data-print-station-count>{{ $jobs->count() }}</span>
+            <span data-print-station-count>{{ $jobs->total() }}</span>
             <span data-print-station-count-label>{{ $countLabel }}</span>
             @if ($statusFilter !== 'pending')
                 <span class="entry-print-station__count-pending">· <span data-print-station-pending-count>{{ $pendingCount }}</span> menunggu</span>
@@ -297,6 +297,12 @@
             </div>
         @endif
     </section>
+
+    <div class="entry-print-station__pager" data-print-station-pager>
+        @if ($jobs->hasPages())
+            {{ $jobs->links() }}
+        @endif
+    </div>
 </div>
 
 <div class="modal-overlay hidden" data-modal="entry-print-station-filters" aria-hidden="true">
