@@ -179,6 +179,7 @@
                             data-file-label-document
                             data-doc-zoom-img
                             data-src="{{ $documentUrls[0] }}"
+                            draggable="false"
                         >
                     </div>
                 </div>

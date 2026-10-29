@@ -1,3 +1,11 @@
+import {
+    docZoomAnchorScroll,
+    docZoomCanPan,
+    docZoomCenterScroll,
+    docZoomImageMargin,
+    docZoomOverflows,
+} from './doc-zoom-layout.js';
+
 const cleanupLegacyPwa = async () => {
     if (!('serviceWorker' in navigator) || !('caches' in window)) {
         return;
@@ -1761,6 +1769,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         let scale = 1;
         let pageIndex = 0;
 
+        img.draggable = false;
+        img.addEventListener('dragstart', (event) => event.preventDefault());
+
         const syncPageChrome = () => {
             if (pageLabel) {
                 pageLabel.textContent = `${pageIndex + 1} / ${pages.length}`;
@@ -1769,16 +1780,69 @@ document.addEventListener('DOMContentLoaded', async () => {
             pageNext?.toggleAttribute('disabled', pageIndex >= pages.length - 1 || pages.length <= 1);
         };
 
-        const apply = () => {
+        const canPanNow = () => docZoomCanPan(
+            scale,
+            viewport.scrollWidth,
+            viewport.clientWidth,
+            viewport.scrollHeight,
+            viewport.clientHeight,
+        );
+
+        const apply = ({ center = false, focus = null } = {}) => {
             const natW = img.naturalWidth;
             const natH = img.naturalHeight;
             if (natW > 0 && natH > 0) {
+                const beforeW = img.offsetWidth;
+                const beforeH = img.offsetHeight;
+                let focusRel = null;
+                if (focus && beforeW > 0 && beforeH > 0) {
+                    const imgRect = img.getBoundingClientRect();
+                    const vpRect = viewport.getBoundingClientRect();
+                    focusRel = {
+                        relX: imgRect.width > 0 ? (focus.clientX - imgRect.left) / imgRect.width : 0.5,
+                        relY: imgRect.height > 0 ? (focus.clientY - imgRect.top) / imgRect.height : 0.5,
+                        cursorX: focus.clientX - vpRect.left,
+                        cursorY: focus.clientY - vpRect.top,
+                    };
+                }
+
                 const fit = Math.min(viewport.clientWidth / natW, viewport.clientHeight / natH) || 1;
                 const width = Math.max(1, natW * fit * scale);
+                const height = Math.max(1, width * (natH / natW));
                 img.style.width = `${width}px`;
                 img.style.height = 'auto';
                 img.style.maxWidth = 'none';
                 img.style.maxHeight = 'none';
+
+                const overflows = docZoomOverflows(width, height, viewport.clientWidth, viewport.clientHeight);
+                img.style.margin = docZoomImageMargin(overflows);
+
+                if (! overflows) {
+                    viewport.scrollLeft = 0;
+                    viewport.scrollTop = 0;
+                } else if (focusRel) {
+                    // Layout must settle before offsetWidth reflects the new size.
+                    requestAnimationFrame(() => {
+                        viewport.scrollLeft = docZoomAnchorScroll(
+                            focusRel.relX,
+                            img.offsetWidth,
+                            focusRel.cursorX - img.offsetLeft,
+                            viewport.clientWidth,
+                        );
+                        viewport.scrollTop = docZoomAnchorScroll(
+                            focusRel.relY,
+                            img.offsetHeight,
+                            focusRel.cursorY - img.offsetTop,
+                            viewport.clientHeight,
+                        );
+                    });
+                } else if (center) {
+                    // Layout must settle before scrollWidth/Height reflect the new size.
+                    requestAnimationFrame(() => {
+                        viewport.scrollLeft = docZoomCenterScroll(viewport.scrollWidth, viewport.clientWidth);
+                        viewport.scrollTop = docZoomCenterScroll(viewport.scrollHeight, viewport.clientHeight);
+                    });
+                }
             }
 
             if (label) {
@@ -1786,13 +1850,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             zoomOut?.toggleAttribute('disabled', scale <= min);
             zoomIn?.toggleAttribute('disabled', scale >= max);
+            viewport.classList.toggle('is-pannable', canPanNow() || scale > 1);
         };
 
-        const setScale = (next, snap = true) => {
+        const setScale = (next, snap = true, focus = null) => {
+            const prev = scale;
             const clamped = Math.min(max, Math.max(min, next));
             scale = snap ? Math.round(clamped / step) * step : clamped;
             scale = Math.min(max, Math.max(min, scale));
-            apply();
+            if (scale === prev) {
+                return;
+            }
+            // Focus point (cursor / pinch mid) wins; else center once when leaving fit.
+            apply({
+                focus,
+                center: ! focus && snap && prev <= 1 && scale > 1,
+            });
         };
 
         const showPage = (index) => {
@@ -1830,8 +1903,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             viewport.classList.remove('is-panning');
         };
 
-        zoomIn?.addEventListener('click', () => setScale(scale + step));
-        zoomOut?.addEventListener('click', () => setScale(scale - step));
+        const viewportCenterFocus = () => {
+            const rect = viewport.getBoundingClientRect();
+
+            return {
+                clientX: rect.left + rect.width / 2,
+                clientY: rect.top + rect.height / 2,
+            };
+        };
+
+        zoomIn?.addEventListener('click', () => setScale(scale + step, true, viewportCenterFocus()));
+        zoomOut?.addEventListener('click', () => setScale(scale - step, true, viewportCenterFocus()));
         zoomReset?.addEventListener('click', () => {
             setScale(1);
             viewport.scrollLeft = 0;
@@ -1840,14 +1922,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         pagePrev?.addEventListener('click', () => showPage(pageIndex - 1));
         pageNext?.addEventListener('click', () => showPage(pageIndex + 1));
 
-        // Wheel / trackpad over the image zooms (no Ctrl required).
+        // Wheel / trackpad over the image zooms toward the cursor (no Ctrl required).
         viewport.addEventListener('wheel', (event) => {
             event.preventDefault();
+            const focus = { clientX: event.clientX, clientY: event.clientY };
             if (event.ctrlKey || event.metaKey) {
-                setScale(scale * Math.exp(-event.deltaY * 0.01), false);
+                setScale(scale * Math.exp(-event.deltaY * 0.01), false, focus);
                 return;
             }
-            setScale(scale + (event.deltaY < 0 ? step : -step));
+            setScale(scale + (event.deltaY < 0 ? step : -step), true, focus);
         }, { passive: false });
 
         viewport.addEventListener('dblclick', (event) => {
@@ -1857,7 +1940,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 viewport.scrollLeft = 0;
                 viewport.scrollTop = 0;
             } else {
-                setScale(2);
+                setScale(2, true, { clientX: event.clientX, clientY: event.clientY });
             }
         });
 
@@ -1865,6 +1948,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (event.pointerType === 'touch' || event.button !== 0) {
                 return;
             }
+            if (! canPanNow()) {
+                return;
+            }
+            event.preventDefault();
             panning = true;
             panMoved = false;
             panLastX = event.clientX;
@@ -1890,8 +1977,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         viewport.addEventListener('pointerup', endPan);
         viewport.addEventListener('pointercancel', endPan);
+        viewport.addEventListener('lostpointercapture', endPan);
 
-        // Mobile: pinch-to-zoom + one-finger pan (page zoom locked with maximum-scale=1).
+        const touchMidpoint = (a, b) => ({
+            clientX: (a.clientX + b.clientX) / 2,
+            clientY: (a.clientY + b.clientY) / 2,
+        });
+
+        // Mobile: pinch-to-zoom toward midpoint + one-finger pan (page zoom locked with maximum-scale=1).
         viewport.addEventListener('touchstart', (event) => {
             if (usingGestureEvents) {
                 return;
@@ -1919,7 +2012,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (event.touches.length === 2 && pinchStartDistance > 0) {
                 event.preventDefault();
                 const distance = touchDistance(event.touches[0], event.touches[1]);
-                setScale(pinchStartScale * (distance / pinchStartDistance), false);
+                setScale(
+                    pinchStartScale * (distance / pinchStartDistance),
+                    false,
+                    touchMidpoint(event.touches[0], event.touches[1]),
+                );
                 return;
             }
             if (event.touches.length === 1 && panning) {
@@ -1959,12 +2056,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const now = Date.now();
             if (now - lastTapAt < 320) {
                 lastTapAt = 0;
+                const tap = event.changedTouches[0];
                 if (scale > 1) {
                     setScale(1);
                     viewport.scrollLeft = 0;
                     viewport.scrollTop = 0;
                 } else {
-                    setScale(2);
+                    setScale(2, true, { clientX: tap.clientX, clientY: tap.clientY });
                 }
             } else {
                 lastTapAt = now;
@@ -1982,7 +2080,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         viewport.addEventListener('gesturechange', (event) => {
             event.preventDefault();
-            setScale(pinchStartScale * event.scale, false);
+            setScale(pinchStartScale * event.scale, false, {
+                clientX: event.clientX,
+                clientY: event.clientY,
+            });
         }, { passive: false });
 
         viewport.addEventListener('gestureend', () => {

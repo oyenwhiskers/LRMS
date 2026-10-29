@@ -40,8 +40,13 @@ class LegalFile extends Model
 
     public const TYPE_DOG = 'dog';
 
+    public const TYPE_DOT = 'dot';
+
     public const TYPE_POA = 'poa';
 
+    public const TYPE_SUBLEASE = 'sublease';
+
+    /** @deprecated Use TYPE_SUBLEASE; kept for reading legacy rows before backfill. */
     public const TYPE_SUBLIST = 'sublist';
 
     public const TYPE_COPY_TITLE = 'copy_title';
@@ -292,8 +297,9 @@ class LegalFile extends Model
             self::TYPE_DOA,
             self::TYPE_DOA_POST,
             self::TYPE_DOG,
+            self::TYPE_DOT,
             self::TYPE_POA,
-            self::TYPE_SUBLIST,
+            self::TYPE_SUBLEASE,
             self::TYPE_COPY_TITLE,
             self::TYPE_RECEIPT_REASSIGNMENT,
         ];
@@ -301,12 +307,28 @@ class LegalFile extends Model
 
     public static function isSnpType(string $type): bool
     {
-        return in_array($type, self::snpTypes(), true);
+        return in_array(self::normalizeCaseTypeCode($type), self::snpTypes(), true);
+    }
+
+    /**
+     * Canonical case_type code. Maps legacy misspellings (e.g. sublist → sublease).
+     */
+    public static function normalizeCaseTypeCode(string $raw): string
+    {
+        $type = strtolower(trim($raw));
+
+        return match ($type) {
+            self::TYPE_SUBLIST, 'sublist agreement', 'sublease agreement' => self::TYPE_SUBLEASE,
+            'deed of trust', 'deeds of trust' => self::TYPE_DOT,
+            default => $type,
+        };
     }
 
     /** Form panel family: loan | litigation | snp */
     public static function formPanel(string $type): string
     {
+        $type = self::normalizeCaseTypeCode($type);
+
         return match (true) {
             $type === self::TYPE_LOAN => self::TYPE_LOAN,
             $type === self::TYPE_LITIGATION => self::TYPE_LITIGATION,
@@ -324,8 +346,9 @@ class LegalFile extends Model
             self::TYPE_DOA => 'Deeds of assignment',
             self::TYPE_DOA_POST => 'Deeds of assignment (P.O.S.T)',
             self::TYPE_DOG => 'Deeds of gift',
+            self::TYPE_DOT => 'Deeds of trust',
             self::TYPE_POA => 'Power of attorney',
-            self::TYPE_SUBLIST => 'Sublist agreement',
+            self::TYPE_SUBLEASE, self::TYPE_SUBLIST => 'Sublease Agreement',
             self::TYPE_COPY_TITLE => 'Copy title',
             self::TYPE_RECEIPT_REASSIGNMENT => 'Receipt and Reassignment',
             default => str($type)->headline()->toString(),

@@ -495,8 +495,9 @@ class EntryController extends Controller
      */
     private function validatedCase(Request $request, ?LegalFile $file = null): array
     {
-        $caseType = (string) $request->input('case_type');
+        $caseType = LegalFile::normalizeCaseTypeCode((string) $request->input('case_type'));
         $request->merge([
+            'case_type' => $caseType,
             'reference_number' => preg_replace('/\s+/', '', trim((string) $request->input('reference_number', ''))) ?: '',
         ]);
 

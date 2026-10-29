@@ -18,8 +18,9 @@
     $navOperators = request()->routeIs('entry.operators.*');
     $navPrint = request()->routeIs('entry.print-station');
     $navAi = request()->routeIs('entry.ai-usage.*');
+    $navProd = request()->routeIs('entry.productivity.*');
     $navManageOps = request()->routeIs('entry.manage-operators.*');
-    $navMore = $navPrint || $navAi || $navManageOps;
+    $navMore = $navPrint || $navAi || $navProd || $navManageOps;
 @endphp
 <body class="entry-app">
     <div class="entry-app__shell">
@@ -84,6 +85,12 @@
                                 </span>
                                 AI
                             </a>
+                            <a class="entry-app__more-item {{ $navProd ? 'is-active' : '' }}" href="{{ route('entry.productivity.index') }}" role="menuitem">
+                                <span class="entry-app__more-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 19.5h16.5M6 16.5V9.75M12 16.5V4.5M18 16.5v-4.5"/></svg>
+                                </span>
+                                Produktiviti
+                            </a>
                             <a class="entry-app__more-item {{ $navManageOps ? 'is-active' : '' }}" href="{{ route('entry.manage-operators.index') }}" role="menuitem">
                                 <span class="entry-app__more-icon" aria-hidden="true">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 11-6 0 3 3 0 016 0zM4.5 19.5a7.5 7.5 0 0115 0V20.25H4.5V19.5zM16.5 8.25l1.5 1.5 3-3"/></svg>
@@ -118,6 +125,12 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3.75l1.35 3.9 3.9 1.35-3.9 1.35L12 14.25l-1.35-3.9-3.9-1.35 3.9-1.35L12 3.75zM6.75 15.75l.7 2.05 2.05.7-2.05.7-.7 2.05-.7-2.05-2.05-.7 2.05-.7.7-2.05zM17.25 14.25l.55 1.6 1.6.55-1.6.55-.55 1.6-.55-1.6-1.6-.55 1.6-.55.55-1.6z"/></svg>
                         </span>
                         <span>AI</span>
+                    </a>
+                    <a class="entry-app__tab {{ $navProd ? 'is-active' : '' }}" href="{{ route('entry.productivity.index') }}" @if($navProd) aria-current="page" @endif>
+                        <span class="entry-app__tab-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 19.5h16.5M6 16.5V9.75M12 16.5V4.5M18 16.5v-4.5"/></svg>
+                        </span>
+                        <span>Produktiviti</span>
                     </a>
                     <a class="entry-app__tab {{ $navManageOps ? 'is-active' : '' }}" href="{{ route('entry.manage-operators.index') }}" @if($navManageOps) aria-current="page" @endif>
                         <span class="entry-app__tab-icon" aria-hidden="true">

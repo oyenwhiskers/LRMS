@@ -79,14 +79,15 @@ Rules:
   - Deed of Assignment (P.O.S.T) / POST / perfection of strata title assignment → doa_post.
   - Deed of Assignment (absolute / without bank facility) → doa.
   - Deed of Gift / Hibah → dog.
+  - Deed of Trust / Deeds of Trust / DOT → dot. This is NOT doa and NOT dog.
   - Power of Attorney / POA → poa.
-  - Sublist agreement → sublist.
+  - Sublease Agreement / Sublist agreement → sublease.
   - Copy of Title / Copy Title / CT / title search copy → copy_title.
 - Bank financing / loan docs → prefer LOA (Loan Documentation). Do NOT treat bank codes or middle tokens inside a firm ref (e.g. CON in THY/YFT/CON/BRAKYAT/2025/18, or ABMB/MIB/UOB) as the case category.
 - Fill only what is clearly visible across the provided pages. Cover pages often lack property and title_number — leave those null unless a later page shows them. Do not invent or guess missing fields.
 - property: put the charged / subject property description OR postal / site address when printed (labels such as Property, Address, Alamat, Schedule of Property, Parcel, Lot, HS(D), Geran, PN, description of land). Prefer the property address from later pages over a letterhead office address. Copy the full address block into property when that is what the page shows.
 - For loan: fill borrowers in document order — party (1) first (main), then (2), (3), …. Include each customer's NRIC in ic_number when printed. Do not drop co-borrowers. Also set purchaser to all borrower names joined with " & " (e.g. "LOOK KAR YANG & LIM PUI SHEE"). Fill bank and start_date if dated; property/title_number from any page if printed.
-- For S&P-family types ({$snpTypeCodes}): fill purchaser, vendor, property, title_number only if printed; borrowers may be empty. Map transferor/assignor/donor → vendor and transferee/assignee/donee → purchaser when those labels appear.
+- For S&P-family types ({$snpTypeCodes}): fill purchaser, vendor, property, title_number only if printed; borrowers may be empty. Map transferor/assignor/donor/settlor → vendor and transferee/assignee/donee/trustee → purchaser when those labels appear.
 - For litigation: fill suite_number, purchaser (person name), ic_number when visible; leave property empty; borrowers may be empty.
 - Use null for unknown fields. Do not invent category codes outside the list.
 PROMPT;
@@ -341,7 +342,7 @@ PROMPT;
 
     private function normalizeCaseType(string $raw): string
     {
-        $type = strtolower(trim($raw));
+        $type = LegalFile::normalizeCaseTypeCode($raw);
         if (in_array($type, LegalFile::caseTypes(), true)) {
             return $type;
         }

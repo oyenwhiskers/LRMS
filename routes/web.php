@@ -12,6 +12,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Entry\EntryAuthController;
 use App\Http\Controllers\Entry\EntryController;
 use App\Http\Controllers\Entry\EntryOperatorController;
+use App\Http\Controllers\Entry\EntryProductivityController;
 use App\Http\Controllers\Entry\EntryPrintStationController;
 use App\Http\Controllers\ImportExportController;
 use App\Http\Controllers\LegalFileController;
@@ -93,6 +94,9 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/ai-usage', [AiTokenUsageController::class, 'index'])
             ->middleware('ai_usage')
             ->name('ai-usage.index');
+
+        Route::get('/productivity', [EntryProductivityController::class, 'index'])
+            ->name('productivity.index');
 
         Route::prefix('manage-operators')->name('manage-operators.')->group(function (): void {
             Route::get('/unlock', [ManageOperatorController::class, 'unlockForm'])->name('unlock');

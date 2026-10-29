@@ -331,8 +331,12 @@ class LegalFileController extends Controller
     private function validated(Request $request, ?LegalFile $file = null): array
     {
         $caseType = $file?->exists
-            ? (string) $file->case_type
-            : (string) $request->input('case_type');
+            ? LegalFile::normalizeCaseTypeCode((string) $file->case_type)
+            : LegalFile::normalizeCaseTypeCode((string) $request->input('case_type'));
+
+        if (! $file?->exists) {
+            $request->merge(['case_type' => $caseType]);
+        }
 
         $rules = [
             'purchaser' => ['required', 'string', 'max:255'],

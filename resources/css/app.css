@@ -3055,9 +3055,13 @@ fieldset.file-label-modal__edit-form {
 
 .modal-panel.operator-review-modal {
     max-width: min(40rem, calc(100vw - 2rem));
-    max-height: min(92vh, 56rem);
+    /* overlay uses p-4 (2rem total) — stay inside the visible frame */
+    max-height: min(56rem, calc(100dvh - 2rem));
     padding: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .modal-panel.operator-review-modal--split {
@@ -3067,9 +3071,13 @@ fieldset.file-label-modal__edit-form {
 .operator-review-page {
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    height: min(92vh, 56rem);
-    max-height: inherit;
+    /* mobile: content-sized; flex:none so file-label-modal's flex column
+       cannot shrink this below content (that pinned actions mid-form) */
+    flex: none;
+    width: 100%;
+    min-height: min-content;
+    height: auto;
+    max-height: none;
 }
 
 .operator-review-page__chrome {
@@ -3115,7 +3123,7 @@ fieldset.file-label-modal__edit-form {
 .operator-review-page__body {
     display: flex;
     flex-direction: column;
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
 }
 
@@ -3124,7 +3132,7 @@ fieldset.file-label-modal__edit-form {
     flex-direction: column;
     min-width: 0;
     min-height: 0;
-    flex: 1 1 auto;
+    flex: none;
 }
 
 .operator-review-page__info {
@@ -3132,9 +3140,9 @@ fieldset.file-label-modal__edit-form {
     flex-direction: column;
     gap: 1.35rem;
     padding: 1rem 1.25rem 1.35rem;
-    overflow: auto;
-    -webkit-overflow-scrolling: touch;
-    flex: 1 1 auto;
+    /* mobile: page grows; modal panel scrolls (desktop restores inner scroll) */
+    overflow: visible;
+    flex: none;
     min-height: 0;
 }
 
@@ -3145,15 +3153,17 @@ fieldset.file-label-modal__edit-form {
 }
 
 .operator-review-modal[data-operator-review-tabs][data-operator-review-tab="dokumen"] .operator-review-page__right {
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
     border-top: 0;
 }
 
+/* Pin a usable preview height; modal scrolls for notes/actions below */
 .operator-review-modal[data-operator-review-tabs][data-operator-review-tab="dokumen"] .operator-review-doc-zoom__viewport {
-    flex: 1 1 0;
-    max-height: none;
-    min-height: 0;
+    flex: none;
+    height: min(52dvh, 26rem);
+    min-height: 18rem;
+    max-height: min(52dvh, 26rem);
 }
 
 .operator-review-page__section-head {
@@ -3175,7 +3185,7 @@ fieldset.file-label-modal__edit-form {
     display: grid;
     gap: 0.65rem;
     flex-shrink: 0;
-    padding: 0.85rem 1rem 1rem;
+    padding: 0.85rem 1rem max(1rem, env(safe-area-inset-bottom, 0px));
     border-top: 1px solid var(--entry-line, #e7e5e4);
     background: #fff;
 }
@@ -3414,7 +3424,7 @@ fieldset.file-label-modal__edit-form {
 .operator-review-doc-zoom__viewport {
     /* flex-basis 0 so height comes from the pane, not the image (avoids a short letterbox) */
     flex: 1 1 0;
-    /* block + margin:auto (not flex justify-center): centered when small, fully pannable when zoomed */
+    /* block + margin:auto when fit; JS sets margin:0 when overflowing so scroll can reach both sides */
     display: block;
     overflow: auto;
     min-height: 16rem;
@@ -3423,12 +3433,18 @@ fieldset.file-label-modal__edit-form {
     -webkit-overflow-scrolling: touch;
     /* none: allow JS pinch + drag-pan (pan-x/y blocks multi-touch zoom) */
     touch-action: none;
-    cursor: grab;
+    cursor: default;
+    user-select: none;
     overscroll-behavior: contain;
+}
+
+.operator-review-doc-zoom__viewport.is-pannable {
+    cursor: grab;
 }
 
 .operator-review-doc-zoom__viewport.is-panning {
     cursor: grabbing;
+    user-select: none;
 }
 
 /*
@@ -3455,6 +3471,29 @@ fieldset.file-label-modal__edit-form {
 }
 
 @media (min-width: 900px) {
+    .modal-panel.operator-review-modal {
+        overflow: hidden;
+        max-height: min(56rem, calc(100dvh - 3rem));
+    }
+
+    .operator-review-page {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: min(56rem, calc(100dvh - 3rem));
+        max-height: inherit;
+    }
+
+    .operator-review-page__body,
+    .operator-review-page__left {
+        flex: 1 1 auto;
+    }
+
+    .operator-review-page__info {
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        flex: 1 1 auto;
+    }
+
     .operator-review-page__tabs {
         display: none;
     }
@@ -3469,7 +3508,18 @@ fieldset.file-label-modal__edit-form {
         display: grid;
         grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr) auto;
-        height: min(92vh, 56rem);
+        height: min(56rem, calc(100dvh - 3rem));
+    }
+
+    .operator-review-modal[data-operator-review-tabs][data-operator-review-tab="dokumen"] .operator-review-page__right {
+        flex: 1 1 auto;
+    }
+
+    .operator-review-modal[data-operator-review-tabs][data-operator-review-tab="dokumen"] .operator-review-doc-zoom__viewport {
+        flex: 1 1 0;
+        height: auto;
+        min-height: 0;
+        max-height: none;
     }
 
     .operator-review-modal--split .operator-review-page__chrome {
@@ -4747,6 +4797,295 @@ a.entry-card--action:focus-visible {
 
 .entry-ai__empty p {
     margin: 0;
+}
+
+.entry-prod {
+    display: grid;
+    gap: 1.15rem;
+}
+
+.entry-prod__head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.entry-prod__eyebrow {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--entry-muted);
+}
+
+.entry-prod__title {
+    margin: 0.15rem 0 0;
+    font-size: 1.55rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+}
+
+.entry-prod__period {
+    margin: 0;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--entry-muted);
+}
+
+.entry-prod__filters {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.entry-prod__chips {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+}
+
+.entry-prod__chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.4rem;
+    border: 1px solid var(--entry-line);
+    background: #fff;
+    color: var(--entry-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.entry-prod__chip.is-active {
+    border-color: var(--entry-ink);
+    background: var(--entry-ink);
+    color: #fff;
+}
+
+.entry-prod__pick {
+    display: grid;
+    gap: 0.3rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--entry-muted);
+}
+
+.entry-prod__pick input {
+    min-height: 2.6rem;
+    border: 1px solid var(--entry-line);
+    background: #fff;
+    padding: 0.45rem 0.7rem;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--entry-ink);
+}
+
+.entry-prod__section {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem 0.95rem 1.05rem;
+    border: 1px solid var(--entry-line);
+    background: #fff;
+}
+
+.entry-prod__section-head h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.entry-prod__section-head p {
+    margin: 0.2rem 0 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--entry-muted);
+}
+
+.entry-prod__block {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.entry-prod__block-title {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--entry-muted);
+}
+
+.entry-prod__stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.entry-prod__stats--flow {
+    grid-template-columns: 1fr 1fr;
+}
+
+.entry-prod__stat {
+    padding: 0.75rem 0.8rem;
+    border: 1px solid var(--entry-line);
+    background: color-mix(in srgb, var(--entry-bg) 72%, #fff);
+}
+
+.entry-prod__stat--focus {
+    grid-column: 1 / -1;
+    background: color-mix(in srgb, var(--entry-ink) 6%, #fff);
+    border-color: color-mix(in srgb, var(--entry-ink) 22%, var(--entry-line));
+}
+
+.entry-prod__stat-label {
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--entry-muted);
+}
+
+.entry-prod__stat-value {
+    margin: 0.3rem 0 0;
+    font-size: 1.55rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.entry-prod__stat--focus .entry-prod__stat-value {
+    font-size: 2.2rem;
+}
+
+.entry-prod__stat-hint {
+    margin: 0.35rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--entry-muted);
+}
+
+.entry-prod__note {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--entry-muted);
+}
+
+.entry-prod__ops {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.entry-prod__ops-cols {
+    display: none;
+    grid-template-columns: minmax(0, 1.6fr) 0.7fr 0.9fr 0.9fr;
+    gap: 0.65rem;
+    padding: 0 0.15rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--entry-muted);
+}
+
+.entry-prod__op {
+    display: grid;
+    gap: 0.65rem;
+    padding: 0.85rem 0.9rem;
+    border: 1px solid var(--entry-line);
+    background: color-mix(in srgb, var(--entry-bg) 55%, #fff);
+}
+
+.entry-prod__op-who {
+    min-width: 0;
+}
+
+.entry-prod__op-name {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.entry-prod__op-email {
+    margin: 0.15rem 0 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    color: var(--entry-muted);
+}
+
+.entry-prod__op-cell {
+    display: grid;
+    gap: 0.1rem;
+}
+
+.entry-prod__op-cell::before {
+    content: attr(data-label);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--entry-muted);
+}
+
+.entry-prod__op-value {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.entry-prod__op-unit {
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--entry-muted);
+}
+
+.entry-prod__empty {
+    padding: 1rem;
+    border: 1px dashed var(--entry-line);
+    background: color-mix(in srgb, var(--entry-bg) 70%, #fff);
+    color: var(--entry-muted);
+    font-size: 0.875rem;
+}
+
+.entry-prod__empty p {
+    margin: 0;
+}
+
+@media (min-width: 720px) {
+    .entry-prod__stats,
+    .entry-prod__stats--flow {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .entry-prod__stat--focus {
+        grid-column: auto;
+    }
+
+    .entry-prod__ops-cols {
+        display: grid;
+    }
+
+    .entry-prod__op {
+        grid-template-columns: minmax(0, 1.6fr) 0.7fr 0.9fr 0.9fr;
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .entry-prod__op-cell::before,
+    .entry-prod__op-unit {
+        display: none;
+    }
 }
 
 .entry-ai__form {

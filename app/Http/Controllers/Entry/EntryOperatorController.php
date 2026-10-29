@@ -23,6 +23,12 @@ class EntryOperatorController extends Controller
 {
     public function index(Request $request): View
     {
+        if ($request->filled('case_type')) {
+            $request->merge([
+                'case_type' => LegalFile::normalizeCaseTypeCode((string) $request->input('case_type')),
+            ]);
+        }
+
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:100'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],

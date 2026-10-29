@@ -474,6 +474,155 @@ class EntryScanRegisterTest extends TestCase
         $this->assertNull($file->bank);
     }
 
+    public function test_analyze_accepts_deeds_of_trust_case_type_from_gemini(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'text' => json_encode([
+                                'reference_number' => 'CON/2021/0303',
+                                'case_type' => 'Deed of Trust',
+                                'case_category_code' => 'CON',
+                                'purchaser' => 'AI Trustee',
+                                'vendor' => 'AI Settlor',
+                            ]),
+                        ]],
+                    ],
+                ]],
+            ]),
+        ]);
+
+        config([
+            'services.gemini.key' => 'test-key',
+            'services.gemini.model' => 'gemini-3.1-flash-lite',
+        ]);
+
+        $entry = User::factory()->entry()->create();
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('deed-of-trust.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_DOT)
+            ->assertJsonPath('draft.purchaser', 'AI Trustee');
+
+        Http::assertSent(function ($request): bool {
+            $prompt = (string) data_get($request->data(), 'contents.0.parts.0.text');
+
+            return str_contains($prompt, '"dot"')
+                && str_contains($prompt, 'Deed of Trust')
+                && str_contains($prompt, 'dot');
+        });
+    }
+
+    public function test_entry_save_accepts_deeds_of_trust_case_type(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $tempPath = 'entry-scans/tmp/'.$entry->id.'/deed-of-trust.jpg';
+        Storage::disk('local')->put($tempPath, 'fake');
+
+        $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'reference_number' => 'CON/2020/0777',
+                'case_type' => LegalFile::TYPE_DOT,
+                'case_category_id' => $category->id,
+                'purchaser' => 'Trustee Sdn Bhd',
+                'vendor' => 'Settlor Sdn Bhd',
+                'property' => 'Lot 77, Kota Kinabalu',
+                'title_number' => 'PN 77777',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('reference_number', 'CON/2020/0777')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_DOT, $file->case_type);
+        $this->assertSame('Deeds of trust', $file->caseTypeLabel());
+        $this->assertTrue(LegalFile::isSnpType($file->case_type));
+        $this->assertSame('Trustee Sdn Bhd', $file->purchaser);
+        $this->assertSame('Settlor Sdn Bhd', $file->vendor);
+        $this->assertNull($file->bank);
+    }
+
+    public function test_analyze_accepts_sublease_case_type_from_gemini(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'text' => json_encode([
+                                'reference_number' => 'CON/2021/0202',
+                                'case_type' => 'Sublist agreement',
+                                'case_category_code' => 'CON',
+                                'purchaser' => 'AI Subtenant',
+                                'vendor' => 'AI Sublessor',
+                            ]),
+                        ]],
+                    ],
+                ]],
+            ]),
+        ]);
+
+        config([
+            'services.gemini.key' => 'test-key',
+            'services.gemini.model' => 'gemini-3.1-flash-lite',
+        ]);
+
+        $entry = User::factory()->entry()->create();
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('sublease.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_SUBLEASE)
+            ->assertJsonPath('draft.purchaser', 'AI Subtenant');
+
+        Http::assertSent(function ($request): bool {
+            $prompt = (string) data_get($request->data(), 'contents.0.parts.0.text');
+
+            return str_contains($prompt, '"sublease"')
+                && str_contains($prompt, 'Sublease Agreement')
+                && str_contains($prompt, 'sublease');
+        });
+    }
+
+    public function test_entry_save_backfills_legacy_sublist_case_type_to_sublease(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $tempPath = 'entry-scans/tmp/'.$entry->id.'/sublease.jpg';
+        Storage::disk('local')->put($tempPath, 'fake');
+
+        $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'reference_number' => 'CON/2020/0888',
+                'case_type' => LegalFile::TYPE_SUBLIST,
+                'case_category_id' => $category->id,
+                'purchaser' => 'Subtenant Sdn Bhd',
+                'vendor' => 'Sublessor Sdn Bhd',
+                'property' => 'Lot 88, Kota Kinabalu',
+                'title_number' => 'PN 88888',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('reference_number', 'CON/2020/0888')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_SUBLEASE, $file->case_type);
+        $this->assertSame('Sublease Agreement', $file->caseTypeLabel());
+        $this->assertTrue(LegalFile::isSnpType($file->case_type));
+    }
+
     public function test_entry_save_stores_each_loan_borrower_with_primary(): void
     {
         Storage::fake('local');
