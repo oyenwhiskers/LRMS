@@ -101,11 +101,7 @@
                 <p class="entry-case-fields__party-title">Peminjam utama <span class="font-normal text-stone-500">(pihak 1)</span></p>
                 <label class="{{ $fieldClass }}">
                     <span class="form-label">Nama</span>
-                    @if ($readonly)
-                        <p class="form-input form-input--readonly" data-entry-field="borrower_name_0">{{ $mainBorrower['name'] ?? '' }}</p>
-                    @else
-                        <input class="form-input" name="borrowers[0][name]" value="{{ $mainBorrower['name'] ?? '' }}" data-entry-field="borrower_name_0" autocomplete="off" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
-                    @endif
+                    <textarea class="form-input" name="borrowers[0][name]" rows="1" data-entry-field="borrower_name_0" autocomplete="off" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $mainBorrower['name'] ?? '' }}</textarea>
                 </label>
                 <label class="{{ $fieldClass }}">
                     <span class="form-label">No. KP</span>
@@ -119,11 +115,7 @@
                         <p class="entry-case-fields__party-title">Peminjam lain</p>
                         <label class="{{ $fieldClass }}">
                             <span class="form-label">Nama</span>
-                            @if ($readonly)
-                                <p class="form-input form-input--readonly" data-entry-field="borrower_name_{{ $i }}">{{ $co['name'] ?? '' }}</p>
-                            @else
-                                <input class="form-input" name="borrowers[{{ $i }}][name]" value="{{ $co['name'] ?? '' }}" data-entry-field="borrower_name_{{ $i }}" autocomplete="off" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
-                            @endif
+                            <textarea class="form-input" name="borrowers[{{ $i }}][name]" rows="1" data-entry-field="borrower_name_{{ $i }}" autocomplete="off" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $co['name'] ?? '' }}</textarea>
                         </label>
                         <label class="{{ $fieldClass }}">
                             <span class="form-label">No. KP</span>
@@ -141,7 +133,7 @@
                     <p class="entry-case-fields__party-title">Peminjam lain</p>
                     <label class="{{ $fieldClass }}">
                         <span class="form-label">Nama</span>
-                        <input class="form-input" name="borrowers[__INDEX__][name]" value="" data-entry-field="borrower_name___INDEX__" autocomplete="off">
+                        <textarea class="form-input" name="borrowers[__INDEX__][name]" rows="1" data-entry-field="borrower_name___INDEX__" autocomplete="off"></textarea>
                     </label>
                     <label class="{{ $fieldClass }}">
                         <span class="form-label">No. KP</span>
@@ -152,57 +144,45 @@
         </div>
         <label class="{{ $fieldClass }}">
             <span class="form-label">Bank</span>
-            <input class="form-input" name="bank" value="{{ $field('bank') }}" data-entry-field="bank" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+            <textarea class="form-input" name="bank" rows="1" data-entry-field="bank" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $field('bank') }}</textarea>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">Alamat hartanah</span>
-            <textarea class="form-input min-h-24" name="property" data-entry-field="property" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $field('property') }}</textarea>
+            <textarea class="form-input min-h-24" name="property" rows="1" data-entry-field="property" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $field('property') }}</textarea>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">No. hakmilik</span>
-            <input class="form-input" name="title_number" value="{{ $field('title_number') }}" data-entry-field="title_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+            <textarea class="form-input" name="title_number" rows="1" data-entry-field="title_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $field('title_number') }}</textarea>
         </label>
     </div>
 
     <div @class([$isModalLayout ? 'entry-case-fields__panel' : 'grid gap-4', 'hidden' => ! $isSnpSelected]) data-case-type-panel="snp">
         <label class="{{ $fieldClass }}">
             <span class="form-label">Pembeli</span>
-            @if ($readonly)
-                <p class="form-input form-input--readonly" data-entry-field="purchaser">{{ $field('purchaser') }}</p>
-            @else
-                <input class="form-input" name="purchaser" value="{{ $field('purchaser') }}" data-entry-field="purchaser" @disabled(! $isSnpSelected)>
-            @endif
+            <textarea class="form-input" name="purchaser" rows="1" data-entry-field="purchaser" @disabled(! $isSnpSelected)>{{ $field('purchaser') }}</textarea>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">Penjual</span>
-            @if ($readonly)
-                <p class="form-input form-input--readonly" data-entry-field="vendor">{{ $field('vendor') }}</p>
-            @else
-                <input class="form-input" name="vendor" value="{{ $field('vendor') }}" data-entry-field="vendor" @disabled(! $isSnpSelected)>
-            @endif
+            <textarea class="form-input" name="vendor" rows="1" data-entry-field="vendor" @disabled(! $isSnpSelected)>{{ $field('vendor') }}</textarea>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">Alamat hartanah</span>
-            <textarea class="form-input min-h-24" name="property" data-entry-field="property" @disabled(! $isSnpSelected)>{{ $field('property') }}</textarea>
+            <textarea class="form-input min-h-24" name="property" rows="1" data-entry-field="property" @disabled(! $isSnpSelected)>{{ $field('property') }}</textarea>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">No. hakmilik</span>
-            <input class="form-input" name="title_number" value="{{ $field('title_number') }}" data-entry-field="title_number" @disabled(! $isSnpSelected)>
+            <textarea class="form-input" name="title_number" rows="1" data-entry-field="title_number" @disabled(! $isSnpSelected)>{{ $field('title_number') }}</textarea>
         </label>
     </div>
 
     <div @class([$isModalLayout ? 'entry-case-fields__panel' : 'grid gap-4', 'hidden' => $selectedType !== App\Models\LegalFile::TYPE_LITIGATION]) data-case-type-panel="litigation">
         <label class="{{ $fieldClass }}">
             <span class="form-label">No. guaman</span>
-            <input class="form-input" name="suite_number" value="{{ $field('suite_number') }}" data-entry-field="suite_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>
+            <textarea class="form-input" name="suite_number" rows="1" data-entry-field="suite_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>{{ $field('suite_number') }}</textarea>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">Nama individu</span>
-            @if ($readonly)
-                <p class="form-input form-input--readonly" data-entry-field="purchaser">{{ $field('purchaser') }}</p>
-            @else
-                <input class="form-input" name="purchaser" value="{{ $field('purchaser') }}" data-entry-field="purchaser" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>
-            @endif
+            <textarea class="form-input" name="purchaser" rows="1" data-entry-field="purchaser" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>{{ $field('purchaser') }}</textarea>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">No. KP</span>

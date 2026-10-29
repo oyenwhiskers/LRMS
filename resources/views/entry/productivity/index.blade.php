@@ -50,66 +50,67 @@
         @endif
     </form>
 
-    <section class="entry-prod__section" aria-labelledby="entry-prod-general-title">
+    <section class="entry-prod__section" aria-labelledby="entry-prod-reg-title">
         <div class="entry-prod__section-head">
-            <h2 id="entry-prod-general-title">Umum</h2>
-            <p>Jumlah keseluruhan dan status aliran fail</p>
+            <h2 id="entry-prod-reg-title">Jumlah daftar</h2>
+            <p>Isipadu pendaftaran fail</p>
         </div>
 
-        <div class="entry-prod__block">
-            <h3 class="entry-prod__block-title">Jumlah daftar</h3>
-            <div class="entry-prod__stats">
-                <article class="entry-prod__stat entry-prod__stat--focus">
-                    <p class="entry-prod__stat-label">Hari ini</p>
-                    <p class="entry-prod__stat-value">{{ $fmt($registeredToday) }}</p>
-                    <p class="entry-prod__stat-hint">Fail disimpan / di rak</p>
-                </article>
-                <article class="entry-prod__stat">
-                    <p class="entry-prod__stat-label">Tempoh ini</p>
-                    <p class="entry-prod__stat-value">{{ $fmt($registeredInPeriod) }}</p>
-                    <p class="entry-prod__stat-hint">{{ $periodLabel }}</p>
-                </article>
-                <article class="entry-prod__stat">
-                    <p class="entry-prod__stat-label">Purata / hari</p>
-                    <p class="entry-prod__stat-value">{{ $fmt($avgPerDay) }}</p>
-                    <p class="entry-prod__stat-hint">Bulan ini · {{ $fmt($monthCount) }} fail</p>
-                </article>
-                <article class="entry-prod__stat">
-                    <p class="entry-prod__stat-label">Purata / bulan</p>
-                    <p class="entry-prod__stat-value">{{ $fmt($avgPerMonth) }}</p>
-                    <p class="entry-prod__stat-hint">Tahun ini · {{ $fmt($yearCount) }} fail</p>
-                </article>
-            </div>
+        <div class="entry-prod__stats entry-prod__stats--register">
+            <article class="entry-prod__stat entry-prod__stat--focus">
+                <p class="entry-prod__stat-label">Hari ini</p>
+                <p class="entry-prod__stat-value">{{ $fmt($registeredToday) }}</p>
+                <p class="entry-prod__stat-hint">Fail disimpan / di rak</p>
+            </article>
+            <article class="entry-prod__stat">
+                <p class="entry-prod__stat-label">Tempoh ini</p>
+                <p class="entry-prod__stat-value">{{ $fmt($registeredInPeriod) }}</p>
+                <p class="entry-prod__stat-hint">{{ $periodLabel }}</p>
+            </article>
+            <article class="entry-prod__stat">
+                <p class="entry-prod__stat-label">Purata / hari</p>
+                <p class="entry-prod__stat-value">{{ $fmt($avgPerDay) }}</p>
+                <p class="entry-prod__stat-hint">Bulan ini · {{ $fmt($monthCount) }} fail</p>
+            </article>
+            <article class="entry-prod__stat">
+                <p class="entry-prod__stat-label">Purata / bulan</p>
+                <p class="entry-prod__stat-value">{{ $fmt($avgPerMonth) }}</p>
+                <p class="entry-prod__stat-hint">Tahun ini · {{ $fmt($yearCount) }} fail</p>
+            </article>
+        </div>
+    </section>
+
+    <section class="entry-prod__section" aria-labelledby="entry-prod-flow-title">
+        <div class="entry-prod__section-head">
+            <h2 id="entry-prod-flow-title">Status aliran</h2>
+            <p>Kedudukan fail dalam proses · {{ $periodLabel }}</p>
         </div>
 
-        <div class="entry-prod__block">
-            <h3 class="entry-prod__block-title">Status aliran · {{ $periodLabel }}</h3>
-            <div class="entry-prod__stats entry-prod__stats--flow">
-                <article class="entry-prod__stat">
-                    <p class="entry-prod__stat-label">Belum di rak</p>
-                    <p class="entry-prod__stat-value">{{ $fmt($pendingShelf) }}</p>
-                </article>
-                <article class="entry-prod__stat">
-                    <p class="entry-prod__stat-label">Di rak</p>
-                    <p class="entry-prod__stat-value">{{ $fmt($onShelf) }}</p>
-                </article>
-                <article class="entry-prod__stat">
-                    <p class="entry-prod__stat-label">Perlu betul</p>
-                    <p class="entry-prod__stat-value">{{ $fmt($needsCorrection) }}</p>
-                </article>
-                <article class="entry-prod__stat">
-                    <p class="entry-prod__stat-label">Disahkan</p>
-                    <p class="entry-prod__stat-value">{{ $fmt($verified) }}</p>
-                </article>
-                <article class="entry-prod__stat">
-                    <p class="entry-prod__stat-label">Belum semak</p>
-                    <p class="entry-prod__stat-value">{{ $fmt($pendingReview) }}</p>
-                </article>
-                <article class="entry-prod__stat">
-                    <p class="entry-prod__stat-label">Operator aktif</p>
-                    <p class="entry-prod__stat-value">{{ $fmt($operators->count()) }}</p>
-                </article>
-            </div>
+        <div class="entry-prod__stats entry-prod__stats--flow">
+            <article class="entry-prod__stat">
+                <p class="entry-prod__stat-label">Belum di rak</p>
+                <p class="entry-prod__stat-value">{{ $fmt($pendingShelf) }}</p>
+            </article>
+            <article class="entry-prod__stat">
+                <p class="entry-prod__stat-label">Di rak</p>
+                <p class="entry-prod__stat-value">{{ $fmt($onShelf) }}</p>
+            </article>
+            <article class="entry-prod__stat entry-prod__stat--warn">
+                <p class="entry-prod__stat-label">Perlu betul</p>
+                <p class="entry-prod__stat-value">{{ $fmt($needsCorrection) }}</p>
+            </article>
+            <article class="entry-prod__stat entry-prod__stat--ok">
+                <p class="entry-prod__stat-label">Disahkan</p>
+                <p class="entry-prod__stat-value">{{ $fmt($verified) }}</p>
+            </article>
+            <article class="entry-prod__stat">
+                <p class="entry-prod__stat-label">Belum semak</p>
+                <p class="entry-prod__stat-value">{{ $fmt($pendingReview) }}</p>
+            </article>
+            <article class="entry-prod__stat">
+                <p class="entry-prod__stat-label">Operator aktif</p>
+                <p class="entry-prod__stat-value">{{ $fmt($operators->count()) }}</p>
+            </article>
         </div>
     </section>
 
@@ -119,14 +120,50 @@
             <p>Jumlah fail dan kelajuan setiap operator · {{ $periodLabel }}</p>
         </div>
 
-        <p class="entry-prod__note">Kelajuan = median jurang antara fail. Rehat lebih 2 jam tidak dikira.</p>
+        @php
+            $kelajuanTip = 'Median jurang antara fail. Rehat lebih 2 jam tidak dikira.';
+        @endphp
 
         <div class="entry-prod__ops" role="list">
-            <div class="entry-prod__ops-cols" aria-hidden="true">
+            <div class="entry-prod__ops-cols">
                 <span>Operator</span>
                 <span>Fail</span>
-                <span>Kelajuan</span>
+                <span class="entry-prod__col-with-info">
+                    Kelajuan
+                    <span class="entry-prod__info">
+                        <button
+                            type="button"
+                            class="entry-prod__info-btn"
+                            aria-describedby="entry-prod-kelajuan-tip"
+                            aria-label="Maklumat kelajuan"
+                        >
+                            <span aria-hidden="true">i</span>
+                        </button>
+                        <span class="entry-prod__info-pop" id="entry-prod-kelajuan-tip" role="tooltip">
+                            {{ $kelajuanTip }}
+                        </span>
+                    </span>
+                </span>
                 <span>Kadar</span>
+            </div>
+
+            <div class="entry-prod__ops-mobile-info">
+                <span class="entry-prod__col-with-info">
+                    Kelajuan
+                    <span class="entry-prod__info">
+                        <button
+                            type="button"
+                            class="entry-prod__info-btn"
+                            aria-describedby="entry-prod-kelajuan-tip-mobile"
+                            aria-label="Maklumat kelajuan"
+                        >
+                            <span aria-hidden="true">i</span>
+                        </button>
+                        <span class="entry-prod__info-pop" id="entry-prod-kelajuan-tip-mobile" role="tooltip">
+                            {{ $kelajuanTip }}
+                        </span>
+                    </span>
+                </span>
             </div>
 
             @forelse ($operators as $op)
