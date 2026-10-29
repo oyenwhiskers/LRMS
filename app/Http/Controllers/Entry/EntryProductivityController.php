@@ -12,25 +12,23 @@ use Illuminate\View\View;
 
 class EntryProductivityController extends Controller
 {
-    /** Gaps longer than this are treated as a break, not work speed. */
-    private const SPEED_GAP_CAP_SECONDS = 7200;
-
     public function index(Request $request): View
     {
         $tz = (string) config('app.timezone');
         $now = Carbon::now($tz);
 
         $filters = $request->validate([
-            'period' => ['nullable', 'in:today,month,date'],
+            'period' => ['nullable', 'in:today,month,year'],
             'month' => ['nullable', 'date_format:Y-m'],
-            'date' => ['nullable', 'date'],
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
         ]);
 
         $period = $filters['period'] ?? 'today';
         $monthValue = $filters['month'] ?? $now->format('Y-m');
-        $dateValue = $filters['date'] ?? $now->toDateString();
+        $yearValue = (int) ($filters['year'] ?? $now->year);
 
-        [$periodStart, $periodEnd] = $this->periodBounds($period, $monthValue, $dateValue, $tz);
+        [$periodStart, $periodEnd] = $this->periodBounds($period, $monthValue, $yearValue, $tz, $now);
+        $periodDays = $this->periodDayCount($periodStart, $periodEnd, $now);
 
         $registeredQuery = $this->registeredScans()
             ->whereBetween('created_at', [$periodStart, $periodEnd]);
@@ -88,17 +86,20 @@ class EntryProductivityController extends Controller
             ->keyBy('id');
 
         $operators = $operatorTimestamps
-            ->map(function (Collection $rows, $userId) use ($users) {
+            ->map(function (Collection $rows, $userId) use ($users, $periodDays) {
                 $times = $rows->pluck('created_at')->sort()->values();
                 $user = $users->get((int) $userId);
+                $count = $times->count();
+                [$perMinute, $perHour] = $this->throughputRates($times);
 
                 return [
                     'user_id' => (int) $userId,
                     'name' => $user?->name ?? 'Tidak diketahui',
                     'email' => $user?->email,
-                    'count' => $times->count(),
-                    'avg_minutes' => $this->medianGapMinutes($times),
-                    'files_per_hour' => $this->filesPerHour($times),
+                    'count' => $count,
+                    'files_per_minute' => $perMinute,
+                    'files_per_hour' => $perHour,
+                    'files_per_day' => round($count / $periodDays, 1),
                 ];
             })
             ->sortByDesc('count')
@@ -106,14 +107,14 @@ class EntryProductivityController extends Controller
 
         $periodLabel = match ($period) {
             'month' => Carbon::createFromFormat('Y-m', $monthValue, $tz)->translatedFormat('F Y'),
-            'date' => Carbon::parse($dateValue, $tz)->translatedFormat('d M Y'),
+            'year' => (string) $yearValue,
             default => 'Hari ini',
         };
 
         return view('entry.productivity.index', [
             'period' => $period,
             'monthValue' => $monthValue,
-            'dateValue' => $dateValue,
+            'yearValue' => $yearValue,
             'periodLabel' => $periodLabel,
             'registeredToday' => $registeredToday,
             'registeredInPeriod' => $registeredInPeriod,
@@ -139,7 +140,7 @@ class EntryProductivityController extends Controller
     /**
      * @return array{0: Carbon, 1: Carbon}
      */
-    private function periodBounds(string $period, string $monthValue, string $dateValue, string $tz): array
+    private function periodBounds(string $period, string $monthValue, int $yearValue, string $tz, Carbon $now): array
     {
         if ($period === 'month') {
             $start = Carbon::createFromFormat('Y-m', $monthValue, $tz)->startOfMonth();
@@ -147,69 +148,50 @@ class EntryProductivityController extends Controller
             return [$start, $start->copy()->endOfMonth()];
         }
 
-        if ($period === 'date') {
-            $day = Carbon::parse($dateValue, $tz);
+        if ($period === 'year') {
+            $start = Carbon::create($yearValue, 1, 1, 0, 0, 0, $tz)->startOfYear();
+            $end = $start->copy()->endOfYear();
+            if ($yearValue === (int) $now->year && $end->gt($now)) {
+                $end = $now->copy()->endOfDay();
+            }
 
-            return [$day->copy()->startOfDay(), $day->copy()->endOfDay()];
+            return [$start, $end];
         }
 
-        $today = Carbon::now($tz);
+        $today = $now->copy();
 
         return [$today->copy()->startOfDay(), $today->copy()->endOfDay()];
     }
 
-    /**
-     * @param  Collection<int, Carbon>  $times
-     */
-    private function medianGapMinutes(Collection $times): ?float
+    private function periodDayCount(Carbon $periodStart, Carbon $periodEnd, Carbon $now): int
     {
-        if ($times->count() < 2) {
-            return null;
-        }
+        $endDay = $periodEnd->lt($now) ? $periodEnd->copy()->startOfDay() : $now->copy()->startOfDay();
 
-        $gaps = [];
-        for ($i = 1, $n = $times->count(); $i < $n; $i++) {
-            $seconds = $times[$i - 1]->diffInSeconds($times[$i]);
-            if ($seconds > 0 && $seconds <= self::SPEED_GAP_CAP_SECONDS) {
-                $gaps[] = $seconds;
-            }
-        }
-
-        if ($gaps === []) {
-            return null;
-        }
-
-        sort($gaps);
-        $mid = intdiv(count($gaps), 2);
-        $median = count($gaps) % 2 === 1
-            ? $gaps[$mid]
-            : (($gaps[$mid - 1] + $gaps[$mid]) / 2);
-
-        return round($median / 60, 1);
+        return max(1, $periodStart->copy()->startOfDay()->diffInDays($endDay) + 1);
     }
 
     /**
+     * Wall-clock throughput from first to last file (breaks included).
+     *
      * @param  Collection<int, Carbon>  $times
+     * @return array{0: ?float, 1: ?float} [files_per_minute, files_per_hour]
      */
-    private function filesPerHour(Collection $times): ?float
+    private function throughputRates(Collection $times): array
     {
         if ($times->count() < 2) {
-            return null;
+            return [null, null];
         }
 
-        $activeSeconds = 0;
-        for ($i = 1, $n = $times->count(); $i < $n; $i++) {
-            $seconds = $times[$i - 1]->diffInSeconds($times[$i]);
-            if ($seconds > 0 && $seconds <= self::SPEED_GAP_CAP_SECONDS) {
-                $activeSeconds += $seconds;
-            }
+        $elapsedSeconds = $times->first()->diffInSeconds($times->last());
+        if ($elapsedSeconds <= 0) {
+            return [null, null];
         }
 
-        if ($activeSeconds <= 0) {
-            return null;
-        }
+        $count = $times->count();
 
-        // ponytail: files/hour from capped inter-arrival gaps only — upgrade if shift roster exists
-        return round(($times->count() - 1) / ($activeSeconds / 3600), 1);
+        return [
+            round($count / ($elapsedSeconds / 60), 2),
+            round($count / ($elapsedSeconds / 3600), 1),
+        ];
     }
 }

@@ -4975,7 +4975,7 @@ a.entry-card--action:focus-visible {
 
 .entry-prod__ops-cols {
     display: none;
-    grid-template-columns: minmax(0, 1.6fr) 0.7fr 0.9fr 0.9fr;
+    grid-template-columns: minmax(0, 1.5fr) 0.55fr 0.7fr 0.7fr 0.7fr;
     gap: 0.65rem;
     padding: 0 0.15rem;
     font-size: 0.68rem;
@@ -5169,7 +5169,7 @@ a.entry-card--action:focus-visible {
     }
 
     .entry-prod__op {
-        grid-template-columns: minmax(0, 1.6fr) 0.7fr 0.9fr 0.9fr;
+        grid-template-columns: minmax(0, 1.5fr) 0.55fr 0.7fr 0.7fr 0.7fr;
         align-items: center;
         gap: 0.65rem;
     }

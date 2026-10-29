@@ -5,8 +5,13 @@
 @section('content')
 @php
     $fmt = fn (int|float $n): string => number_format($n, is_float($n) && floor($n) !== $n ? 1 : 0);
-    $speed = fn (?float $minutes): string => $minutes === null ? '—' : $fmt($minutes).' min';
-    $rate = fn (?float $perHour): string => $perHour === null ? '—' : $fmt($perHour).'/j';
+    $fmtRate = function (?float $n, int $decimals = 1): string {
+        if ($n === null) {
+            return '—';
+        }
+
+        return number_format($n, abs($n - round($n)) < 0.0001 ? 0 : $decimals);
+    };
 @endphp
 <div class="entry-prod">
     <header class="entry-prod__head">
@@ -22,15 +27,15 @@
             <a
                 class="entry-prod__chip {{ $period === 'today' ? 'is-active' : '' }}"
                 href="{{ route('entry.productivity.index', ['period' => 'today']) }}"
-            >Hari ini</a>
+            >Hari</a>
             <a
                 class="entry-prod__chip {{ $period === 'month' ? 'is-active' : '' }}"
                 href="{{ route('entry.productivity.index', ['period' => 'month', 'month' => $monthValue]) }}"
             >Bulan</a>
             <a
-                class="entry-prod__chip {{ $period === 'date' ? 'is-active' : '' }}"
-                href="{{ route('entry.productivity.index', ['period' => 'date', 'date' => $dateValue]) }}"
-            >Tarikh</a>
+                class="entry-prod__chip {{ $period === 'year' ? 'is-active' : '' }}"
+                href="{{ route('entry.productivity.index', ['period' => 'year', 'year' => $yearValue]) }}"
+            >Tahun</a>
         </div>
 
         @if ($period === 'month')
@@ -41,11 +46,19 @@
             </label>
         @endif
 
-        @if ($period === 'date')
+        @if ($period === 'year')
             <label class="entry-prod__pick">
-                <span>Pilih tarikh</span>
-                <input type="hidden" name="period" value="date">
-                <input type="date" name="date" value="{{ $dateValue }}" onchange="this.form.submit()">
+                <span>Pilih tahun</span>
+                <input type="hidden" name="period" value="year">
+                <input
+                    type="number"
+                    name="year"
+                    min="2000"
+                    max="2100"
+                    step="1"
+                    value="{{ $yearValue }}"
+                    onchange="this.form.submit()"
+                >
             </label>
         @endif
     </form>
@@ -117,11 +130,11 @@
     <section class="entry-prod__section" aria-labelledby="entry-prod-ops-title">
         <div class="entry-prod__section-head">
             <h2 id="entry-prod-ops-title">Operator</h2>
-            <p>Jumlah fail dan kelajuan setiap operator · {{ $periodLabel }}</p>
+            <p>Jumlah fail dan kadar key-in setiap operator · {{ $periodLabel }}</p>
         </div>
 
         @php
-            $kelajuanTip = 'Median jurang antara fail. Rehat lebih 2 jam tidak dikira.';
+            $rateTip = 'Fail/min dan fail/jam: bilangan fail ÷ masa dari fail pertama ke fail terakhir (semua masa termasuk). Fail/hari: jumlah fail ÷ bilangan hari dalam tempoh.';
         @endphp
 
         <div class="entry-prod__ops" role="list">
@@ -129,38 +142,39 @@
                 <span>Operator</span>
                 <span>Fail</span>
                 <span class="entry-prod__col-with-info">
-                    Kelajuan
+                    Fail/min
                     <span class="entry-prod__info">
                         <button
                             type="button"
                             class="entry-prod__info-btn"
-                            aria-describedby="entry-prod-kelajuan-tip"
-                            aria-label="Maklumat kelajuan"
+                            aria-describedby="entry-prod-rate-tip"
+                            aria-label="Maklumat kadar key-in"
                         >
                             <span aria-hidden="true">i</span>
                         </button>
-                        <span class="entry-prod__info-pop" id="entry-prod-kelajuan-tip" role="tooltip">
-                            {{ $kelajuanTip }}
+                        <span class="entry-prod__info-pop" id="entry-prod-rate-tip" role="tooltip">
+                            {{ $rateTip }}
                         </span>
                     </span>
                 </span>
-                <span>Kadar</span>
+                <span>Fail/jam</span>
+                <span>Fail/hari</span>
             </div>
 
             <div class="entry-prod__ops-mobile-info">
                 <span class="entry-prod__col-with-info">
-                    Kelajuan
+                    Kadar key-in
                     <span class="entry-prod__info">
                         <button
                             type="button"
                             class="entry-prod__info-btn"
-                            aria-describedby="entry-prod-kelajuan-tip-mobile"
-                            aria-label="Maklumat kelajuan"
+                            aria-describedby="entry-prod-rate-tip-mobile"
+                            aria-label="Maklumat kadar key-in"
                         >
                             <span aria-hidden="true">i</span>
                         </button>
-                        <span class="entry-prod__info-pop" id="entry-prod-kelajuan-tip-mobile" role="tooltip">
-                            {{ $kelajuanTip }}
+                        <span class="entry-prod__info-pop" id="entry-prod-rate-tip-mobile" role="tooltip">
+                            {{ $rateTip }}
                         </span>
                     </span>
                 </span>
@@ -177,13 +191,14 @@
                     <div class="entry-prod__op-cell" data-label="Fail">
                         <p class="entry-prod__op-value">{{ $fmt($op['count']) }}</p>
                     </div>
-                    <div class="entry-prod__op-cell" data-label="Kelajuan">
-                        <p class="entry-prod__op-value">{{ $speed($op['avg_minutes']) }}</p>
-                        <p class="entry-prod__op-unit">/ fail</p>
+                    <div class="entry-prod__op-cell" data-label="Fail/min">
+                        <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_minute'], 2) }}</p>
                     </div>
-                    <div class="entry-prod__op-cell" data-label="Kadar">
-                        <p class="entry-prod__op-value">{{ $rate($op['files_per_hour']) }}</p>
-                        <p class="entry-prod__op-unit">fail sejam</p>
+                    <div class="entry-prod__op-cell" data-label="Fail/jam">
+                        <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_hour']) }}</p>
+                    </div>
+                    <div class="entry-prod__op-cell" data-label="Fail/hari">
+                        <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_day']) }}</p>
                     </div>
                 </article>
             @empty
