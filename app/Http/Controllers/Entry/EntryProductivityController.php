@@ -19,15 +19,17 @@ class EntryProductivityController extends Controller
 
         $filters = $request->validate([
             'period' => ['nullable', 'in:today,month,year'],
+            'date' => ['nullable', 'date'],
             'month' => ['nullable', 'date_format:Y-m'],
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
         ]);
 
         $period = $filters['period'] ?? 'today';
+        $dateValue = $filters['date'] ?? $now->toDateString();
         $monthValue = $filters['month'] ?? $now->format('Y-m');
         $yearValue = (int) ($filters['year'] ?? $now->year);
 
-        [$periodStart, $periodEnd] = $this->periodBounds($period, $monthValue, $yearValue, $tz, $now);
+        [$periodStart, $periodEnd] = $this->periodBounds($period, $dateValue, $monthValue, $yearValue, $tz, $now);
         $periodDays = $this->periodDayCount($periodStart, $periodEnd, $now);
         $periodMonths = $this->periodMonthCount($period, $yearValue, $now);
 
@@ -118,11 +120,14 @@ class EntryProductivityController extends Controller
         $periodLabel = match ($period) {
             'month' => Carbon::createFromFormat('Y-m', $monthValue, $tz)->translatedFormat('F Y'),
             'year' => (string) $yearValue,
-            default => 'Hari ini',
+            default => $dateValue === $now->toDateString()
+                ? 'Hari ini'
+                : Carbon::parse($dateValue, $tz)->translatedFormat('d M Y'),
         };
 
         return view('entry.productivity.index', [
             'period' => $period,
+            'dateValue' => $dateValue,
             'monthValue' => $monthValue,
             'yearValue' => $yearValue,
             'periodLabel' => $periodLabel,
@@ -150,8 +155,14 @@ class EntryProductivityController extends Controller
     /**
      * @return array{0: Carbon, 1: Carbon}
      */
-    private function periodBounds(string $period, string $monthValue, int $yearValue, string $tz, Carbon $now): array
-    {
+    private function periodBounds(
+        string $period,
+        string $dateValue,
+        string $monthValue,
+        int $yearValue,
+        string $tz,
+        Carbon $now,
+    ): array {
         if ($period === 'month') {
             $start = Carbon::createFromFormat('Y-m', $monthValue, $tz)->startOfMonth();
 
@@ -168,9 +179,9 @@ class EntryProductivityController extends Controller
             return [$start, $end];
         }
 
-        $today = $now->copy();
+        $day = Carbon::parse($dateValue, $tz);
 
-        return [$today->copy()->startOfDay(), $today->copy()->endOfDay()];
+        return [$day->copy()->startOfDay(), $day->copy()->endOfDay()];
     }
 
     private function periodDayCount(Carbon $periodStart, Carbon $periodEnd, Carbon $now): int

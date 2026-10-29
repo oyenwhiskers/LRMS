@@ -26,7 +26,7 @@
         <div class="entry-prod__chips" role="group" aria-label="Tempoh">
             <a
                 class="entry-prod__chip {{ $period === 'today' ? 'is-active' : '' }}"
-                href="{{ route('entry.productivity.index', ['period' => 'today']) }}"
+                href="{{ route('entry.productivity.index', ['period' => 'today', 'date' => $dateValue]) }}"
             >Hari</a>
             <a
                 class="entry-prod__chip {{ $period === 'month' ? 'is-active' : '' }}"
@@ -37,6 +37,14 @@
                 href="{{ route('entry.productivity.index', ['period' => 'year', 'year' => $yearValue]) }}"
             >Tahun</a>
         </div>
+
+        @if ($period === 'today')
+            <label class="entry-prod__pick">
+                <span>Pilih tarikh</span>
+                <input type="hidden" name="period" value="today">
+                <input type="date" name="date" value="{{ $dateValue }}" onchange="this.form.submit()">
+            </label>
+        @endif
 
         @if ($period === 'month')
             <label class="entry-prod__pick">

@@ -62,6 +62,21 @@ class EntryProductivityTest extends TestCase
                     && $slow['files_per_hour'] === 3.0;
             });
 
+        $this->actingAs($fast)
+            ->get(route('entry.productivity.index', [
+                'period' => 'today',
+                'date' => '2026-10-15',
+            ]))
+            ->assertOk()
+            ->assertViewHas('dateValue', '2026-10-15')
+            ->assertViewHas('periodLabel', '15 Oct 2026')
+            ->assertViewHas('registeredInPeriod', 1)
+            ->assertViewHas('operators', function ($operators) {
+                $fast = collect($operators)->firstWhere('name', 'Fast Op');
+
+                return $fast && $fast['count'] === 1 && $fast['files_per_minute'] === null;
+            });
+
         Carbon::setTestNow();
     }
 
