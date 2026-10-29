@@ -130,46 +130,86 @@
     <section class="entry-prod__section" aria-labelledby="entry-prod-ops-title">
         <div class="entry-prod__section-head">
             <h2 id="entry-prod-ops-title">Operator</h2>
-            <p>Jumlah fail dan kadar key-in setiap operator · {{ $periodLabel }}</p>
+            <p>Jumlah fail dan kadar setiap operator · {{ $periodLabel }}</p>
         </div>
 
         @php
-            $rateTip = 'Fail/min dan fail/jam: bilangan fail ÷ masa dari fail pertama ke fail terakhir (semua masa termasuk). Fail/hari: jumlah fail ÷ bilangan hari dalam tempoh.';
+            $rateTip = match ($period) {
+                'month' => 'Fail/hari: jumlah fail ÷ bilangan hari dalam bulan. Fail/minggu: purata mingguan (fail × 7 ÷ hari).',
+                'year' => 'Fail/bulan: jumlah fail ÷ bilangan bulan yang sudah berlalu dalam tahun ini.',
+                default => 'Fail/min & fail/jam: jumlah fail ÷ masa kerja hari ini (dari fail pertama ke terakhir; rehat dalam hari termasuk).',
+            };
         @endphp
 
-        <div class="entry-prod__ops" role="list">
+        <div class="entry-prod__ops" data-period="{{ $period }}" role="list">
             <div class="entry-prod__ops-cols">
                 <span>Operator</span>
                 <span>Fail</span>
-                <span class="entry-prod__col-with-info">
-                    Fail/min
-                    <span class="entry-prod__info">
-                        <button
-                            type="button"
-                            class="entry-prod__info-btn"
-                            aria-describedby="entry-prod-rate-tip"
-                            aria-label="Maklumat kadar key-in"
-                        >
-                            <span aria-hidden="true">i</span>
-                        </button>
-                        <span class="entry-prod__info-pop" id="entry-prod-rate-tip" role="tooltip">
-                            {{ $rateTip }}
+                @if ($period === 'today')
+                    <span class="entry-prod__col-with-info">
+                        Fail/min
+                        <span class="entry-prod__info">
+                            <button
+                                type="button"
+                                class="entry-prod__info-btn"
+                                aria-describedby="entry-prod-rate-tip"
+                                aria-label="Maklumat kadar"
+                            >
+                                <span aria-hidden="true">i</span>
+                            </button>
+                            <span class="entry-prod__info-pop" id="entry-prod-rate-tip" role="tooltip">
+                                {{ $rateTip }}
+                            </span>
                         </span>
                     </span>
-                </span>
-                <span>Fail/jam</span>
-                <span>Fail/hari</span>
+                    <span>Fail/jam</span>
+                @elseif ($period === 'month')
+                    <span class="entry-prod__col-with-info">
+                        Fail/hari
+                        <span class="entry-prod__info">
+                            <button
+                                type="button"
+                                class="entry-prod__info-btn"
+                                aria-describedby="entry-prod-rate-tip"
+                                aria-label="Maklumat kadar"
+                            >
+                                <span aria-hidden="true">i</span>
+                            </button>
+                            <span class="entry-prod__info-pop" id="entry-prod-rate-tip" role="tooltip">
+                                {{ $rateTip }}
+                            </span>
+                        </span>
+                    </span>
+                    <span>Fail/minggu</span>
+                @else
+                    <span class="entry-prod__col-with-info">
+                        Fail/bulan
+                        <span class="entry-prod__info">
+                            <button
+                                type="button"
+                                class="entry-prod__info-btn"
+                                aria-describedby="entry-prod-rate-tip"
+                                aria-label="Maklumat kadar"
+                            >
+                                <span aria-hidden="true">i</span>
+                            </button>
+                            <span class="entry-prod__info-pop" id="entry-prod-rate-tip" role="tooltip">
+                                {{ $rateTip }}
+                            </span>
+                        </span>
+                    </span>
+                @endif
             </div>
 
             <div class="entry-prod__ops-mobile-info">
                 <span class="entry-prod__col-with-info">
-                    Kadar key-in
+                    Kadar
                     <span class="entry-prod__info">
                         <button
                             type="button"
                             class="entry-prod__info-btn"
                             aria-describedby="entry-prod-rate-tip-mobile"
-                            aria-label="Maklumat kadar key-in"
+                            aria-label="Maklumat kadar"
                         >
                             <span aria-hidden="true">i</span>
                         </button>
@@ -191,15 +231,25 @@
                     <div class="entry-prod__op-cell" data-label="Fail">
                         <p class="entry-prod__op-value">{{ $fmt($op['count']) }}</p>
                     </div>
-                    <div class="entry-prod__op-cell" data-label="Fail/min">
-                        <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_minute'], 2) }}</p>
-                    </div>
-                    <div class="entry-prod__op-cell" data-label="Fail/jam">
-                        <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_hour']) }}</p>
-                    </div>
-                    <div class="entry-prod__op-cell" data-label="Fail/hari">
-                        <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_day']) }}</p>
-                    </div>
+                    @if ($period === 'today')
+                        <div class="entry-prod__op-cell" data-label="Fail/min">
+                            <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_minute'] ?? null, 2) }}</p>
+                        </div>
+                        <div class="entry-prod__op-cell" data-label="Fail/jam">
+                            <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_hour'] ?? null) }}</p>
+                        </div>
+                    @elseif ($period === 'month')
+                        <div class="entry-prod__op-cell" data-label="Fail/hari">
+                            <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_day'] ?? null) }}</p>
+                        </div>
+                        <div class="entry-prod__op-cell" data-label="Fail/minggu">
+                            <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_week'] ?? null) }}</p>
+                        </div>
+                    @else
+                        <div class="entry-prod__op-cell" data-label="Fail/bulan">
+                            <p class="entry-prod__op-value">{{ $fmtRate($op['files_per_month'] ?? null) }}</p>
+                        </div>
+                    @endif
                 </article>
             @empty
                 <div class="entry-prod__empty">

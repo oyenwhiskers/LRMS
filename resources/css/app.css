@@ -4975,7 +4975,7 @@ a.entry-card--action:focus-visible {
 
 .entry-prod__ops-cols {
     display: none;
-    grid-template-columns: minmax(0, 1.5fr) 0.55fr 0.7fr 0.7fr 0.7fr;
+    grid-template-columns: minmax(0, 1.5fr) 0.7fr 0.85fr 0.85fr;
     gap: 0.65rem;
     padding: 0 0.15rem;
     font-size: 0.68rem;
@@ -5169,9 +5169,14 @@ a.entry-card--action:focus-visible {
     }
 
     .entry-prod__op {
-        grid-template-columns: minmax(0, 1.5fr) 0.55fr 0.7fr 0.7fr 0.7fr;
+        grid-template-columns: minmax(0, 1.5fr) 0.7fr 0.85fr 0.85fr;
         align-items: center;
         gap: 0.65rem;
+    }
+
+    .entry-prod__ops[data-period="year"] .entry-prod__ops-cols,
+    .entry-prod__ops[data-period="year"] .entry-prod__op {
+        grid-template-columns: minmax(0, 1.5fr) 0.7fr 0.9fr;
     }
 
     .entry-prod__op-cell::before,

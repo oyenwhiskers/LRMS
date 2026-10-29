@@ -29,6 +29,7 @@ class EntryProductivityController extends Controller
 
         [$periodStart, $periodEnd] = $this->periodBounds($period, $monthValue, $yearValue, $tz, $now);
         $periodDays = $this->periodDayCount($periodStart, $periodEnd, $now);
+        $periodMonths = $this->periodMonthCount($period, $yearValue, $now);
 
         $registeredQuery = $this->registeredScans()
             ->whereBetween('created_at', [$periodStart, $periodEnd]);
@@ -86,21 +87,30 @@ class EntryProductivityController extends Controller
             ->keyBy('id');
 
         $operators = $operatorTimestamps
-            ->map(function (Collection $rows, $userId) use ($users, $periodDays) {
+            ->map(function (Collection $rows, $userId) use ($users, $period, $periodDays, $periodMonths) {
                 $times = $rows->pluck('created_at')->sort()->values();
                 $user = $users->get((int) $userId);
                 $count = $times->count();
-                [$perMinute, $perHour] = $this->throughputRates($times);
 
-                return [
+                $row = [
                     'user_id' => (int) $userId,
                     'name' => $user?->name ?? 'Tidak diketahui',
                     'email' => $user?->email,
                     'count' => $count,
-                    'files_per_minute' => $perMinute,
-                    'files_per_hour' => $perHour,
-                    'files_per_day' => round($count / $periodDays, 1),
                 ];
+
+                if ($period === 'today') {
+                    [$perMinute, $perHour] = $this->throughputRates($times);
+                    $row['files_per_minute'] = $perMinute;
+                    $row['files_per_hour'] = $perHour;
+                } elseif ($period === 'month') {
+                    $row['files_per_day'] = round($count / $periodDays, 1);
+                    $row['files_per_week'] = round($count * 7 / $periodDays, 1);
+                } else {
+                    $row['files_per_month'] = round($count / $periodMonths, 1);
+                }
+
+                return $row;
             })
             ->sortByDesc('count')
             ->values();
@@ -170,28 +180,53 @@ class EntryProductivityController extends Controller
         return max(1, $periodStart->copy()->startOfDay()->diffInDays($endDay) + 1);
     }
 
+    private function periodMonthCount(string $period, int $yearValue, Carbon $now): int
+    {
+        if ($period !== 'year') {
+            return 1;
+        }
+
+        if ($yearValue === (int) $now->year) {
+            return max(1, (int) $now->month);
+        }
+
+        return $yearValue < (int) $now->year ? 12 : 1;
+    }
+
     /**
-     * Wall-clock throughput from first to last file (breaks included).
+     * Key-in throughput from each calendar day's first→last file (lunch etc. included;
+     * nights/weekends between days are not).
      *
      * @param  Collection<int, Carbon>  $times
      * @return array{0: ?float, 1: ?float} [files_per_minute, files_per_hour]
      */
     private function throughputRates(Collection $times): array
     {
-        if ($times->count() < 2) {
-            return [null, null];
+        $files = 0;
+        $elapsedSeconds = 0;
+
+        foreach ($times->groupBy(fn (Carbon $at) => $at->toDateString()) as $dayTimes) {
+            $dayTimes = $dayTimes->sort()->values();
+            if ($dayTimes->count() < 2) {
+                continue;
+            }
+
+            $span = $dayTimes->first()->diffInSeconds($dayTimes->last());
+            if ($span <= 0) {
+                continue;
+            }
+
+            $files += $dayTimes->count();
+            $elapsedSeconds += $span;
         }
 
-        $elapsedSeconds = $times->first()->diffInSeconds($times->last());
-        if ($elapsedSeconds <= 0) {
+        if ($files < 2 || $elapsedSeconds <= 0) {
             return [null, null];
         }
-
-        $count = $times->count();
 
         return [
-            round($count / ($elapsedSeconds / 60), 2),
-            round($count / ($elapsedSeconds / 3600), 1),
+            round($files / ($elapsedSeconds / 60), 2),
+            round($files / ($elapsedSeconds / 3600), 1),
         ];
     }
 }
