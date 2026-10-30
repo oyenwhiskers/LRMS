@@ -46,7 +46,8 @@ class EntryProductivityTest extends TestCase
             ->assertSee('Fail/jam', false)
             ->assertViewHas('registeredToday', 5)
             ->assertViewHas('monthCount', 6)
-            ->assertViewHas('avgPerDay', 0.2)
+            ->assertViewHas('avgPerDay', 0.2) // 6 / 31 days in Oct
+            ->assertViewHas('avgPerMonth', 0.5) // 6 / 12
             ->assertViewHas('operators', function ($operators) {
                 $fast = collect($operators)->firstWhere('name', 'Fast Op');
                 $slow = collect($operators)->firstWhere('name', 'Slow Op');
@@ -101,11 +102,11 @@ class EntryProductivityTest extends TestCase
             ->assertViewHas('operators', function ($operators) {
                 $row = collect($operators)->firstWhere('name', 'Break Op');
 
-                // 5 files / 29 days → 0.2/hari; 5 × 7 / 29 → 1.2/minggu
+                // 5 files / 31 days in Oct → 0.2/hari; week = 0.2 × 7 → 1.4
                 return $row
                     && $row['count'] === 5
                     && $row['files_per_day'] === 0.2
-                    && $row['files_per_week'] === 1.2
+                    && $row['files_per_week'] === 1.4
                     && ! array_key_exists('files_per_minute', $row);
             });
 
@@ -133,10 +134,10 @@ class EntryProductivityTest extends TestCase
             ->assertViewHas('operators', function ($operators) {
                 $row = collect($operators)->firstWhere('name', 'Year Op');
 
-                // 4 files / 10 months elapsed → 0.4/bulan
+                // 4 files / 12 months → 0.3/bulan
                 return $row
                     && $row['count'] === 4
-                    && $row['files_per_month'] === 0.4
+                    && $row['files_per_month'] === 0.3
                     && ! array_key_exists('files_per_week', $row);
             });
 

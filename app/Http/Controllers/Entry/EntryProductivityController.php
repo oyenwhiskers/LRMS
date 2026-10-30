@@ -30,8 +30,9 @@ class EntryProductivityController extends Controller
         $yearValue = (int) ($filters['year'] ?? $now->year);
 
         [$periodStart, $periodEnd] = $this->periodBounds($period, $dateValue, $monthValue, $yearValue, $tz, $now);
-        $periodDays = $this->periodDayCount($periodStart, $periodEnd, $now);
-        $periodMonths = $this->periodMonthCount($period, $yearValue, $now);
+        $periodDays = $period === 'month'
+            ? Carbon::createFromFormat('Y-m', $monthValue, $tz)->daysInMonth
+            : $this->periodDayCount($periodStart, $periodEnd, $now);
 
         $registeredQuery = $this->registeredScans()
             ->whereBetween('created_at', [$periodStart, $periodEnd]);
@@ -45,19 +46,16 @@ class EntryProductivityController extends Controller
             ->count();
 
         $monthStart = $now->copy()->startOfMonth();
-        $monthEnd = $now->copy()->endOfMonth();
         $monthCount = $this->registeredScans()
-            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->whereBetween('created_at', [$monthStart, $monthStart->copy()->endOfMonth()])
             ->count();
-        $daysElapsedInMonth = max(1, $monthStart->diffInDays($now->copy()->startOfDay()) + 1);
-        $avgPerDay = round($monthCount / $daysElapsedInMonth, 1);
+        $avgPerDay = round($monthCount / max(1, $monthStart->daysInMonth), 1);
 
         $yearStart = $now->copy()->startOfYear();
         $yearCount = $this->registeredScans()
             ->whereBetween('created_at', [$yearStart, $now->copy()->endOfDay()])
             ->count();
-        $monthsElapsed = max(1, (int) $now->month);
-        $avgPerMonth = round($yearCount / $monthsElapsed, 1);
+        $avgPerMonth = round($yearCount / 12, 1);
 
         $pendingShelf = (clone $registeredQuery)
             ->where('status', EntryScan::STATUS_SAVED)
@@ -89,7 +87,7 @@ class EntryProductivityController extends Controller
             ->keyBy('id');
 
         $operators = $operatorTimestamps
-            ->map(function (Collection $rows, $userId) use ($users, $period, $periodDays, $periodMonths) {
+            ->map(function (Collection $rows, $userId) use ($users, $period, $periodDays) {
                 $times = $rows->pluck('created_at')->sort()->values();
                 $user = $users->get((int) $userId);
                 $count = $times->count();
@@ -106,10 +104,11 @@ class EntryProductivityController extends Controller
                     $row['files_per_minute'] = $perMinute;
                     $row['files_per_hour'] = $perHour;
                 } elseif ($period === 'month') {
-                    $row['files_per_day'] = round($count / $periodDays, 1);
-                    $row['files_per_week'] = round($count * 7 / $periodDays, 1);
+                    $perDay = round($count / max(1, $periodDays), 1);
+                    $row['files_per_day'] = $perDay;
+                    $row['files_per_week'] = round($perDay * 7, 1);
                 } else {
-                    $row['files_per_month'] = round($count / $periodMonths, 1);
+                    $row['files_per_month'] = round($count / 12, 1);
                 }
 
                 return $row;
@@ -191,22 +190,10 @@ class EntryProductivityController extends Controller
         return max(1, $periodStart->copy()->startOfDay()->diffInDays($endDay) + 1);
     }
 
-    private function periodMonthCount(string $period, int $yearValue, Carbon $now): int
-    {
-        if ($period !== 'year') {
-            return 1;
-        }
-
-        if ($yearValue === (int) $now->year) {
-            return max(1, (int) $now->month);
-        }
-
-        return $yearValue < (int) $now->year ? 12 : 1;
-    }
-
     /**
      * Key-in throughput from each calendar day's first→last file (lunch etc. included;
-     * nights/weekends between days are not).
+     * nights/weekends between days are not). Hour is derived from rounded per-minute
+     * so Fail/min × 60 matches Fail/jam.
      *
      * @param  Collection<int, Carbon>  $times
      * @return array{0: ?float, 1: ?float} [files_per_minute, files_per_hour]
@@ -235,9 +222,11 @@ class EntryProductivityController extends Controller
             return [null, null];
         }
 
+        $perMinute = round($files / ($elapsedSeconds / 60), 2);
+
         return [
-            round($files / ($elapsedSeconds / 60), 2),
-            round($files / ($elapsedSeconds / 3600), 1),
+            $perMinute,
+            round($perMinute * 60, 1),
         ];
     }
 }

@@ -91,12 +91,12 @@
             <article class="entry-prod__stat">
                 <p class="entry-prod__stat-label">Purata / hari</p>
                 <p class="entry-prod__stat-value">{{ $fmt($avgPerDay) }}</p>
-                <p class="entry-prod__stat-hint">Bulan ini · {{ $fmt($monthCount) }} fail</p>
+                <p class="entry-prod__stat-hint">Bulan ini ÷ hari dalam bulan · {{ $fmt($monthCount) }} fail</p>
             </article>
             <article class="entry-prod__stat">
                 <p class="entry-prod__stat-label">Purata / bulan</p>
                 <p class="entry-prod__stat-value">{{ $fmt($avgPerMonth) }}</p>
-                <p class="entry-prod__stat-hint">Tahun ini · {{ $fmt($yearCount) }} fail</p>
+                <p class="entry-prod__stat-hint">Tahun ini ÷ 12 · {{ $fmt($yearCount) }} fail</p>
             </article>
         </div>
     </section>
@@ -143,9 +143,9 @@
 
         @php
             $rateTip = match ($period) {
-                'month' => 'Fail/hari: jumlah fail ÷ bilangan hari dalam bulan. Fail/minggu: purata mingguan (fail × 7 ÷ hari).',
-                'year' => 'Fail/bulan: jumlah fail ÷ bilangan bulan yang sudah berlalu dalam tahun ini.',
-                default => 'Fail/min & fail/jam: jumlah fail ÷ masa kerja hari ini (dari fail pertama ke terakhir; rehat dalam hari termasuk).',
+                'month' => 'Fail/hari: jumlah fail ÷ bilangan hari dalam bulan tersebut. Fail/minggu = fail/hari × 7.',
+                'year' => 'Fail/bulan: jumlah fail dalam tahun ÷ 12.',
+                default => 'Fail/min: jumlah fail ÷ masa dari fail pertama ke terakhir hari itu. Fail/jam = fail/min × 60.',
             };
         @endphp
 
