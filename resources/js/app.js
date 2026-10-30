@@ -3563,6 +3563,114 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    const prodDayPicker = document.querySelector('[data-prod-day-picker]');
+    if (prodDayPicker) {
+        const workDates = new Set(JSON.parse(prodDayPicker.dataset.workDates || '[]'));
+        const valueInput = prodDayPicker.querySelector('[data-prod-day-value]');
+        const toggle = prodDayPicker.querySelector('[data-prod-day-toggle]');
+        const panel = prodDayPicker.querySelector('[data-prod-day-panel]');
+        const grid = prodDayPicker.querySelector('[data-prod-day-grid]');
+        const label = prodDayPicker.querySelector('[data-prod-day-label]');
+        const form = prodDayPicker.closest('form');
+        let cursor = new Date(`${prodDayPicker.dataset.selected || valueInput?.value}T00:00:00`);
+        if (Number.isNaN(cursor.getTime())) {
+            cursor = new Date();
+        }
+        cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+
+        const pad = (n) => String(n).padStart(2, '0');
+        const toKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+        const monthLabel = (date) => date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+        const close = () => {
+            panel?.classList.add('hidden');
+            toggle?.setAttribute('aria-expanded', 'false');
+        };
+
+        const open = () => {
+            panel?.classList.remove('hidden');
+            toggle?.setAttribute('aria-expanded', 'true');
+            render();
+        };
+
+        const render = () => {
+            if (!grid || !label) return;
+            const year = cursor.getFullYear();
+            const month = cursor.getMonth();
+            label.textContent = monthLabel(cursor);
+
+            const firstDow = (new Date(year, month, 1).getDay() + 6) % 7; // Monday-first
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const selected = valueInput?.value || '';
+            grid.replaceChildren();
+
+            for (let i = 0; i < firstDow; i += 1) {
+                const cell = document.createElement('span');
+                cell.className = 'entry-prod__cal-day is-outside';
+                grid.append(cell);
+            }
+
+            for (let day = 1; day <= daysInMonth; day += 1) {
+                const key = toKey(year, month, day);
+                const hasWork = workDates.has(key);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = String(day);
+                btn.className = 'entry-prod__cal-day';
+                btn.dataset.date = key;
+
+                if (hasWork) {
+                    btn.classList.add('is-work');
+                } else {
+                    btn.classList.add('is-muted');
+                    btn.disabled = true;
+                    btn.tabIndex = -1;
+                    btn.setAttribute('aria-disabled', 'true');
+                }
+
+                if (key === selected) {
+                    btn.classList.add('is-selected');
+                    btn.setAttribute('aria-current', 'date');
+                }
+
+                grid.append(btn);
+            }
+        };
+
+        toggle?.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (panel?.classList.contains('hidden')) open();
+            else close();
+        });
+
+        prodDayPicker.querySelector('[data-prod-day-prev]')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1);
+            render();
+        });
+
+        prodDayPicker.querySelector('[data-prod-day-next]')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+            render();
+        });
+
+        grid?.addEventListener('click', (event) => {
+            const dayBtn = event.target.closest('.entry-prod__cal-day.is-work');
+            if (!dayBtn || !valueInput) return;
+            valueInput.value = dayBtn.dataset.date;
+            form?.requestSubmit();
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!prodDayPicker.contains(event.target)) close();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') close();
+        });
+    }
+
     const reader = document.getElementById('qr-reader');
     if (! reader) {
         return;
@@ -3726,114 +3834,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             activeButton = null;
         }
     };
-
-    const prodDayPicker = document.querySelector('[data-prod-day-picker]');
-    if (prodDayPicker) {
-        const workDates = new Set(JSON.parse(prodDayPicker.dataset.workDates || '[]'));
-        const valueInput = prodDayPicker.querySelector('[data-prod-day-value]');
-        const toggle = prodDayPicker.querySelector('[data-prod-day-toggle]');
-        const panel = prodDayPicker.querySelector('[data-prod-day-panel]');
-        const grid = prodDayPicker.querySelector('[data-prod-day-grid]');
-        const label = prodDayPicker.querySelector('[data-prod-day-label]');
-        const form = prodDayPicker.closest('form');
-        let cursor = new Date(`${prodDayPicker.dataset.selected || valueInput?.value}T00:00:00`);
-        if (Number.isNaN(cursor.getTime())) {
-            cursor = new Date();
-        }
-        cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-
-        const pad = (n) => String(n).padStart(2, '0');
-        const toKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
-        const monthLabel = (date) => date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-
-        const close = () => {
-            panel?.classList.add('hidden');
-            toggle?.setAttribute('aria-expanded', 'false');
-        };
-
-        const open = () => {
-            panel?.classList.remove('hidden');
-            toggle?.setAttribute('aria-expanded', 'true');
-            render();
-        };
-
-        const render = () => {
-            if (!grid || !label) return;
-            const year = cursor.getFullYear();
-            const month = cursor.getMonth();
-            label.textContent = monthLabel(cursor);
-
-            const firstDow = (new Date(year, month, 1).getDay() + 6) % 7; // Monday-first
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
-            const selected = valueInput?.value || '';
-            grid.replaceChildren();
-
-            for (let i = 0; i < firstDow; i += 1) {
-                const cell = document.createElement('span');
-                cell.className = 'entry-prod__cal-day is-outside';
-                grid.append(cell);
-            }
-
-            for (let day = 1; day <= daysInMonth; day += 1) {
-                const key = toKey(year, month, day);
-                const hasWork = workDates.has(key);
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.textContent = String(day);
-                btn.className = 'entry-prod__cal-day';
-                btn.dataset.date = key;
-
-                if (hasWork) {
-                    btn.classList.add('is-work');
-                } else {
-                    btn.classList.add('is-muted');
-                    btn.disabled = true;
-                    btn.tabIndex = -1;
-                    btn.setAttribute('aria-disabled', 'true');
-                }
-
-                if (key === selected) {
-                    btn.classList.add('is-selected');
-                    btn.setAttribute('aria-current', 'date');
-                }
-
-                grid.append(btn);
-            }
-        };
-
-        toggle?.addEventListener('click', (event) => {
-            event.preventDefault();
-            if (panel?.classList.contains('hidden')) open();
-            else close();
-        });
-
-        prodDayPicker.querySelector('[data-prod-day-prev]')?.addEventListener('click', (event) => {
-            event.preventDefault();
-            cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1);
-            render();
-        });
-
-        prodDayPicker.querySelector('[data-prod-day-next]')?.addEventListener('click', (event) => {
-            event.preventDefault();
-            cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-            render();
-        });
-
-        grid?.addEventListener('click', (event) => {
-            const dayBtn = event.target.closest('.entry-prod__cal-day.is-work');
-            if (!dayBtn || !valueInput) return;
-            valueInput.value = dayBtn.dataset.date;
-            form?.requestSubmit();
-        });
-
-        document.addEventListener('click', (event) => {
-            if (!prodDayPicker.contains(event.target)) close();
-        });
-
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') close();
-        });
-    }
 
     document.addEventListener('click', async (event) => {
         const button = event.target.closest('[data-scan-target]');
