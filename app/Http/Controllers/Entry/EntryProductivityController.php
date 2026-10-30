@@ -130,6 +130,7 @@ class EntryProductivityController extends Controller
             'monthValue' => $monthValue,
             'yearValue' => $yearValue,
             'periodLabel' => $periodLabel,
+            'workDates' => $period === 'today' ? $this->workDates() : [],
             'registeredToday' => $registeredToday,
             'registeredInPeriod' => $registeredInPeriod,
             'avgPerDay' => $avgPerDay,
@@ -149,6 +150,22 @@ class EntryProductivityController extends Controller
     {
         return EntryScan::query()
             ->whereIn('status', [EntryScan::STATUS_SAVED, EntryScan::STATUS_STORED]);
+    }
+
+    /**
+     * @return list<string> Y-m-d dates that have at least one registered scan
+     */
+    private function workDates(): array
+    {
+        return $this->registeredScans()
+            ->toBase()
+            ->selectRaw('DATE(created_at) as work_date')
+            ->distinct()
+            ->orderBy('work_date')
+            ->pluck('work_date')
+            ->map(fn ($date) => Carbon::parse((string) $date)->toDateString())
+            ->values()
+            ->all();
     }
 
     /**

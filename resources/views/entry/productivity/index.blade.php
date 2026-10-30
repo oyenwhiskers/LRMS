@@ -39,11 +39,44 @@
         </div>
 
         @if ($period === 'today')
-            <label class="entry-prod__pick">
+            <div
+                class="entry-prod__pick entry-prod__day-picker"
+                data-prod-day-picker
+                data-work-dates='@json($workDates)'
+                data-selected="{{ $dateValue }}"
+            >
                 <span>Pilih tarikh</span>
                 <input type="hidden" name="period" value="today">
-                <input type="date" name="date" value="{{ $dateValue }}" onchange="this.form.submit()">
-            </label>
+                <input type="hidden" name="date" value="{{ $dateValue }}" data-prod-day-value>
+                <button
+                    type="button"
+                    class="entry-prod__day-toggle"
+                    data-prod-day-toggle
+                    aria-expanded="false"
+                    aria-controls="entry-prod-day-panel"
+                >
+                    <span data-prod-day-summary>{{ $periodLabel }}</span>
+                    <span class="entry-prod__day-toggle-icon" aria-hidden="true">▾</span>
+                </button>
+                <div
+                    class="entry-prod__cal hidden"
+                    id="entry-prod-day-panel"
+                    data-prod-day-panel
+                    role="dialog"
+                    aria-label="Kalendar hari kerja"
+                >
+                    <div class="entry-prod__cal-nav">
+                        <button type="button" class="entry-prod__cal-nav-btn" data-prod-day-prev aria-label="Bulan sebelumnya">‹</button>
+                        <p class="entry-prod__cal-month" data-prod-day-label></p>
+                        <button type="button" class="entry-prod__cal-nav-btn" data-prod-day-next aria-label="Bulan seterusnya">›</button>
+                    </div>
+                    <div class="entry-prod__cal-weekdays" aria-hidden="true">
+                        <span>Is</span><span>Se</span><span>Ra</span><span>Kh</span><span>Ju</span><span>Sa</span><span>Ah</span>
+                    </div>
+                    <div class="entry-prod__cal-grid" data-prod-day-grid></div>
+                    <p class="entry-prod__cal-hint">Hari tanpa daftar dikaburkan</p>
+                </div>
+            </div>
         @endif
 
         @if ($period === 'month')

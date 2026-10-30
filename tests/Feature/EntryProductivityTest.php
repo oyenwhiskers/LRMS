@@ -69,9 +69,15 @@ class EntryProductivityTest extends TestCase
                 'date' => '2026-10-15',
             ]))
             ->assertOk()
+            ->assertSee('data-prod-day-picker', false)
             ->assertViewHas('dateValue', '2026-10-15')
             ->assertViewHas('periodLabel', '15 Oct 2026')
             ->assertViewHas('registeredInPeriod', 1)
+            ->assertViewHas('workDates', function ($dates) {
+                return in_array('2026-10-15', $dates, true)
+                    && in_array('2026-10-29', $dates, true)
+                    && ! in_array('2026-10-16', $dates, true);
+            })
             ->assertViewHas('operators', function ($operators) {
                 $fast = collect($operators)->firstWhere('name', 'Fast Op');
 

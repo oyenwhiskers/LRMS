@@ -162,6 +162,9 @@
             @if (session('warning'))
                 <p class="entry-app__flash entry-app__flash--warn">{{ session('warning') }}</p>
             @endif
+            @if ($errors->any())
+                <p class="entry-app__flash entry-app__flash--warn">{{ $errors->first() }}</p>
+            @endif
 
             <main class="entry-app__main">
                 @yield('content')

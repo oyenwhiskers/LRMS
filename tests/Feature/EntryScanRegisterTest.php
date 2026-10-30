@@ -254,6 +254,64 @@ class EntryScanRegisterTest extends TestCase
             ->assertOk();
     }
 
+    public function test_save_accepts_more_than_three_pages(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'text' => json_encode([
+                                'reference_number' => 'CON/2021/0013',
+                                'case_type' => LegalFile::TYPE_SNP,
+                                'case_category_code' => 'CON',
+                                'purchaser' => 'Thirteen Pages',
+                            ]),
+                        ]],
+                    ],
+                ]],
+            ]),
+        ]);
+
+        config([
+            'services.gemini.key' => 'test-key',
+            'services.gemini.model' => 'gemini-3.1-flash-lite',
+        ]);
+
+        $entry = User::factory()->entry()->create();
+        $documents = [];
+        for ($i = 1; $i <= 13; $i++) {
+            $documents[] = UploadedFile::fake()->image("page{$i}.jpg");
+        }
+
+        $analyze = $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => $documents,
+            ], ['Accept' => 'application/json']);
+
+        $analyze->assertOk()->assertJsonPath('pages', 13);
+        $tempPaths = $analyze->json('temp_paths');
+        $this->assertCount(13, $tempPaths);
+
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+
+        $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_paths' => $tempPaths,
+                'reference_number' => 'CON/2021/0013',
+                'case_type' => LegalFile::TYPE_SNP,
+                'case_category_id' => $category->id,
+                'purchaser' => 'Thirteen Pages',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $scan = EntryScan::firstOrFail();
+        $this->assertCount(13, $scan->documentPaths());
+        $this->assertSame('entry-scans/'.$scan->id.'/page-1.jpg', $scan->document_path);
+    }
+
     public function test_analyze_does_not_create_draft_until_confirm_save(): void
     {
         Storage::fake('local');

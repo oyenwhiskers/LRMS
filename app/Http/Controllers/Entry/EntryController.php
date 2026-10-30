@@ -473,7 +473,7 @@ class EntryController extends Controller
         }
 
         $paths = array_values(array_unique($paths));
-        if ($paths === [] || count($paths) > 3) {
+        if ($paths === []) {
             throw ValidationException::withMessages([
                 'temp_path' => 'Sesi gambar tidak sah. Sila imbas semula.',
             ]);
