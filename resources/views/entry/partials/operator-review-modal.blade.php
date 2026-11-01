@@ -156,6 +156,8 @@
                                 </div>
                             </dl>
                         </section>
+
+                        @include('entry.partials.review-comment-log', ['scan' => $scan])
                     </div>
                 </div>
 
@@ -195,7 +197,6 @@
             </div>
 
             <div class="operator-review-page__actions">
-                @include('entry.partials.review-comment-log', ['scan' => $scan])
                 <label class="operator-review-page__notes">
                     <span class="operator-review-page__notes-label">Catatan pembetulan</span>
                     <textarea

@@ -3821,8 +3821,8 @@ a.entry-card--action:focus-visible {
     color: #c2410c;
 }
 
-.operator-review-page__actions > .entry-review-note {
-    margin-bottom: 0.15rem;
+.operator-review-page__info > .entry-review-note {
+    margin-top: 0.15rem;
 }
 
 .entry-pill {
