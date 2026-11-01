@@ -33,6 +33,7 @@ class EntryScan extends Model
         'reviewed_by',
         'reviewed_at',
         'review_notes',
+        'review_comment_log',
     ];
 
     protected function casts(): array
@@ -40,7 +41,49 @@ class EntryScan extends Model
         return [
             'ai_suggestion' => 'array',
             'reviewed_at' => 'datetime',
+            'review_comment_log' => 'array',
         ];
+    }
+
+    /**
+     * Correction comments newest-first. Falls back to the current review_notes row for legacy data.
+     *
+     * @return list<array{note: string, by: int|null, by_name: string|null, at: string|null}>
+     */
+    public function reviewCommentLogEntries(): array
+    {
+        $log = $this->review_comment_log;
+        if (! is_array($log)) {
+            $log = [];
+        }
+
+        $entries = [];
+        foreach ($log as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $note = isset($row['note']) && is_string($row['note']) ? trim($row['note']) : '';
+            if ($note === '') {
+                continue;
+            }
+            $entries[] = [
+                'note' => $note,
+                'by' => isset($row['by']) && is_numeric($row['by']) ? (int) $row['by'] : null,
+                'by_name' => isset($row['by_name']) && is_string($row['by_name']) ? $row['by_name'] : null,
+                'at' => isset($row['at']) && is_string($row['at']) ? $row['at'] : null,
+            ];
+        }
+
+        if ($entries === [] && filled($this->review_notes)) {
+            $entries[] = [
+                'note' => (string) $this->review_notes,
+                'by' => $this->reviewed_by,
+                'by_name' => $this->reviewedBy?->name,
+                'at' => $this->reviewed_at?->toIso8601String(),
+            ];
+        }
+
+        return array_reverse($entries);
     }
 
     public function user(): BelongsTo

@@ -205,6 +205,9 @@ class EntryOperatorBrowseTest extends TestCase
         $this->assertSame($peer->id, $scan->reviewed_by);
         $this->assertNotNull($scan->reviewed_at);
         $this->assertSame('Nama pembeli salah eja', $scan->review_notes);
+        $this->assertCount(1, $scan->review_comment_log);
+        $this->assertSame('Nama pembeli salah eja', $scan->review_comment_log[0]['note']);
+        $this->assertSame($peer->id, $scan->review_comment_log[0]['by']);
 
         $this->actingAs($peer)
             ->from(route('entry.operators.index'))
@@ -217,6 +220,8 @@ class EntryOperatorBrowseTest extends TestCase
         $this->assertSame(EntryScan::REVIEW_VERIFIED, $scan->review_status);
         $this->assertSame($peer->id, $scan->reviewed_by);
         $this->assertNull($scan->review_notes);
+        $this->assertCount(1, $scan->review_comment_log);
+        $this->assertSame('Nama pembeli salah eja', $scan->review_comment_log[0]['note']);
     }
 
     public function test_owner_sees_needs_correction_on_home_and_history(): void
@@ -298,6 +303,12 @@ class EntryOperatorBrowseTest extends TestCase
             'reviewed_by' => $peer->id,
             'reviewed_at' => now(),
             'review_notes' => 'Tukar nama pembeli',
+            'review_comment_log' => [[
+                'note' => 'Tukar nama pembeli',
+                'by' => $peer->id,
+                'by_name' => $peer->name,
+                'at' => now()->utc()->format('Y-m-d H:i:s'),
+            ]],
         ]);
 
         $this->actingAs($owner)
@@ -318,8 +329,31 @@ class EntryOperatorBrowseTest extends TestCase
         $this->assertSame(EntryScan::REVIEW_PENDING, $scan->review_status);
         $this->assertNull($scan->reviewed_by);
         $this->assertNull($scan->reviewed_at);
-        $this->assertNull($scan->review_notes);
+        $this->assertSame('Tukar nama pembeli', $scan->review_notes);
+        $this->assertCount(1, $scan->review_comment_log);
+        $this->assertSame('Tukar nama pembeli', $scan->review_comment_log[0]['note']);
         $this->assertSame('Fixed Name', $file->fresh()->purchaser);
+
+        $this->actingAs($peer)
+            ->get(route('entry.operators.index'))
+            ->assertOk()
+            ->assertSee('Tukar nama pembeli', false)
+            ->assertSee('Sejarah catatan', false);
+
+        $this->actingAs($peer)
+            ->from(route('entry.operators.index'))
+            ->post(route('entry.operators.review', $scan), [
+                'review_status' => EntryScan::REVIEW_NEEDS_CORRECTION,
+                'review_notes' => 'Masih salah ejaan bank',
+            ])
+            ->assertRedirect(route('entry.operators.index'));
+
+        $scan->refresh();
+        $this->assertSame(EntryScan::REVIEW_NEEDS_CORRECTION, $scan->review_status);
+        $this->assertSame('Masih salah ejaan bank', $scan->review_notes);
+        $this->assertCount(2, $scan->review_comment_log);
+        $this->assertSame('Tukar nama pembeli', $scan->review_comment_log[0]['note']);
+        $this->assertSame('Masih salah ejaan bank', $scan->review_comment_log[1]['note']);
     }
 
     public function test_draft_scan_cannot_be_reviewed_and_invalid_status_rejected(): void

@@ -3801,6 +3801,30 @@ a.entry-card--action:focus-visible {
     white-space: pre-wrap;
 }
 
+.entry-review-note__log {
+    margin: 0.45rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.65rem;
+}
+
+.entry-review-note__log-item + .entry-review-note__log-item {
+    padding-top: 0.65rem;
+    border-top: 1px solid #fed7aa;
+}
+
+.entry-review-note__meta {
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1.3;
+    color: #c2410c;
+}
+
+.operator-review-page__actions > .entry-review-note {
+    margin-bottom: 0.15rem;
+}
+
 .entry-pill {
     flex-shrink: 0;
     padding: 0.3rem 0.55rem;

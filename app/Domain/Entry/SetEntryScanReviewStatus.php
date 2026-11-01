@@ -32,20 +32,29 @@ class SetEntryScanReviewStatus
             $locked = EntryScan::query()->whereKey($scan->id)->lockForUpdate()->firstOrFail();
 
             if ($reviewStatus === EntryScan::REVIEW_PENDING) {
+                // Keep review_notes + review_comment_log so QC still sees prior comments after resubmit.
                 $locked->update([
                     'review_status' => EntryScan::REVIEW_PENDING,
                     'reviewed_by' => null,
                     'reviewed_at' => null,
-                    'review_notes' => null,
                 ]);
             } elseif ($reviewStatus === EntryScan::REVIEW_NEEDS_CORRECTION) {
+                $log = is_array($locked->review_comment_log) ? $locked->review_comment_log : [];
+                $log[] = [
+                    'note' => $notes,
+                    'by' => $user->id,
+                    'by_name' => $user->name,
+                    'at' => now()->utc()->format('Y-m-d H:i:s'),
+                ];
                 $locked->update([
                     'review_status' => $reviewStatus,
                     'reviewed_by' => $user->id,
                     'reviewed_at' => now(),
                     'review_notes' => $notes,
+                    'review_comment_log' => $log,
                 ]);
             } else {
+                // Clear active note; keep comment log for history.
                 $locked->update([
                     'review_status' => $reviewStatus,
                     'reviewed_by' => $user->id,

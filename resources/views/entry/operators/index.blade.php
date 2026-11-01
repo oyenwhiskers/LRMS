@@ -161,8 +161,11 @@
                                 · {{ $scan->legalFile->purchaser ?: '—' }}
                             </p>
                             @if (
-                                $scan->review_status === App\Models\EntryScan::REVIEW_NEEDS_CORRECTION
-                                && filled($scan->review_notes)
+                                filled($scan->review_notes)
+                                && in_array($scan->review_status, [
+                                    App\Models\EntryScan::REVIEW_PENDING,
+                                    App\Models\EntryScan::REVIEW_NEEDS_CORRECTION,
+                                ], true)
                             )
                                 <p class="entry-card__note">{{ $scan->review_notes }}</p>
                             @endif
