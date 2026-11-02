@@ -6,6 +6,8 @@ use App\Models\CaseCategory;
 use App\Models\EntryPrintJob;
 use App\Models\EntryScan;
 use App\Models\LegalFile;
+use App\Models\Rack;
+use App\Models\Shelf;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -393,8 +395,155 @@ class EntryPrintStationTest extends TestCase
             ->assertJsonCount(0, 'jobs');
     }
 
-    private function makeFile(CaseCategory $category, User $owner, string $reference): LegalFile
+    public function test_station_filters_jobs_by_rack_column_and_shelf_location(): void
     {
+        $operator = User::factory()->entry()->create();
+        $station = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+
+        $rackG = Rack::create(['code' => 'G', 'name' => 'Conveyancing']);
+        $rackF = Rack::create(['code' => 'F', 'name' => 'Other']);
+
+        $shelfGA1 = Shelf::create([
+            'rack_id' => $rackG->id,
+            'code' => 'A1',
+            'name' => 'Column A, Row 1',
+        ]);
+        $shelfGA2 = Shelf::create([
+            'rack_id' => $rackG->id,
+            'code' => 'A2',
+            'name' => 'Column A, Row 2',
+        ]);
+        $shelfGB1 = Shelf::create([
+            'rack_id' => $rackG->id,
+            'code' => 'B1',
+            'name' => 'Column B, Row 1',
+        ]);
+        $shelfGZ1 = Shelf::create([
+            'rack_id' => $rackG->id,
+            'code' => 'Z1',
+            'name' => 'Column Z, Row 1',
+        ]);
+        $shelfGZ11 = Shelf::create([
+            'rack_id' => $rackG->id,
+            'code' => 'Z11',
+            'name' => 'Column Z1, Row 1',
+        ]);
+        $shelfFA1 = Shelf::create([
+            'rack_id' => $rackF->id,
+            'code' => 'A1',
+            'name' => 'Column A, Row 1',
+        ]);
+
+        $fileGA1 = $this->makeFile($category, $operator, 'CON/2019/1001', $shelfGA1);
+        $fileGA2 = $this->makeFile($category, $operator, 'CON/2019/1002', $shelfGA2);
+        $fileGB1 = $this->makeFile($category, $operator, 'CON/2019/1003', $shelfGB1);
+        $fileGZ1 = $this->makeFile($category, $operator, 'CON/2019/1004', $shelfGZ1);
+        $fileGZ11 = $this->makeFile($category, $operator, 'CON/2019/1005', $shelfGZ11);
+        $fileFA1 = $this->makeFile($category, $operator, 'CON/2019/1006', $shelfFA1);
+        $fileUnshelved = $this->makeFile($category, $operator, 'CON/2019/1007');
+
+        foreach ([$fileGA1, $fileGA2, $fileGB1, $fileGZ1, $fileGZ11, $fileFA1, $fileUnshelved] as $file) {
+            $this->actingAs($operator)
+                ->postJson(route('entry.print-jobs.store'), [
+                    'legal_file_id' => $file->id,
+                    'type' => 'front',
+                ])
+                ->assertCreated();
+        }
+
+        $jobGA1 = EntryPrintJob::query()->where('legal_file_id', $fileGA1->id)->firstOrFail();
+        $jobGA2 = EntryPrintJob::query()->where('legal_file_id', $fileGA2->id)->firstOrFail();
+        $jobGB1 = EntryPrintJob::query()->where('legal_file_id', $fileGB1->id)->firstOrFail();
+        $jobGZ1 = EntryPrintJob::query()->where('legal_file_id', $fileGZ1->id)->firstOrFail();
+        $jobGZ11 = EntryPrintJob::query()->where('legal_file_id', $fileGZ11->id)->firstOrFail();
+        $jobFA1 = EntryPrintJob::query()->where('legal_file_id', $fileFA1->id)->firstOrFail();
+        $jobUnshelved = EntryPrintJob::query()->where('legal_file_id', $fileUnshelved->id)->firstOrFail();
+
+        $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index', ['rack_id' => $rackG->id]))
+            ->assertOk()
+            ->assertJsonCount(5, 'jobs')
+            ->assertJsonPath('total', 5)
+            ->assertJsonFragment(['id' => $jobGA1->id, 'location' => 'G/A1'])
+            ->assertJsonFragment(['id' => $jobGB1->id])
+            ->assertJsonMissing(['id' => $jobFA1->id])
+            ->assertJsonMissing(['id' => $jobUnshelved->id]);
+
+        $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index', [
+                'rack_id' => $rackG->id,
+                'column' => 'A',
+            ]))
+            ->assertOk()
+            ->assertJsonCount(2, 'jobs')
+            ->assertJsonFragment(['id' => $jobGA1->id])
+            ->assertJsonFragment(['id' => $jobGA2->id])
+            ->assertJsonMissing(['id' => $jobGB1->id]);
+
+        $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index', [
+                'rack_id' => $rackG->id,
+                'column' => 'Z',
+            ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'jobs')
+            ->assertJsonPath('jobs.0.id', $jobGZ1->id)
+            ->assertJsonMissing(['id' => $jobGZ11->id]);
+
+        $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index', [
+                'rack_id' => $rackG->id,
+                'column' => 'Z1',
+            ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'jobs')
+            ->assertJsonPath('jobs.0.id', $jobGZ11->id);
+
+        $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index', ['shelf_id' => $shelfGA1->id]))
+            ->assertOk()
+            ->assertJsonCount(1, 'jobs')
+            ->assertJsonPath('jobs.0.id', $jobGA1->id)
+            ->assertJsonPath('jobs.0.location', 'G/A1');
+
+        // Column without rack is ignored (no location constraint).
+        $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.index', ['column' => 'A']))
+            ->assertOk()
+            ->assertJsonPath('total', 7);
+
+        $matching = $this->actingAs($station)
+            ->getJson(route('entry.print-jobs.matching', [
+                'rack_id' => $rackG->id,
+                'column' => 'A',
+            ]))
+            ->assertOk()
+            ->assertJsonCount(2, 'jobs')
+            ->assertJsonPath('total', 2)
+            ->assertJsonPath('capped', false);
+
+        $matchedIds = collect($matching->json('jobs'))->pluck('id')->all();
+        $this->assertEqualsCanonicalizing([$jobGA1->id, $jobGA2->id], $matchedIds);
+
+        $this->actingAs($station)
+            ->get(route('entry.print-station', [
+                'rack_id' => $rackG->id,
+                'column' => 'A',
+            ]))
+            ->assertOk()
+            ->assertSee('data-print-station-print-filtered', false)
+            ->assertSee('Cetak semua', false)
+            ->assertSee('G/A1', false)
+            ->assertSee('Lokasi', false);
+    }
+
+    private function makeFile(
+        CaseCategory $category,
+        User $owner,
+        string $reference,
+        ?Shelf $shelf = null,
+    ): LegalFile {
         $file = LegalFile::create([
             'reference_number' => $reference,
             'case_category_id' => $category->id,
@@ -403,7 +552,8 @@ class EntryPrintStationTest extends TestCase
             'purchaser' => 'Print Me',
             'property' => 'Lot Print',
             'title_number' => 'PN PRINT',
-            'status' => LegalFile::STATUS_REGISTERED,
+            'status' => $shelf ? LegalFile::STATUS_STORED : LegalFile::STATUS_REGISTERED,
+            'shelf_id' => $shelf?->id,
             'created_by' => $owner->id,
             'updated_by' => $owner->id,
         ]);
@@ -412,7 +562,8 @@ class EntryPrintStationTest extends TestCase
             'user_id' => $owner->id,
             'document_path' => 'entry-scans/print-'.$file->id.'.jpg',
             'legal_file_id' => $file->id,
-            'status' => EntryScan::STATUS_SAVED,
+            'shelf_id' => $shelf?->id,
+            'status' => $shelf ? EntryScan::STATUS_STORED : EntryScan::STATUS_SAVED,
         ]);
 
         return $file;

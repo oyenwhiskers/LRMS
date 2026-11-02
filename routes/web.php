@@ -3,20 +3,20 @@
 use App\Http\Controllers\Admin\EntryUserController;
 use App\Http\Controllers\Admin\PositionController;
 use App\Http\Controllers\Admin\RegistrationApprovalController;
-use App\Http\Controllers\Entry\AiTokenUsageController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\CaseCategoryController;
 use App\Http\Controllers\CompletionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Entry\AiTokenUsageController;
 use App\Http\Controllers\Entry\EntryAuthController;
 use App\Http\Controllers\Entry\EntryController;
 use App\Http\Controllers\Entry\EntryOperatorController;
-use App\Http\Controllers\Entry\EntryProductivityController;
 use App\Http\Controllers\Entry\EntryPrintStationController;
+use App\Http\Controllers\Entry\EntryProductivityController;
+use App\Http\Controllers\Entry\ManageOperatorController;
 use App\Http\Controllers\ImportExportController;
 use App\Http\Controllers\LegalFileController;
-use App\Http\Controllers\Entry\ManageOperatorController;
 use App\Http\Controllers\MovementController;
 use App\Http\Controllers\PasswordController;
 use App\Http\Controllers\StaffController;
@@ -82,6 +82,7 @@ Route::middleware('auth')->group(function (): void {
 
         Route::get('/print-station', [EntryPrintStationController::class, 'index'])->name('print-station');
         Route::get('/print-jobs', [EntryPrintStationController::class, 'list'])->name('print-jobs.index');
+        Route::get('/print-jobs/matching', [EntryPrintStationController::class, 'matching'])->name('print-jobs.matching');
         Route::post('/print-jobs', [EntryPrintStationController::class, 'store'])->name('print-jobs.store');
         Route::post('/print-jobs/status', [EntryPrintStationController::class, 'setStatus'])->name('print-jobs.status');
         Route::get('/print-jobs/batch-print', [EntryPrintStationController::class, 'batchPrint'])->name('print-jobs.batch-print');

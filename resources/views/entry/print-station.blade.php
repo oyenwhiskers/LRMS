@@ -6,6 +6,10 @@
 @php
     $statusFilter = $filters['status'] ?? 'pending';
     $reviewFilter = $filters['review'] ?? 'all';
+    $rackFilter = $filters['rack_id'] ?? '';
+    $columnFilter = $filters['column'] ?? '';
+    $shelfFilter = $filters['shelf_id'] ?? '';
+    $locationActive = filled($rackFilter) || filled($columnFilter) || filled($shelfFilter);
     $countLabel = match ($statusFilter) {
         'printed' => 'dicetak',
         'all' => 'job',
@@ -14,17 +18,38 @@
     $printSelectedLabel = $statusFilter === 'printed' ? 'Cetak semula' : 'Cetak';
     $advancedActive = $statusFilter !== 'pending'
         || $reviewFilter !== 'all'
-        || filled($filters['requested_by'] ?? null);
+        || filled($filters['requested_by'] ?? null)
+        || $locationActive;
+
+    $locationSummaryParts = [];
+    if (filled($rackFilter)) {
+        $rackModel = $racks->firstWhere('id', (int) $rackFilter);
+        $locationSummaryParts[] = 'Rak '.($rackModel?->code ?? $rackFilter);
+    }
+    if (filled($columnFilter)) {
+        $locationSummaryParts[] = 'Kolum '.$columnFilter;
+    }
+    if (filled($shelfFilter)) {
+        $shelfModel = $racks->flatMap->shelves->firstWhere('id', (int) $shelfFilter);
+        $locationSummaryParts[] = $shelfModel
+            ? (($shelfModel->rack?->code ?? $rackModel?->code ?? '').'/'.$shelfModel->code)
+            : 'Shelf '.$shelfFilter;
+    }
+    $locationSummary = implode(' / ', array_filter($locationSummaryParts));
 @endphp
 <div
     class="entry-print-station"
     data-entry-print-station
     data-jobs-url="{{ route('entry.print-jobs.index') }}"
+    data-matching-url="{{ route('entry.print-jobs.matching') }}"
     data-status-url="{{ route('entry.print-jobs.status') }}"
     data-batch-print-url="{{ route('entry.print-jobs.batch-print') }}"
     data-requested-by="{{ $filters['requested_by'] }}"
     data-status-filter="{{ $statusFilter }}"
     data-review-filter="{{ $reviewFilter }}"
+    data-rack-id="{{ $rackFilter }}"
+    data-column="{{ $columnFilter }}"
+    data-shelf-id="{{ $shelfFilter }}"
     data-q="{{ $filters['q'] }}"
 >
     <div class="entry-print-station__intro">
@@ -42,28 +67,33 @@
     </div>
 
     <div class="entry-print-station__toolbar">
-        <form class="entry-print-station__filterbar" method="GET" action="{{ route('entry.print-station') }}">
-            <input type="hidden" name="status" value="{{ $statusFilter }}" data-print-station-mobile-filter>
-            <input type="hidden" name="review" value="{{ $reviewFilter }}" data-print-station-mobile-filter>
-            <input type="hidden" name="requested_by" value="{{ $filters['requested_by'] }}" data-print-station-mobile-filter>
+        <div class="entry-print-station__filterbar">
+            <form class="entry-print-station__search-form" method="GET" action="{{ route('entry.print-station') }}">
+                <input type="hidden" name="status" value="{{ $statusFilter }}" data-print-station-mobile-filter>
+                <input type="hidden" name="review" value="{{ $reviewFilter }}" data-print-station-mobile-filter>
+                <input type="hidden" name="requested_by" value="{{ $filters['requested_by'] }}" data-print-station-mobile-filter>
+                <input type="hidden" name="rack_id" value="{{ $rackFilter }}" data-print-station-mobile-filter>
+                <input type="hidden" name="column" value="{{ $columnFilter }}" data-print-station-mobile-filter>
+                <input type="hidden" name="shelf_id" value="{{ $shelfFilter }}" data-print-station-mobile-filter>
 
-            <label class="entry-searchbar__field">
-                <span class="sr-only">Cari no. rujukan</span>
-                <span class="entry-searchbar__icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path stroke-linecap="round" d="M16.5 16.5 21 21"/></svg>
-                </span>
-                <input
-                    type="search"
-                    name="q"
-                    value="{{ $filters['q'] }}"
-                    placeholder="Cari no. rujukan"
-                    autocomplete="off"
-                    data-print-station-search
-                >
-            </label>
+                <label class="entry-searchbar__field">
+                    <span class="sr-only">Cari no. rujukan</span>
+                    <span class="entry-searchbar__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path stroke-linecap="round" d="M16.5 16.5 21 21"/></svg>
+                    </span>
+                    <input
+                        type="search"
+                        name="q"
+                        value="{{ $filters['q'] }}"
+                        placeholder="Cari no. rujukan"
+                        autocomplete="off"
+                        data-print-station-search
+                    >
+                </label>
+            </form>
 
             <button
-                class="entry-searchbar__funnel entry-print-station__mobile-only {{ $advancedActive ? 'is-active' : '' }}"
+                class="entry-searchbar__funnel {{ $advancedActive ? 'is-active' : '' }}"
                 type="button"
                 data-modal-open="entry-print-station-filters"
                 aria-label="Tapis lanjutan"
@@ -76,37 +106,7 @@
                     <span class="entry-searchbar__dot" aria-hidden="true"></span>
                 @endif
             </button>
-
-            <label class="entry-print-station__inline-filter">
-                <span>Status</span>
-                <select name="status" data-print-station-status-filter data-print-station-desktop-filter>
-                    <option value="pending" @selected($statusFilter === 'pending')>Belum dicetak</option>
-                    <option value="printed" @selected($statusFilter === 'printed')>Dicetak</option>
-                    <option value="all" @selected($statusFilter === 'all')>Semua</option>
-                </select>
-            </label>
-
-            <label class="entry-print-station__inline-filter">
-                <span>Pengesahan</span>
-                <select name="review" data-print-station-review-filter data-print-station-desktop-filter>
-                    <option value="all" @selected($reviewFilter === 'all')>Semua</option>
-                    <option value="verified" @selected($reviewFilter === 'verified')>Disahkan</option>
-                    <option value="unverified" @selected($reviewFilter === 'unverified')>Belum disahkan</option>
-                </select>
-            </label>
-
-            <label class="entry-print-station__inline-filter">
-                <span>Operator</span>
-                <select name="requested_by" data-print-station-operator data-print-station-desktop-filter>
-                    <option value="">Semua operator</option>
-                    @foreach ($operators as $operator)
-                        <option value="{{ $operator->id }}" @selected((string) $filters['requested_by'] === (string) $operator->id)>
-                            {{ $operator->name }}
-                        </option>
-                    @endforeach
-                </select>
-            </label>
-        </form>
+        </div>
 
         @if ($advancedActive || filled($filters['q']))
             <p class="entry-searchbar__hint entry-print-station__mobile-only">
@@ -147,6 +147,15 @@
                 Tanda dicetak
             </button>
             <button
+                class="btn-secondary {{ $locationActive && $jobs->total() > 0 ? '' : 'hidden' }}"
+                type="button"
+                data-print-station-print-filtered
+                data-location-summary="{{ $locationSummary }}"
+                @disabled(! $locationActive || $jobs->total() === 0)
+            >
+                Cetak semua (<span data-print-station-print-filtered-count>{{ $jobs->total() }}</span>)
+            </button>
+            <button
                 class="btn-primary"
                 type="button"
                 data-print-station-print-selected
@@ -165,7 +174,13 @@
                 <p class="entry-empty__title">
                     {{ $statusFilter === 'printed' ? 'Tiada job dicetak' : ($statusFilter === 'all' ? 'Tiada job' : 'Tiada job menunggu') }}
                 </p>
-                <p class="entry-empty__text">Apabila operator tekan Hantar ke stesen, job akan muncul di sini.</p>
+                <p class="entry-empty__text">
+                    @if ($locationActive)
+                        Tiada job untuk lokasi ini. Fail mesti sudah diletak di rak sebelum boleh ditapis ikut lokasi.
+                    @else
+                        Apabila operator tekan Hantar ke stesen, job akan muncul di sini.
+                    @endif
+                </p>
             </div>
         @else
             <div class="entry-print-station__cards" data-print-station-cards>
@@ -189,6 +204,8 @@
                         $scan = $job->legalFile?->entryScan;
                         $reviewStatus = $scan?->review_status ?: App\Models\EntryScan::REVIEW_PENDING;
                         $reviewLabel = $scan?->reviewStatusLabel() ?? 'Belum semak';
+                        $shelf = $job->legalFile?->shelf;
+                        $location = ($shelf && $shelf->rack) ? $shelf->rack->code.'/'.$shelf->code : '—';
                     @endphp
                     <article
                         class="entry-print-station__card"
@@ -216,7 +233,7 @@
                                 </span>
                             </div>
                             <p class="entry-print-station__card-meta">
-                                {{ $operator }} · {{ $typeLabel }}
+                                {{ $operator }} · {{ $typeLabel }} · {{ $location }}
                                 · <span class="entry-ops__badge entry-ops__badge--review-{{ $reviewStatus }}">{{ $reviewLabel }}</span>
                             </p>
                         </div>
@@ -232,6 +249,7 @@
                                 <input type="checkbox" data-print-station-select-all aria-label="Pilih semua">
                             </th>
                             <th scope="col">Rujukan</th>
+                            <th scope="col">Lokasi</th>
                             <th scope="col">Status</th>
                             <th scope="col">Pengesahan</th>
                             <th scope="col">Operator</th>
@@ -252,6 +270,8 @@
                                 $scan = $job->legalFile?->entryScan;
                                 $reviewStatus = $scan?->review_status ?: App\Models\EntryScan::REVIEW_PENDING;
                                 $reviewLabel = $scan?->reviewStatusLabel() ?? 'Belum semak';
+                                $shelf = $job->legalFile?->shelf;
+                                $location = ($shelf && $shelf->rack) ? $shelf->rack->code.'/'.$shelf->code : '—';
                             @endphp
                             <tr
                                 data-print-job-id="{{ $job->id }}"
@@ -272,6 +292,7 @@
                                 <td>
                                     <span class="entry-print-station__ref">{{ $ref }}</span>
                                 </td>
+                                <td>{{ $location }}</td>
                                 <td>
                                     <span class="entry-print-station__badge entry-print-station__badge--{{ $pending ? 'pending' : 'printed' }}">
                                         {{ $job->statusLabel() }}
@@ -319,35 +340,12 @@
             <input type="hidden" name="q" value="{{ $filters['q'] }}">
 
             <div class="entry-filter-modal__fields">
-                <label class="entry-filters__field">
-                    <span>Status</span>
-                    <select name="status">
-                        <option value="pending" @selected($statusFilter === 'pending')>Belum dicetak</option>
-                        <option value="printed" @selected($statusFilter === 'printed')>Dicetak</option>
-                        <option value="all" @selected($statusFilter === 'all')>Semua</option>
-                    </select>
-                </label>
-
-                <label class="entry-filters__field">
-                    <span>Pengesahan</span>
-                    <select name="review">
-                        <option value="all" @selected($reviewFilter === 'all')>Semua</option>
-                        <option value="verified" @selected($reviewFilter === 'verified')>Disahkan</option>
-                        <option value="unverified" @selected($reviewFilter === 'unverified')>Belum disahkan</option>
-                    </select>
-                </label>
-
-                <label class="entry-filters__field">
-                    <span>Operator</span>
-                    <select name="requested_by">
-                        <option value="">Semua operator</option>
-                        @foreach ($operators as $operator)
-                            <option value="{{ $operator->id }}" @selected((string) $filters['requested_by'] === (string) $operator->id)>
-                                {{ $operator->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                </label>
+                @include('entry.partials.print-station-filter-fields', [
+                    'includeStatus' => true,
+                    'rackAttr' => 'data-print-station-filter-rack',
+                    'columnAttr' => 'data-print-station-filter-column',
+                    'shelfAttr' => 'data-print-station-filter-shelf',
+                ])
             </div>
 
             <div class="entry-filter-modal__actions">

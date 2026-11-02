@@ -2113,6 +2113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const jobsUrl = station.getAttribute('data-jobs-url') || '';
+        const matchingUrl = station.getAttribute('data-matching-url') || '';
         const statusUrl = station.getAttribute('data-status-url') || '';
         const batchPrintUrl = station.getAttribute('data-batch-print-url') || '';
         const listEl = station.querySelector('[data-print-station-list]');
@@ -2121,25 +2122,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         const pendingCountEl = station.querySelector('[data-print-station-pending-count]');
         const statusEl = station.querySelector('[data-print-station-status]');
         const printSelectedBtn = station.querySelector('[data-print-station-print-selected]');
+        const printFilteredBtn = station.querySelector('[data-print-station-print-filtered]');
+        const printFilteredCountEl = station.querySelector('[data-print-station-print-filtered-count]');
         const markPrintedBtn = station.querySelector('[data-print-station-mark-printed]');
         const markPendingBtn = station.querySelector('[data-print-station-mark-pending]');
         const refreshBtn = station.querySelector('[data-print-station-refresh]');
         const searchInput = station.querySelector('[data-print-station-search]');
-        const desktopStatusSelect = station.querySelector('[data-print-station-status-filter]');
-        const desktopReviewSelect = station.querySelector('[data-print-station-review-filter]');
-        const desktopOperatorSelect = station.querySelector('[data-print-station-operator]');
-        const mobileFilterInputs = station.querySelectorAll('[data-print-station-mobile-filter]');
         const previewModal = document.querySelector('[data-modal="entry-print-preview"]');
         const previewFrame = previewModal?.querySelector('[data-print-preview-frame]');
         const previewTitle = previewModal?.querySelector('[data-print-preview-title]');
         const previewPrintBtn = previewModal?.querySelector('[data-print-preview-print]');
         const previewDeleteBtn = previewModal?.querySelector('[data-print-preview-delete]');
         const previewMarkStatusBtn = previewModal?.querySelector('[data-print-preview-mark-status]');
-        const desktopFilterQuery = window.matchMedia('(min-width: 900px)');
         const pagerEl = station.querySelector('[data-print-station-pager]');
         let jobs = [];
+        let filteredTotal = Number(countEl?.textContent) || 0;
         let busy = false;
         let previewJob = null;
+        let searchTimer = null;
         let currentPage = Number(new URLSearchParams(window.location.search).get('page')) || 1;
         if (! Number.isFinite(currentPage) || currentPage < 1) {
             currentPage = 1;
@@ -2147,9 +2147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const jobIsPending = (job) => job?.is_pending !== false && job?.status !== 'printed';
 
-        const statusFilter = () => desktopStatusSelect?.value
-            || station.getAttribute('data-status-filter')
-            || 'pending';
+        const statusFilter = () => station.getAttribute('data-status-filter') || 'pending';
 
         const countLabelFor = (filter) => {
             if (filter === 'printed') {
@@ -2219,12 +2217,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                 printSelectedBtn.textContent = printSelectedLabel(statusFilter());
             }
 
+            syncPrintFilteredUi();
+
             if (markPrintedBtn) {
                 markPrintedBtn.disabled = ! hasPending || busy;
             }
 
             if (markPendingBtn) {
                 markPendingBtn.disabled = ! hasPrinted || busy;
+            }
+        };
+
+        const locationFiltersActive = () => Boolean(
+            rackIdParam() || columnParam() || shelfIdParam(),
+        );
+
+        const locationSummaryLabel = () => (
+            printFilteredBtn?.getAttribute('data-location-summary') || 'tapisan lokasi'
+        );
+
+        const syncPrintFilteredUi = () => {
+            if (! printFilteredBtn) {
+                return;
+            }
+
+            const active = locationFiltersActive();
+            const count = filteredTotal;
+            printFilteredBtn.classList.toggle('hidden', ! active || count <= 0);
+            printFilteredBtn.disabled = ! active || count <= 0 || busy;
+            if (printFilteredCountEl) {
+                printFilteredCountEl.textContent = String(count);
             }
         };
 
@@ -2257,21 +2279,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             .replaceAll('>', '&gt;')
             .replaceAll('"', '&quot;');
 
-        const requestedByParam = () => {
-            if (desktopOperatorSelect && desktopFilterQuery.matches) {
-                return desktopOperatorSelect.value || '';
-            }
+        const requestedByParam = () => station.getAttribute('data-requested-by') || '';
 
-            return station.getAttribute('data-requested-by') || '';
-        };
+        const reviewFilter = () => station.getAttribute('data-review-filter') || 'all';
 
-        const reviewFilter = () => {
-            if (desktopReviewSelect && desktopFilterQuery.matches) {
-                return desktopReviewSelect.value || 'all';
-            }
+        const rackIdParam = () => station.getAttribute('data-rack-id') || '';
 
-            return station.getAttribute('data-review-filter') || 'all';
-        };
+        const columnParam = () => station.getAttribute('data-column') || '';
+
+        const shelfIdParam = () => station.getAttribute('data-shelf-id') || '';
 
         const searchQuery = () => {
             const fromInput = searchInput?.value?.trim() || '';
@@ -2282,45 +2298,71 @@ document.addEventListener('DOMContentLoaded', async () => {
             return (station.getAttribute('data-q') || '').trim();
         };
 
-        const syncFilterControlMode = () => {
-            const desktop = desktopFilterQuery.matches;
-            mobileFilterInputs.forEach((input) => {
-                input.disabled = desktop;
-            });
-            [desktopStatusSelect, desktopReviewSelect, desktopOperatorSelect].forEach((select) => {
-                if (select) {
-                    select.disabled = ! desktop;
+        const syncColumnOptions = (rackSelect, columnSelect) => {
+            if (! columnSelect) {
+                return;
+            }
+
+            const rackId = rackSelect?.value || '';
+            const options = [...columnSelect.querySelectorAll('option[data-rack-id]')];
+            let keep = false;
+
+            options.forEach((option) => {
+                const match = ! rackId || option.dataset.rackId === rackId;
+                option.hidden = ! match;
+                if (match && option.selected) {
+                    keep = true;
                 }
             });
+
+            if (! keep) {
+                columnSelect.value = '';
+            }
         };
 
-        const applyDesktopFilters = () => {
-            if (desktopStatusSelect) {
-                station.setAttribute('data-status-filter', desktopStatusSelect.value);
-                const hiddenStatus = station.querySelector('[data-print-station-mobile-filter][name="status"]');
-                if (hiddenStatus) {
-                    hiddenStatus.value = desktopStatusSelect.value;
-                }
+        const syncShelfOptions = (rackSelect, columnSelect, shelfSelect) => {
+            if (! shelfSelect) {
+                return;
             }
 
-            if (desktopReviewSelect) {
-                station.setAttribute('data-review-filter', desktopReviewSelect.value);
-                const hiddenReview = station.querySelector('[data-print-station-mobile-filter][name="review"]');
-                if (hiddenReview) {
-                    hiddenReview.value = desktopReviewSelect.value;
+            const rackId = rackSelect?.value || '';
+            const column = columnSelect?.value || '';
+            const options = [...shelfSelect.querySelectorAll('option[data-rack-id]')];
+            let keep = false;
+
+            options.forEach((option) => {
+                const rackMatch = ! rackId || option.dataset.rackId === rackId;
+                const columnMatch = ! column || option.dataset.column === column;
+                const match = rackMatch && columnMatch;
+                option.hidden = ! match;
+                if (match && option.selected) {
+                    keep = true;
                 }
+            });
+
+            if (! keep) {
+                shelfSelect.value = '';
+            }
+        };
+
+        const bindLocationCascade = (root) => {
+            const rackSelect = root.querySelector('[data-print-station-filter-rack]');
+            const columnSelect = root.querySelector('[data-print-station-filter-column]');
+            const shelfSelect = root.querySelector('[data-print-station-filter-shelf]');
+            if (! rackSelect || ! columnSelect) {
+                return;
             }
 
-            if (desktopOperatorSelect) {
-                station.setAttribute('data-requested-by', desktopOperatorSelect.value);
-                const hiddenOperator = station.querySelector('[data-print-station-mobile-filter][name="requested_by"]');
-                if (hiddenOperator) {
-                    hiddenOperator.value = desktopOperatorSelect.value;
-                }
-            }
+            const sync = () => {
+                syncColumnOptions(rackSelect, columnSelect);
+                syncShelfOptions(rackSelect, columnSelect, shelfSelect);
+            };
 
-            currentPage = 1;
-            reloadJobs();
+            sync();
+            rackSelect.addEventListener('change', sync);
+            columnSelect.addEventListener('change', () => {
+                syncShelfOptions(rackSelect, columnSelect, shelfSelect);
+            });
         };
 
         const previewUrlFor = (job) => {
@@ -2389,9 +2431,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .map((box) => Number(box.value)),
             );
             jobs = nextJobs;
+            filteredTotal = typeof total === 'number' ? total : jobs.length;
             const filter = statusFilter();
             if (countEl) {
-                countEl.textContent = String(total ?? jobs.length);
+                countEl.textContent = String(filteredTotal);
             }
             if (countLabelEl) {
                 countLabelEl.textContent = countLabelFor(filter);
@@ -2402,6 +2445,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderPager(paginationHtml);
 
             if (! listEl) {
+                syncPrintFilteredUi();
                 return;
             }
 
@@ -2409,10 +2453,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const emptyTitle = filter === 'printed'
                     ? 'Tiada job dicetak'
                     : (filter === 'all' ? 'Tiada job' : 'Tiada job menunggu');
+                const emptyText = locationFiltersActive()
+                    ? 'Tiada job untuk lokasi ini. Fail mesti sudah diletak di rak sebelum boleh ditapis ikut lokasi.'
+                    : 'Apabila operator tekan Hantar ke stesen, job akan muncul di sini.';
                 listEl.innerHTML = `
                     <div class="entry-empty" data-print-station-empty>
                         <p class="entry-empty__title">${emptyTitle}</p>
-                        <p class="entry-empty__text">Apabila operator tekan Hantar ke stesen, job akan muncul di sini.</p>
+                        <p class="entry-empty__text">${emptyText}</p>
                     </div>
                 `;
                 syncSelectionUi();
@@ -2433,6 +2480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const ref = escapeHtml(job.reference_number || '—');
                 const typeLabel = escapeHtml(job.type_label || '');
                 const operator = escapeHtml(job.operator || '—');
+                const location = escapeHtml(job.location || '—');
                 const printUrl = escapeHtml(job.print_url || '');
                 const previewUrl = escapeHtml(previewUrlFor(job));
                 const previewTitleText = escapeHtml(`${job.reference_number || 'Label'} · ${job.type_label || ''}`.trim());
@@ -2464,7 +2512,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <p class="entry-print-station__ref">${ref}</p>
                             <span class="entry-print-station__badge entry-print-station__badge--${badgeClass}">${statusLabel}</span>
                         </div>
-                        <p class="entry-print-station__card-meta">${operator} · ${typeLabel} · ${reviewBadge}</p>
+                        <p class="entry-print-station__card-meta">${operator} · ${typeLabel} · ${location} · ${reviewBadge}</p>
                     </div>
                 </article>
                 `);
@@ -2480,6 +2528,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         >
                     </td>
                     <td><span class="entry-print-station__ref">${ref}</span></td>
+                    <td>${location}</td>
                     <td>
                         <span class="entry-print-station__badge entry-print-station__badge--${badgeClass}">${statusLabel}</span>
                     </td>
@@ -2515,6 +2564,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     <input type="checkbox" data-print-station-select-all aria-label="Pilih semua">
                                 </th>
                                 <th scope="col">Rujukan</th>
+                                <th scope="col">Lokasi</th>
                                 <th scope="col">Status</th>
                                 <th scope="col">Pengesahan</th>
                                 <th scope="col">Operator</th>
@@ -2530,15 +2580,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             syncSelectionUi();
         };
 
-        const fetchJobs = async () => {
-            if (! jobsUrl) {
-                return;
-            }
-
-            const url = new URL(jobsUrl, window.location.origin);
+        const appendLocationParams = (url) => {
             const requestedBy = requestedByParam();
             const review = reviewFilter();
             const q = searchQuery();
+            const rackId = rackIdParam();
+            const column = columnParam();
+            const shelfId = shelfIdParam();
             if (requestedBy) {
                 url.searchParams.set('requested_by', requestedBy);
             }
@@ -2548,7 +2596,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (q) {
                 url.searchParams.set('q', q);
             }
+            if (rackId) {
+                url.searchParams.set('rack_id', rackId);
+            }
+            if (column) {
+                url.searchParams.set('column', column);
+            }
+            if (shelfId) {
+                url.searchParams.set('shelf_id', shelfId);
+            }
             url.searchParams.set('status', statusFilter());
+        };
+
+        const fetchJobs = async () => {
+            if (! jobsUrl) {
+                return;
+            }
+
+            const url = new URL(jobsUrl, window.location.origin);
+            appendLocationParams(url);
             if (currentPage > 1) {
                 url.searchParams.set('page', String(currentPage));
             }
@@ -2574,6 +2640,68 @@ document.addEventListener('DOMContentLoaded', async () => {
                 typeof payload.total === 'number' ? payload.total : null,
                 typeof payload.pagination === 'string' ? payload.pagination : '',
             );
+        };
+
+        const fetchMatchingJobs = async () => {
+            if (! matchingUrl) {
+                throw new Error('Endpoint tapisan tiada.');
+            }
+
+            const url = new URL(matchingUrl, window.location.origin);
+            appendLocationParams(url);
+
+            const response = await fetch(url.pathname + url.search, {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (! response.ok) {
+                throw new Error(payload.message || 'Gagal memuat job tapisan.');
+            }
+
+            return payload;
+        };
+
+        const printFilteredJobs = async () => {
+            if (busy || ! locationFiltersActive() || filteredTotal <= 0) {
+                return;
+            }
+
+            const summary = locationSummaryLabel();
+            if (! window.confirm(`Cetak ${filteredTotal} label untuk ${summary}?`)) {
+                return;
+            }
+
+            busy = true;
+            syncSelectionUi();
+            setStatus('Memuat job tapisan…');
+
+            let matched = [];
+            try {
+                const payload = await fetchMatchingJobs();
+                matched = Array.isArray(payload.jobs) ? payload.jobs : [];
+                if (matched.length === 0) {
+                    setStatus('Tiada job dalam tapisan lokasi.', 'error');
+                    return;
+                }
+
+                if (payload.capped) {
+                    setStatus(
+                        `Tapisan ada ${payload.total} job; mencetak ${matched.length} pertama sahaja.`,
+                        'ok',
+                    );
+                }
+            } catch (error) {
+                setStatus(error instanceof Error ? error.message : 'Cetakan tapisan gagal.', 'error');
+                return;
+            } finally {
+                busy = false;
+                syncSelectionUi();
+            }
+
+            await printJobs(matched);
         };
 
         const setJobStatus = async (ids, status) => {
@@ -2792,20 +2920,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         };
 
-        syncFilterControlMode();
-        if (typeof desktopFilterQuery.addEventListener === 'function') {
-            desktopFilterQuery.addEventListener('change', syncFilterControlMode);
-        } else if (typeof desktopFilterQuery.addListener === 'function') {
-            desktopFilterQuery.addListener(syncFilterControlMode);
-        }
+        document.querySelectorAll('[data-modal="entry-print-station-filters"]')
+            .forEach((root) => bindLocationCascade(root));
+        syncPrintFilteredUi();
 
-        desktopStatusSelect?.addEventListener('change', applyDesktopFilters);
-        desktopReviewSelect?.addEventListener('change', applyDesktopFilters);
-        desktopOperatorSelect?.addEventListener('change', applyDesktopFilters);
+        searchInput?.addEventListener('input', () => {
+            window.clearTimeout(searchTimer);
+            searchTimer = window.setTimeout(() => {
+                currentPage = 1;
+                station.setAttribute('data-q', searchInput.value.trim());
+                reloadJobs();
+            }, 280);
+        });
+
         refreshBtn?.addEventListener('click', reloadJobs);
 
         printSelectedBtn?.addEventListener('click', () => {
             printJobs(selectedJobs());
+        });
+
+        printFilteredBtn?.addEventListener('click', () => {
+            printFilteredJobs();
         });
 
         markPrintedBtn?.addEventListener('click', () => {

@@ -58,4 +58,22 @@ class Shelf extends Model
 
         return "{$rack->code} / {$shelfLabel}";
     }
+
+    /**
+     * Column label from name ("Column A, Row 1" → "A"; "Column Z1, Row 2" → "Z1").
+     * Prefer name over code prefix — Z vs Z1 collide on code.
+     */
+    public function columnLabel(): ?string
+    {
+        if (preg_match('/^Column\s+(.+),\s*Row\s+/i', (string) $this->name, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
+    public static function columnNameLike(string $column): string
+    {
+        return 'Column '.addcslashes($column, '\\%_').', Row%';
+    }
 }

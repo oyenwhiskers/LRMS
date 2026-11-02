@@ -5491,14 +5491,22 @@ a.entry-card--action:focus-visible {
     min-width: 0;
 }
 
+.entry-print-station__search-form {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+}
+
 .entry-print-station__filterbar .entry-searchbar__field {
     flex: 1;
     min-width: 0;
+    width: 100%;
 }
 
 .entry-print-station__inline-filter {
     display: none;
 }
+
 
 .entry-print-station__badge {
     display: inline-flex;
@@ -5879,33 +5887,15 @@ a.entry-card--action:focus-visible {
     }
 
     .entry-print-station__filterbar {
-        flex: 1 1 22rem;
+        flex: 1 1 18rem;
         min-width: 0;
-        display: grid;
-        grid-template-columns: minmax(0, 1.3fr) minmax(7rem, 0.65fr) minmax(7.5rem, 0.75fr) minmax(7.5rem, 0.8fr);
-        align-items: end;
+        display: flex;
+        align-items: stretch;
         gap: 0.65rem;
     }
 
     .entry-print-station__inline-filter {
-        display: grid;
-        gap: 0.35rem;
-        min-width: 0;
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--entry-muted);
-    }
-
-    .entry-print-station__inline-filter select {
-        width: 100%;
-        min-width: 0;
-        min-height: 2.85rem;
-        border: 1px solid color-mix(in srgb, #12352f 16%, transparent);
-        background: #fff;
-        padding: 0.55rem 0.75rem;
-        font: inherit;
-        font-weight: 500;
-        color: var(--entry-ink);
+        display: none;
     }
 
     .entry-print-station__actions {

@@ -6,11 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\EntryPrintJob;
 use App\Models\EntryScan;
 use App\Models\LegalFile;
+use App\Models\Rack;
+use App\Models\Shelf;
 use App\Models\User;
 use App\Support\LegalFileQr;
 use App\Support\LocalDate;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -18,14 +23,20 @@ class EntryPrintStationController extends Controller
 {
     private const PER_PAGE = 20;
 
+    private const MATCHING_CAP = 200;
+
+    private const JOB_WITH = [
+        'legalFile:id,reference_number,purchaser,file_identifier,qr_identifier,shelf_id',
+        'legalFile.entryScan',
+        'legalFile.shelf:id,rack_id,code,name',
+        'legalFile.shelf.rack:id,code',
+        'requester:id,name',
+    ];
+
     public function index(Request $request): View
     {
         $filters = $this->validatedFilters($request);
-        $jobs = $this->paginatedJobs($filters, [
-            'legalFile:id,reference_number,purchaser,file_identifier,qr_identifier',
-            'legalFile.entryScan',
-            'requester:id,name',
-        ]);
+        $jobs = $this->paginatedJobs($filters, self::JOB_WITH);
 
         $operators = User::query()
             ->whereIn('id', EntryPrintJob::query()
@@ -34,14 +45,25 @@ class EntryPrintStationController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        $racks = Rack::query()
+            ->where('is_active', true)
+            ->with(['shelves' => fn ($builder) => $builder->where('is_active', true)->orderBy('code')])
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
         return view('entry.print-station', [
             'jobs' => $jobs,
             'operators' => $operators,
+            'racks' => $racks,
+            'columnsByRack' => $this->columnsByRack($racks),
             'filters' => [
                 'q' => $filters['q'],
                 'requested_by' => $filters['requested_by'] !== null ? (string) $filters['requested_by'] : '',
                 'status' => $filters['status'],
                 'review' => $filters['review'],
+                'rack_id' => $filters['rack_id'] !== null ? (string) $filters['rack_id'] : '',
+                'column' => $filters['column'],
+                'shelf_id' => $filters['shelf_id'] !== null ? (string) $filters['shelf_id'] : '',
             ],
             'pendingCount' => EntryPrintJob::query()->where('status', EntryPrintJob::STATUS_PENDING)->count(),
         ]);
@@ -51,11 +73,7 @@ class EntryPrintStationController extends Controller
     {
         $filters = $this->validatedFilters($request);
 
-        $jobs = $this->paginatedJobs($filters, [
-            'legalFile:id,reference_number,purchaser,file_identifier',
-            'legalFile.entryScan',
-            'requester:id,name',
-        ]);
+        $jobs = $this->paginatedJobs($filters, self::JOB_WITH);
 
         return response()->json([
             'jobs' => $jobs->getCollection()
@@ -66,6 +84,21 @@ class EntryPrintStationController extends Controller
             'current_page' => $jobs->currentPage(),
             'last_page' => $jobs->lastPage(),
             'pagination' => $jobs->hasPages() ? (string) $jobs->links() : '',
+        ]);
+    }
+
+    public function matching(Request $request): JsonResponse
+    {
+        $filters = $this->validatedFilters($request);
+
+        $query = $this->jobsQuery($filters)->with(self::JOB_WITH);
+        $total = (clone $query)->count();
+        $jobs = $query->limit(self::MATCHING_CAP)->get();
+
+        return response()->json([
+            'jobs' => $jobs->map(fn (EntryPrintJob $job) => $this->jobPayload($job))->values(),
+            'total' => $total,
+            'capped' => $total > self::MATCHING_CAP,
         ]);
     }
 
@@ -89,11 +122,7 @@ class EntryPrintStationController extends Controller
             return response()->json([
                 'message' => 'Job sudah dihantar ke stesen cetak',
                 'already_queued' => true,
-                'job' => $this->jobPayload($existing->loadMissing([
-                    'legalFile:id,reference_number,purchaser,file_identifier',
-                    'legalFile.entryScan',
-                    'requester:id,name',
-                ])),
+                'job' => $this->jobPayload($existing->loadMissing(self::JOB_WITH)),
             ]);
         }
 
@@ -107,18 +136,14 @@ class EntryPrintStationController extends Controller
         return response()->json([
             'message' => 'Job berjaya dihantar ke stesen cetak',
             'already_queued' => false,
-            'job' => $this->jobPayload($job->load([
-                'legalFile:id,reference_number,purchaser,file_identifier',
-                'legalFile.entryScan',
-                'requester:id,name',
-            ])),
+            'job' => $this->jobPayload($job->load(self::JOB_WITH)),
         ], 201);
     }
 
     public function batchPrint(Request $request): View
     {
         $data = $request->validate([
-            'ids' => ['required', 'string', 'max:2000'],
+            'ids' => ['required', 'string', 'max:4000'],
             'type' => ['nullable', Rule::in([EntryPrintJob::TYPE_FRONT, EntryPrintJob::TYPE_SIDE])],
         ]);
 
@@ -227,7 +252,15 @@ class EntryPrintStationController extends Controller
     }
 
     /**
-     * @return array{q: string, status: string, review: string, requested_by: int|null}
+     * @return array{
+     *     q: string,
+     *     status: string,
+     *     review: string,
+     *     requested_by: int|null,
+     *     rack_id: int|null,
+     *     column: string,
+     *     shelf_id: int|null
+     * }
      */
     private function validatedFilters(Request $request): array
     {
@@ -236,19 +269,49 @@ class EntryPrintStationController extends Controller
             'requested_by' => ['nullable', 'integer', 'exists:users,id'],
             'status' => ['nullable', Rule::in(['pending', 'printed', 'all'])],
             'review' => ['nullable', Rule::in(['all', 'verified', 'unverified'])],
+            'rack_id' => ['nullable', 'integer', 'exists:racks,id'],
+            'column' => ['nullable', 'string', 'max:10'],
+            'shelf_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('shelves', 'id')->when(
+                    $request->filled('rack_id'),
+                    fn ($rule) => $rule->where('rack_id', $request->integer('rack_id')),
+                ),
+            ],
         ]);
+
+        $rackId = $filters['rack_id'] ?? null;
+        $column = trim((string) ($filters['column'] ?? ''));
+        $shelfId = $filters['shelf_id'] ?? null;
+
+        // Column requires a rack; otherwise ignore.
+        if ($column !== '' && $rackId === null) {
+            $column = '';
+        }
 
         return [
             'q' => trim((string) ($filters['q'] ?? '')),
             'status' => $filters['status'] ?? 'pending',
             'review' => $filters['review'] ?? 'all',
             'requested_by' => $filters['requested_by'] ?? null,
+            'rack_id' => $rackId,
+            'column' => $column,
+            'shelf_id' => $shelfId,
         ];
     }
 
     /**
-     * @param  array{q: string, status: string, review: string, requested_by: int|null}  $filters
-     * @return \Illuminate\Database\Eloquent\Builder<EntryPrintJob>
+     * @param  array{
+     *     q: string,
+     *     status: string,
+     *     review: string,
+     *     requested_by: int|null,
+     *     rack_id: int|null,
+     *     column: string,
+     *     shelf_id: int|null
+     * }  $filters
+     * @return Builder<EntryPrintJob>
      */
     private function jobsQuery(array $filters)
     {
@@ -298,19 +361,49 @@ class EntryPrintStationController extends Controller
                 },
             );
 
+        if (filled($filters['shelf_id'])) {
+            $query->whereHas(
+                'legalFile',
+                fn ($file) => $file->where('shelf_id', $filters['shelf_id']),
+            );
+        } elseif ($filters['column'] !== '' && filled($filters['rack_id'])) {
+            $columnLike = Shelf::columnNameLike($filters['column']);
+            $rackId = $filters['rack_id'];
+            $query->whereHas(
+                'legalFile.shelf',
+                fn ($shelf) => $shelf
+                    ->where('rack_id', $rackId)
+                    ->where('name', 'like', $columnLike),
+            );
+        } elseif (filled($filters['rack_id'])) {
+            $rackId = $filters['rack_id'];
+            $query->whereHas(
+                'legalFile.shelf',
+                fn ($shelf) => $shelf->where('rack_id', $rackId),
+            );
+        }
+
         return match ($status) {
             'printed' => $query->orderByDesc('printed_at'),
             'all' => $query
-                ->orderByRaw("case when status = ? then 0 else 1 end", [EntryPrintJob::STATUS_PENDING])
+                ->orderByRaw('case when status = ? then 0 else 1 end', [EntryPrintJob::STATUS_PENDING])
                 ->orderByDesc('updated_at'),
             default => $query->orderBy('created_at'),
         };
     }
 
     /**
-     * @param  array{q: string, status: string, review: string, requested_by: int|null}  $filters
+     * @param  array{
+     *     q: string,
+     *     status: string,
+     *     review: string,
+     *     requested_by: int|null,
+     *     rack_id: int|null,
+     *     column: string,
+     *     shelf_id: int|null
+     * }  $filters
      * @param  list<string>  $with
-     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator<int, EntryPrintJob>
+     * @return LengthAwarePaginator<int, EntryPrintJob>
      */
     private function paginatedJobs(array $filters, array $with)
     {
@@ -333,6 +426,27 @@ class EntryPrintStationController extends Controller
     }
 
     /**
+     * @param  Collection<int, Rack>  $racks
+     * @return array<int, list<string>>
+     */
+    private function columnsByRack($racks): array
+    {
+        $columns = [];
+
+        foreach ($racks as $rack) {
+            $columns[$rack->id] = $rack->shelves
+                ->map(fn (Shelf $shelf) => $shelf->columnLabel())
+                ->filter()
+                ->unique()
+                ->sort(SORT_NATURAL)
+                ->values()
+                ->all();
+        }
+
+        return $columns;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function jobPayload(EntryPrintJob $job): array
@@ -345,6 +459,10 @@ class EntryPrintStationController extends Controller
 
         $scan = $job->legalFile?->entryScan;
         $reviewStatus = $scan?->review_status ?: EntryScan::REVIEW_PENDING;
+        $shelf = $job->legalFile?->shelf;
+        $location = ($shelf && $shelf->rack)
+            ? $shelf->rack->code.'/'.$shelf->code
+            : '—';
 
         return [
             'id' => $job->id,
@@ -362,6 +480,7 @@ class EntryPrintStationController extends Controller
             'operator' => $job->requester?->name ?? '—',
             'legal_file_id' => $job->legal_file_id,
             'reference_number' => $job->legalFile?->reference_number ?? '—',
+            'location' => $location,
             'print_url' => $printUrl,
             'preview_url' => $printUrl.(str_contains($printUrl, '?') ? '&' : '?').'embed=1',
             'delete_url' => ($job->isPending() || $job->isPrinted())
