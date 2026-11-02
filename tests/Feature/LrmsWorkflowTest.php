@@ -181,6 +181,36 @@ class LrmsWorkflowTest extends TestCase
         $this->assertNull($litigation->title_number);
     }
 
+    public function test_charge_case_types_use_snp_shaped_fields(): void
+    {
+        [$admin, $shelf, $staff, $category] = $this->records();
+
+        foreach ([
+            [LegalFile::TYPE_SATISFACTION_OF_CHARGE, 'Satisfaction of charge', 'SOC Party'],
+            [LegalFile::TYPE_MEMORANDUM_OF_CHARGE, 'Memorandum of charge', 'MOC Party'],
+        ] as [$type, $label, $purchaser]) {
+            $this->actingAs($admin)->post(route('files.store'), [
+                'case_type' => $type,
+                'case_category_id' => $category->id,
+                'purchaser' => $purchaser,
+                'vendor' => 'Bank Chargee',
+                'property' => 'Lot Charge, Sandakan',
+                'title_number' => 'PN CHARGE',
+                'person_in_charge_id' => $staff->id,
+            ])->assertSessionHasNoErrors();
+
+            $file = LegalFile::query()->where('purchaser', $purchaser)->firstOrFail();
+            $this->assertSame($type, $file->case_type);
+            $this->assertSame($label, $file->caseTypeLabel());
+            $this->assertTrue(LegalFile::isSnpType($file->case_type));
+            $this->assertSame('Bank Chargee', $file->vendor);
+            $this->assertSame('PN CHARGE', $file->title_number);
+            $this->assertNull($file->bank);
+            $this->assertNull($file->suite_number);
+            $this->assertMatchesRegularExpression('/^CON\/\d{4}\/\d{3}$/', $file->reference_number);
+        }
+    }
+
     public function test_related_files_can_be_linked_many_to_many(): void
     {
         [$admin, $shelf, $staff, $category] = $this->records();

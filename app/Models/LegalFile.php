@@ -53,6 +53,10 @@ class LegalFile extends Model
 
     public const TYPE_RECEIPT_REASSIGNMENT = 'receipt_reassignment';
 
+    public const TYPE_SATISFACTION_OF_CHARGE = 'satisfaction_of_charge';
+
+    public const TYPE_MEMORANDUM_OF_CHARGE = 'memorandum_of_charge';
+
     public const SUB_TYPE_MOT = 'mot';
 
     public const SUB_TYPE_DOA = 'doa';
@@ -322,6 +326,8 @@ class LegalFile extends Model
             self::TYPE_SUBLEASE,
             self::TYPE_COPY_TITLE,
             self::TYPE_RECEIPT_REASSIGNMENT,
+            self::TYPE_SATISFACTION_OF_CHARGE,
+            self::TYPE_MEMORANDUM_OF_CHARGE,
         ];
     }
 
@@ -409,6 +415,8 @@ class LegalFile extends Model
         return match ($type) {
             self::TYPE_SUBLIST, 'sublist agreement', 'sublease agreement' => self::TYPE_SUBLEASE,
             'deed of trust', 'deeds of trust' => self::TYPE_DOT,
+            'satisfaction of charge', 'soc' => self::TYPE_SATISFACTION_OF_CHARGE,
+            'memorandum of charge', 'moc' => self::TYPE_MEMORANDUM_OF_CHARGE,
             default => $type,
         };
     }
@@ -440,6 +448,8 @@ class LegalFile extends Model
             self::TYPE_SUBLEASE, self::TYPE_SUBLIST => 'Sublease Agreement',
             self::TYPE_COPY_TITLE => 'Copy title',
             self::TYPE_RECEIPT_REASSIGNMENT => 'Receipt and Reassignment',
+            self::TYPE_SATISFACTION_OF_CHARGE => 'Satisfaction of charge',
+            self::TYPE_MEMORANDUM_OF_CHARGE => 'Memorandum of charge',
             default => str($type)->headline()->toString(),
         };
     }

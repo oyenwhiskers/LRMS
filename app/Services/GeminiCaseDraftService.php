@@ -83,6 +83,8 @@ Rules:
   - Power of Attorney / POA → poa.
   - Sublease Agreement / Sublist agreement → sublease.
   - Copy of Title / Copy Title / CT / title search copy → copy_title.
+  - Satisfaction of Charge / SOC → satisfaction_of_charge. This is NOT memorandum of charge and NOT receipt_reassignment.
+  - Memorandum of Charge / MOC → memorandum_of_charge. This is NOT memorandum of transfer (mot) and NOT satisfaction_of_charge.
 - Bank financing / loan docs → prefer LOA (Loan Documentation). Do NOT treat bank codes or middle tokens inside a firm ref (e.g. CON in THY/YFT/CON/BRAKYAT/2025/18, or ABMB/MIB/UOB) as the case category.
 - Fill only what is clearly visible across the provided pages. Cover pages often lack property and title_number — leave those null unless a later page shows them. Do not invent or guess missing fields.
 - property: put the charged / subject property description OR postal / site address when printed (labels such as Property, Address, Alamat, Schedule of Property, Parcel, Lot, HS(D), Geran, PN, description of land). Prefer the property address from later pages over a letterhead office address. Copy the full address block into property when that is what the page shows.

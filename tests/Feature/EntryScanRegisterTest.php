@@ -608,6 +608,111 @@ class EntryScanRegisterTest extends TestCase
         $this->assertNull($file->bank);
     }
 
+    public function test_analyze_accepts_charge_case_types_from_gemini(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence()
+                ->push([
+                    'candidates' => [[
+                        'content' => [
+                            'parts' => [[
+                                'text' => json_encode([
+                                    'reference_number' => 'CON/2021/0404',
+                                    'case_type' => 'Satisfaction of Charge',
+                                    'case_category_code' => 'CON',
+                                    'purchaser' => 'AI Chargor',
+                                    'vendor' => 'AI Chargee',
+                                ]),
+                            ]],
+                        ],
+                    ]],
+                ])
+                ->push([
+                    'candidates' => [[
+                        'content' => [
+                            'parts' => [[
+                                'text' => json_encode([
+                                    'reference_number' => 'CON/2021/0505',
+                                    'case_type' => 'Memorandum of Charge',
+                                    'case_category_code' => 'CON',
+                                    'purchaser' => 'AI Borrower',
+                                    'vendor' => 'AI Bank',
+                                ]),
+                            ]],
+                        ],
+                    ]],
+                ]),
+        ]);
+
+        config([
+            'services.gemini.key' => 'test-key',
+            'services.gemini.model' => 'gemini-3.1-flash-lite',
+        ]);
+
+        $entry = User::factory()->entry()->create();
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('soc.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_SATISFACTION_OF_CHARGE);
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('moc.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_MEMORANDUM_OF_CHARGE);
+
+        Http::assertSent(function ($request): bool {
+            $prompt = (string) data_get($request->data(), 'contents.0.parts.0.text');
+
+            return str_contains($prompt, '"satisfaction_of_charge"')
+                && str_contains($prompt, '"memorandum_of_charge"')
+                && str_contains($prompt, 'Satisfaction of Charge')
+                && str_contains($prompt, 'Memorandum of Charge');
+        });
+    }
+
+    public function test_entry_save_accepts_charge_case_types(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+
+        foreach ([
+            [LegalFile::TYPE_SATISFACTION_OF_CHARGE, 'Satisfaction of charge', 'CON/2020/0888', 'soc.jpg'],
+            [LegalFile::TYPE_MEMORANDUM_OF_CHARGE, 'Memorandum of charge', 'CON/2020/0889', 'moc.jpg'],
+        ] as [$type, $label, $ref, $fileName]) {
+            $tempPath = 'entry-scans/tmp/'.$entry->id.'/'.$fileName;
+            Storage::disk('local')->put($tempPath, 'fake');
+
+            $this->actingAs($entry)
+                ->post(route('entry.save'), [
+                    'temp_path' => $tempPath,
+                    'reference_number' => $ref,
+                    'case_type' => $type,
+                    'case_category_id' => $category->id,
+                    'purchaser' => 'Chargor Sdn Bhd',
+                    'vendor' => 'Chargee Bank',
+                    'property' => 'Lot 88, Sandakan',
+                    'title_number' => 'PN 88888',
+                ])
+                ->assertRedirect()
+                ->assertSessionHasNoErrors();
+
+            $file = LegalFile::query()->where('reference_number', $ref)->firstOrFail();
+            $this->assertSame($type, $file->case_type);
+            $this->assertSame($label, $file->caseTypeLabel());
+            $this->assertTrue(LegalFile::isSnpType($file->case_type));
+            $this->assertSame('Chargor Sdn Bhd', $file->purchaser);
+            $this->assertSame('Chargee Bank', $file->vendor);
+            $this->assertNull($file->bank);
+        }
+    }
+
     public function test_analyze_accepts_sublease_case_type_from_gemini(): void
     {
         Storage::fake('local');
