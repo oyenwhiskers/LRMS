@@ -2298,166 +2298,253 @@ document.addEventListener('DOMContentLoaded', async () => {
             return (station.getAttribute('data-q') || '').trim();
         };
 
-        const syncColumnOptions = (rackSelect, columnSelect) => {
-            if (! columnSelect) {
+        const bindLocationCascade = (root) => {
+            const boxes = [...root.querySelectorAll('[data-entry-combobox]')];
+            if (boxes.length === 0) {
                 return;
             }
 
-            const rackId = rackSelect?.value || '';
-            const options = [...columnSelect.querySelectorAll('option[data-rack-id]')];
-            let keep = false;
+            let openApi = null;
+            const apis = new Map();
 
-            options.forEach((option) => {
-                const match = ! rackId || option.dataset.rackId === rackId;
-                option.hidden = ! match;
-                if (match && option.selected) {
-                    keep = true;
+            const closeOpen = () => {
+                openApi?.close({ restore: true });
+                openApi = null;
+            };
+
+            const positionPopover = (search, popover) => {
+                const rect = search.getBoundingClientRect();
+                const width = Math.max(rect.width, 12 * 16);
+                const maxHeight = Math.min(14 * 16, window.innerHeight * 0.4);
+                let top = rect.bottom + 4;
+                if (top + Math.min(maxHeight, 180) > window.innerHeight - 8) {
+                    top = Math.max(8, rect.top - 4 - Math.min(maxHeight, rect.top - 8));
                 }
-            });
+                popover.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+                popover.style.top = `${top}px`;
+                popover.style.width = `${width}px`;
+                popover.style.maxHeight = `${maxHeight}px`;
+            };
 
-            if (! keep) {
-                columnSelect.value = '';
-            }
-        };
+            boxes.forEach((box) => {
+                const hidden = box.querySelector('input[type="hidden"]');
+                const search = box.querySelector('[data-entry-combobox-search]');
+                const popover = box.querySelector('[data-entry-combobox-popover]');
+                const options = [...(popover?.querySelectorAll('[data-entry-combobox-option]') || [])];
+                if (! hidden || ! search || ! popover || options.length === 0) {
+                    return;
+                }
 
-        const bindShelfCombobox = (root, rackSelect, columnSelect) => {
-            const box = root.querySelector('[data-shelf-combobox]');
-            if (! box) {
-                return null;
-            }
+                let emptyHint = popover.querySelector('[data-entry-combobox-empty]');
+                if (! emptyHint) {
+                    emptyHint = document.createElement('p');
+                    emptyHint.className = 'entry-combobox__empty hidden';
+                    emptyHint.setAttribute('data-entry-combobox-empty', '');
+                    emptyHint.textContent = 'Tiada padanan.';
+                    popover.appendChild(emptyHint);
+                }
 
-            const hidden = box.querySelector('[data-print-station-filter-shelf]');
-            const search = box.querySelector('[data-shelf-combobox-search]');
-            const list = box.querySelector('[data-shelf-combobox-list]');
-            const emptyHint = box.querySelector('[data-shelf-combobox-empty]');
-            const options = [...box.querySelectorAll('[data-shelf-combobox-option]')];
-            if (! hidden || ! search || ! list || options.length === 0) {
-                return null;
-            }
+                const key = box.getAttribute('data-entry-combobox-key') || '';
+                const defaultLabel = options.find((option) => ! option.dataset.value)?.dataset.label
+                    || options[0].dataset.label
+                    || '';
 
-            const locationAllows = (option) => {
-                const rackId = rackSelect?.value || '';
-                const column = columnSelect?.value || '';
-                if (! option.dataset.value) {
+                const locationAllows = (option) => {
+                    if (! option.dataset.value) {
+                        return true;
+                    }
+
+                    const rackId = apis.get('rack')?.value() || '';
+                    const column = apis.get('column')?.value() || '';
+
+                    if (key === 'column') {
+                        return ! rackId || option.dataset.rackId === rackId;
+                    }
+
+                    if (key === 'shelf') {
+                        const rackMatch = ! rackId || option.dataset.rackId === rackId;
+                        const columnMatch = ! column || option.dataset.column === column;
+                        return rackMatch && columnMatch;
+                    }
+
                     return true;
+                };
+
+                const selectedOption = () => (
+                    options.find((option) => option.dataset.value === hidden.value)
+                    || options.find((option) => ! option.dataset.value)
+                    || options[0]
+                );
+
+                const render = (needleOverride = null) => {
+                    const needle = (needleOverride ?? search.value).trim().toLowerCase();
+                    let visible = 0;
+                    options.forEach((option) => {
+                        const allowed = locationAllows(option);
+                        const label = (option.dataset.label || option.textContent || '').toLowerCase();
+                        const show = allowed && (! needle || label.includes(needle));
+                        option.classList.toggle('is-filtered-out', ! show);
+                        if (show) {
+                            visible += 1;
+                        }
+                    });
+                    emptyHint.classList.toggle('hidden', visible > 0);
+                };
+
+                const close = ({ restore = false } = {}) => {
+                    if (restore) {
+                        const selected = selectedOption();
+                        search.value = selected?.dataset.label || defaultLabel;
+                    }
+                    popover.classList.add('hidden');
+                    popover.hidden = true;
+                    search.setAttribute('aria-expanded', 'false');
+                    if (popover.parentElement === document.body) {
+                        box.appendChild(popover);
+                    }
+                    if (openApi === api) {
+                        openApi = null;
+                    }
+                };
+
+                const open = ({ filterNeedle = null } = {}) => {
+                    if (openApi && openApi !== api) {
+                        openApi.close({ restore: true });
+                    }
+                    if (popover.parentElement !== document.body) {
+                        document.body.appendChild(popover);
+                    }
+                    popover.classList.remove('hidden');
+                    popover.hidden = false;
+                    search.setAttribute('aria-expanded', 'true');
+                    positionPopover(search, popover);
+                    render(filterNeedle);
+                    openApi = api;
+                };
+
+                const setValue = (option, { silent = false } = {}) => {
+                    const value = option?.dataset.value || '';
+                    const label = option?.dataset.label || defaultLabel;
+                    const changed = hidden.value !== value;
+                    hidden.value = value;
+                    search.value = label;
+                    options.forEach((entry) => {
+                        entry.setAttribute('aria-selected', entry === option ? 'true' : 'false');
+                    });
+                    close({ restore: false });
+                    if (! silent && changed) {
+                        hidden.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                };
+
+                const syncFilter = () => {
+                    const selected = selectedOption();
+                    if (selected && ! locationAllows(selected)) {
+                        const fallback = options.find((option) => ! option.dataset.value) || options[0];
+                        setValue(fallback, { silent: true });
+                        return;
+                    }
+                    search.value = selected?.dataset.label || defaultLabel;
+                };
+
+                const api = {
+                    key,
+                    value: () => hidden.value || '',
+                    close,
+                    syncFilter,
+                    open,
+                };
+                if (key) {
+                    apis.set(key, api);
                 }
-                const rackMatch = ! rackId || option.dataset.rackId === rackId;
-                const columnMatch = ! column || option.dataset.column === column;
-                return rackMatch && columnMatch;
-            };
 
-            const setOpen = (open) => {
-                list.classList.toggle('hidden', ! open);
-                list.hidden = ! open;
-                search.setAttribute('aria-expanded', open ? 'true' : 'false');
-            };
-
-            const setValue = (option) => {
-                const value = option?.dataset.value || '';
-                const label = option?.dataset.label || 'Semua shelf';
-                hidden.value = value;
-                search.value = label;
-                options.forEach((entry) => {
-                    entry.setAttribute('aria-selected', entry === option ? 'true' : 'false');
+                search.addEventListener('focus', () => {
+                    open({ filterNeedle: '' });
+                    search.select();
                 });
-                setOpen(false);
-            };
 
-            const render = () => {
-                const needle = search.value.trim().toLowerCase();
-                let visible = 0;
+                search.addEventListener('input', () => {
+                    open();
+                    positionPopover(search, popover);
+                });
 
-                options.forEach((option) => {
-                    const allowed = locationAllows(option);
-                    const label = (option.dataset.label || option.textContent || '').toLowerCase();
-                    const matchesSearch = ! needle || label.includes(needle);
-                    const show = allowed && matchesSearch;
-                    option.classList.toggle('is-filtered-out', ! show);
-                    if (show) {
-                        visible += 1;
+                search.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        const firstVisible = options.find((option) => ! option.classList.contains('is-filtered-out'));
+                        if (firstVisible) {
+                            setValue(firstVisible);
+                        }
+                        return;
+                    }
+
+                    if (event.key === 'Escape') {
+                        close({ restore: true });
                     }
                 });
 
-                emptyHint?.classList.toggle('hidden', visible > 0);
-            };
-
-            const syncToLocation = () => {
-                const selected = options.find((option) => option.dataset.value === hidden.value);
-                if (selected && ! locationAllows(selected)) {
-                    const fallback = options.find((option) => ! option.dataset.value) || options[0];
-                    setValue(fallback);
-                }
-                render();
-            };
-
-            search.addEventListener('focus', () => {
-                setOpen(true);
-                render();
-                search.select();
-            });
-
-            search.addEventListener('input', () => {
-                setOpen(true);
-                render();
-            });
-
-            search.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
+                popover.addEventListener('mousedown', (event) => {
+                    // Keep focus on search while choosing an option.
                     event.preventDefault();
-                    const firstVisible = options.find((option) => ! option.classList.contains('is-filtered-out'));
-                    if (firstVisible) {
-                        setValue(firstVisible);
+                });
+
+                popover.addEventListener('click', (event) => {
+                    const option = event.target.closest('[data-entry-combobox-option]');
+                    if (! option || option.classList.contains('is-filtered-out')) {
+                        return;
                     }
-                    return;
-                }
+                    setValue(option);
+                });
 
-                if (event.key === 'Escape') {
-                    const selected = options.find((option) => option.dataset.value === hidden.value);
-                    search.value = selected?.dataset.label || 'Semua shelf';
-                    setOpen(false);
-                    emptyHint?.classList.add('hidden');
-                }
+                syncFilter();
             });
 
-            list.addEventListener('click', (event) => {
-                const option = event.target.closest('[data-shelf-combobox-option]');
-                if (! option || option.classList.contains('is-filtered-out')) {
-                    return;
-                }
-                setValue(option);
-            });
+            const syncCascade = () => {
+                apis.get('column')?.syncFilter();
+                apis.get('shelf')?.syncFilter();
+            };
+
+            root.querySelector('[data-print-station-filter-rack]')
+                ?.addEventListener('change', syncCascade);
+            root.querySelector('[data-print-station-filter-column]')
+                ?.addEventListener('change', () => {
+                    apis.get('shelf')?.syncFilter();
+                });
 
             document.addEventListener('click', (event) => {
-                if (! box.contains(event.target)) {
-                    const selected = options.find((option) => option.dataset.value === hidden.value);
-                    search.value = selected?.dataset.label || 'Semua shelf';
-                    setOpen(false);
-                    emptyHint?.classList.add('hidden');
+                if (! openApi) {
+                    return;
                 }
+                const target = event.target;
+                if (target instanceof Element) {
+                    const inSearch = target.closest('[data-entry-combobox]');
+                    const inPopover = target.closest('[data-entry-combobox-popover]');
+                    if (inSearch || inPopover) {
+                        return;
+                    }
+                }
+                closeOpen();
             });
 
-            syncToLocation();
-
-            return { syncToLocation };
-        };
-
-        const bindLocationCascade = (root) => {
-            const rackSelect = root.querySelector('[data-print-station-filter-rack]');
-            const columnSelect = root.querySelector('[data-print-station-filter-column]');
-            if (! rackSelect || ! columnSelect) {
-                return;
-            }
-
-            const shelfCombobox = bindShelfCombobox(root, rackSelect, columnSelect);
-
-            const sync = () => {
-                syncColumnOptions(rackSelect, columnSelect);
-                shelfCombobox?.syncToLocation();
-            };
-
-            sync();
-            rackSelect.addEventListener('change', sync);
-            columnSelect.addEventListener('change', sync);
+            window.addEventListener('resize', () => {
+                if (! openApi) {
+                    return;
+                }
+                const active = boxes.find((box) => {
+                    const key = box.getAttribute('data-entry-combobox-key') || '';
+                    return apis.get(key) === openApi || (! key && box.contains(document.activeElement));
+                });
+                const search = document.activeElement;
+                const popover = document.body.querySelector('[data-entry-combobox-popover]:not(.hidden)');
+                if (search instanceof HTMLElement && popover && search.matches('[data-entry-combobox-search]')) {
+                    positionPopover(search, popover);
+                } else if (active) {
+                    const activeSearch = active.querySelector('[data-entry-combobox-search]');
+                    if (activeSearch && popover) {
+                        positionPopover(activeSearch, popover);
+                    }
+                }
+            });
         };
 
         const previewUrlFor = (job) => {
