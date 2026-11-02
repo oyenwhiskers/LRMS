@@ -3149,6 +3149,50 @@ document.addEventListener('DOMContentLoaded', async () => {
             syncCaseTypePanels(resolvePanelType());
         });
 
+        // Manual register only: CON + S&P|MOT requires case sub-type.
+        if (form.hasAttribute('data-manual-case-register')) {
+            const categorySelect = form.querySelector('[data-case-category-select]');
+            const subTypeRow = form.querySelector('[data-case-sub-type-row]');
+            const subTypeSelect = form.querySelector('[data-case-sub-type-select]');
+
+            const syncManualSubType = () => {
+                if (! categorySelect || ! subTypeRow || ! subTypeSelect) {
+                    return;
+                }
+
+                const categoryCode = (
+                    categorySelect.selectedOptions?.[0]?.dataset?.categoryCode || ''
+                ).toUpperCase();
+                const caseType = select?.value || '';
+                const optionFor = categoryCode === 'CON' && (caseType === 'snp' || caseType === 'mot')
+                    ? caseType
+                    : '';
+                const previous = subTypeSelect.value;
+
+                subTypeSelect.querySelectorAll('option[data-sub-type-for]').forEach((option) => {
+                    const show = optionFor !== '' && option.dataset.subTypeFor === optionFor;
+                    option.hidden = ! show;
+                    option.disabled = ! show;
+                });
+
+                const active = optionFor !== '';
+                subTypeRow.classList.toggle('hidden', ! active);
+                subTypeSelect.disabled = ! active;
+                subTypeSelect.required = active;
+
+                const selected = subTypeSelect.selectedOptions?.[0];
+                if (! active || selected?.disabled || selected?.hidden) {
+                    subTypeSelect.value = '';
+                } else if (previous) {
+                    subTypeSelect.value = previous;
+                }
+            };
+
+            syncManualSubType();
+            categorySelect?.addEventListener('change', syncManualSubType);
+            select?.addEventListener('change', syncManualSubType);
+        }
+
         const borrowersRoot = form.querySelector('[data-borrowers-root]');
         const coBorrowersEl = form.querySelector('[data-co-borrowers]');
         const borrowerTemplate = form.querySelector('[data-borrower-template]');

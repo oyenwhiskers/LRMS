@@ -53,15 +53,16 @@ class CaseCategory extends Model
         });
     }
 
-    public function formatReference(int $number, ?int $year = null): string
+    public function formatReference(int $number, ?int $year = null, ?string $caseType = null): string
     {
         $year ??= (int) now()->format('Y');
+        $width = LegalFile::referenceSequenceWidth($caseType);
 
-        return sprintf('%s/%d/%04d', strtoupper($this->code), $year, $number);
+        return sprintf('%s/%d/%0'.$width.'d', strtoupper($this->code), $year, $number);
     }
 
-    public function nextReference(): string
+    public function nextReference(?string $caseType = null): string
     {
-        return $this->formatReference($this->reserveNextNumber());
+        return $this->formatReference($this->reserveNextNumber(), null, $caseType);
     }
 }

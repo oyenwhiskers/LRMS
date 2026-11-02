@@ -34,8 +34,15 @@
         <dl class="mt-6 grid gap-5">
             @php
                 $details = [
+                    'Case category' => $file->caseCategory
+                        ? $file->caseCategory->code.' — '.$file->caseCategory->name
+                        : $file->matter_type,
                     'Case type' => $file->caseTypeLabel(),
                 ];
+
+                if ($file->case_sub_type) {
+                    $details['Case sub-type'] = $file->caseSubTypeLabel();
+                }
 
                 if ($file->case_type === App\Models\LegalFile::TYPE_LOAN) {
                     $details['Bank'] = $file->bank;
@@ -50,9 +57,6 @@
                     $details['Title number'] = $file->title_number;
                 }
 
-                $details['Case category'] = $file->caseCategory
-                    ? $file->caseCategory->code.' — '.$file->caseCategory->name
-                    : $file->matter_type;
                 $details['Start date'] = $file->start_date?->format('d M Y');
                 $details['End date'] = $file->end_date?->format('d M Y');
                 $details['Person responsible'] = $file->personInCharge?->full_name;

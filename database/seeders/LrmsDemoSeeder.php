@@ -551,8 +551,13 @@ class LrmsDemoSeeder extends Seeder
             $development = $developments[($index - 1) % count($developments)];
             $shelfKey = $activeShelfKeys[($index - 1) % count($activeShelfKeys)];
             $category = $this->categories[$blueprint['prefix']];
+            $caseType = match ($blueprint['prefix']) {
+                'LOA' => LegalFile::TYPE_LOAN,
+                'LIT' => LegalFile::TYPE_LITIGATION,
+                default => LegalFile::TYPE_SNP,
+            };
             $sequenceNumber = $category->reserveNextNumber();
-            $referenceNumber = $category->formatReference($sequenceNumber, 2026);
+            $referenceNumber = $category->formatReference($sequenceNumber, 2026, $caseType);
             $createdAt = $index > 128
                 ? $this->today->copy()->subDays(138 - $index)->setTime(9 + ($index % 4), ($index * 7) % 60)
                 : Carbon::create(2026, 2, 3, 9, 0, 0, config('app.timezone'))->addDays($index);
@@ -566,11 +571,7 @@ class LrmsDemoSeeder extends Seeder
             $file->vendor = $vendors[($index + 2) % count($vendors)];
             $file->property = $property;
             $file->case_category_id = $category->id;
-            $file->case_type = match ($blueprint['prefix']) {
-                'LOA' => LegalFile::TYPE_LOAN,
-                'LIT' => LegalFile::TYPE_LITIGATION,
-                default => LegalFile::TYPE_SNP,
-            };
+            $file->case_type = $caseType;
             $file->matter_type = $category->name;
             $file->start_date = $createdAt->toDateString();
             $file->end_date = $createdAt->copy()->addDays(30 + ($index % 45))->toDateString();

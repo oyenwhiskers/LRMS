@@ -53,9 +53,16 @@ class LegalFile extends Model
 
     public const TYPE_RECEIPT_REASSIGNMENT = 'receipt_reassignment';
 
+    public const SUB_TYPE_MOT = 'mot';
+
+    public const SUB_TYPE_DOA = 'doa';
+
+    /** MOT registered by way of love and affection (manual CON + S&P path). */
+    public const SUB_TYPE_LOVE_AND_AFFECTION = 'love_and_affection';
+
     protected $fillable = [
         'reference_number', 'purchaser', 'vendor', 'bank', 'property', 'title_number',
-        'suite_number', 'ic_number', 'case_category_id', 'case_type', 'matter_type',
+        'suite_number', 'ic_number', 'case_category_id', 'case_type', 'case_sub_type', 'matter_type',
         'start_date', 'end_date', 'person_in_charge_id', 'shelf_id',
         'current_holder_id', 'status', 'archived_at', 'created_by', 'updated_by',
     ];
@@ -285,6 +292,19 @@ class LegalFile extends Model
     }
 
     /**
+     * Manual case register type list (plain DOA is a CON + S&P sub-type; DOA POST stays).
+     *
+     * @return list<string>
+     */
+    public static function manualCaseTypes(): array
+    {
+        return array_values(array_filter(
+            self::caseTypes(),
+            fn (string $type): bool => $type !== self::TYPE_DOA,
+        ));
+    }
+
+    /**
      * Conveyancing / S&P-shaped case types (shared form fields).
      *
      * @return list<string>
@@ -303,6 +323,75 @@ class LegalFile extends Model
             self::TYPE_COPY_TITLE,
             self::TYPE_RECEIPT_REASSIGNMENT,
         ];
+    }
+
+    /**
+     * Manual-register sub-types when category is CON and type is S&P.
+     *
+     * @return list<string>
+     */
+    public static function conSnpSubTypes(): array
+    {
+        return [
+            self::SUB_TYPE_MOT,
+            self::SUB_TYPE_DOA,
+        ];
+    }
+
+    /**
+     * Manual-register sub-types when category is CON and type is MOT.
+     *
+     * @return list<string>
+     */
+    public static function conMotSubTypes(): array
+    {
+        return [
+            self::SUB_TYPE_LOVE_AND_AFFECTION,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function manualSubTypes(): array
+    {
+        return [
+            ...self::conSnpSubTypes(),
+            ...self::conMotSubTypes(),
+        ];
+    }
+
+    public static function caseSubTypeLabelFor(string $subType): string
+    {
+        return match ($subType) {
+            self::SUB_TYPE_MOT => 'Memorandum of transfer',
+            self::SUB_TYPE_DOA => 'Deeds of Assignment',
+            self::SUB_TYPE_LOVE_AND_AFFECTION => 'By way love and affection',
+            default => str($subType)->headline()->toString(),
+        };
+    }
+
+    public function caseSubTypeLabel(): string
+    {
+        return $this->case_sub_type
+            ? self::caseSubTypeLabelFor((string) $this->case_sub_type)
+            : '—';
+    }
+
+    /** Map a CON + S&P sub-type to the stored case_type code. */
+    public static function caseTypeFromManualSubType(string $subType): string
+    {
+        return match ($subType) {
+            self::SUB_TYPE_MOT => self::TYPE_MOT,
+            self::SUB_TYPE_DOA => self::TYPE_DOA,
+            default => self::TYPE_SNP,
+        };
+    }
+
+    /** Running-number pad width in CATEGORY/YEAR/NUMBER: loan = 2, all others = 3. */
+    public static function referenceSequenceWidth(?string $caseType = null): int
+    {
+        return self::normalizeCaseTypeCode((string) $caseType) === self::TYPE_LOAN ? 2 : 3;
     }
 
     public static function isSnpType(string $type): bool

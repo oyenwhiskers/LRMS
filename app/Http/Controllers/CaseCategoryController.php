@@ -142,7 +142,7 @@ class CaseCategoryController extends Controller
         string $newName,
         bool $updateMatterType,
     ): array {
-        $files = $category->legalFiles()->get(['id', 'reference_number', 'matter_type']);
+        $files = $category->legalFiles()->get(['id', 'reference_number', 'matter_type', 'case_type']);
         /** @var array<int, array{matter_type?: string, reference_number?: string}> $pending */
         $pending = [];
         /** @var array<int, string> $plannedReferences */
@@ -157,7 +157,8 @@ class CaseCategoryController extends Controller
             }
 
             if (preg_match('/^([A-Za-z0-9]+)\/(\d{4})\/(\d+)$/', (string) $file->reference_number, $matches)) {
-                $newReference = sprintf('%s/%s/%04d', $newCode, $matches[2], (int) $matches[3]);
+                $width = LegalFile::referenceSequenceWidth($file->case_type);
+                $newReference = sprintf('%s/%s/%0'.$width.'d', $newCode, $matches[2], (int) $matches[3]);
 
                 if ($newReference !== $file->reference_number) {
                     $updates['reference_number'] = $newReference;

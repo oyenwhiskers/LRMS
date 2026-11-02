@@ -53,6 +53,7 @@ class LrmsWorkflowTest extends TestCase
         [$admin, $shelf, $staff, $category] = $this->records();
         $response = $this->actingAs($admin)->post(route('files.store'), [
             'case_type' => LegalFile::TYPE_SNP,
+            'case_sub_type' => LegalFile::SUB_TYPE_MOT,
             'case_category_id' => $category->id,
             'purchaser' => 'ABC SDN BHD',
             'vendor' => 'XYZ SDN BHD',
@@ -66,15 +67,77 @@ class LrmsWorkflowTest extends TestCase
         $this->assertSame(LegalFile::STATUS_REGISTERED, $file->status);
         $this->assertNull($file->shelf_id);
         $this->assertSame($category->id, $file->case_category_id);
-        $this->assertSame(LegalFile::TYPE_SNP, $file->case_type);
+        // CON + S&P + MOT sub-type stores as MOT.
+        $this->assertSame(LegalFile::TYPE_MOT, $file->case_type);
+        $this->assertSame(LegalFile::SUB_TYPE_MOT, $file->case_sub_type);
         $this->assertSame('PN 12345', $file->title_number);
-        $this->assertMatchesRegularExpression('/^CON\/\d{4}\/\d{4}$/', $file->reference_number);
+        $this->assertMatchesRegularExpression('/^CON\/\d{4}\/\d{3}$/', $file->reference_number);
         $this->assertTrue(Str::isUuid($file->qr_identifier));
         $this->assertDatabaseHas('file_movements', [
             'legal_file_id' => $file->id,
             'type' => 'registered',
             'new_status' => LegalFile::STATUS_REGISTERED,
         ]);
+    }
+
+    public function test_manual_register_con_snp_and_mot_sub_types_and_allows_blank_title(): void
+    {
+        [$admin, $shelf, $staff, $category] = $this->records();
+
+        $this->actingAs($admin)->post(route('files.store'), [
+            'case_type' => LegalFile::TYPE_SNP,
+            'case_category_id' => $category->id,
+            'purchaser' => 'No Sub Type Sdn Bhd',
+            'property' => 'Lot 1',
+        ])->assertSessionHasErrors('case_sub_type');
+
+        $this->actingAs($admin)->post(route('files.store'), [
+            'case_type' => LegalFile::TYPE_MOT,
+            'case_category_id' => $category->id,
+            'purchaser' => 'MOT Needs Sub Type',
+            'property' => 'Lot 1A',
+        ])->assertSessionHasErrors('case_sub_type');
+
+        $this->actingAs($admin)->post(route('files.store'), [
+            'case_type' => LegalFile::TYPE_MOT,
+            'case_sub_type' => LegalFile::SUB_TYPE_LOVE_AND_AFFECTION,
+            'case_category_id' => $category->id,
+            'purchaser' => 'Love Affection Sdn Bhd',
+            'vendor' => 'Donor Sdn Bhd',
+            'property' => 'Lot 2, Sandakan',
+            'person_in_charge_id' => $staff->id,
+        ])->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('purchaser', 'Love Affection Sdn Bhd')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_MOT, $file->case_type);
+        $this->assertSame(LegalFile::SUB_TYPE_LOVE_AND_AFFECTION, $file->case_sub_type);
+        $this->assertNull($file->title_number);
+
+        $this->actingAs($admin)->post(route('files.store'), [
+            'case_type' => LegalFile::TYPE_SNP,
+            'case_sub_type' => LegalFile::SUB_TYPE_DOA,
+            'case_category_id' => $category->id,
+            'purchaser' => 'DOA Via Sub Type',
+            'property' => 'Lot 3',
+            'person_in_charge_id' => $staff->id,
+        ])->assertSessionHasNoErrors();
+
+        $doa = LegalFile::query()->where('purchaser', 'DOA Via Sub Type')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_DOA, $doa->case_type);
+        $this->assertSame(LegalFile::SUB_TYPE_DOA, $doa->case_sub_type);
+    }
+
+    public function test_manual_register_rejects_plain_doa_as_top_level_type(): void
+    {
+        [$admin, $shelf, $staff, $category] = $this->records();
+
+        $this->actingAs($admin)->post(route('files.store'), [
+            'case_type' => LegalFile::TYPE_DOA,
+            'case_category_id' => $category->id,
+            'purchaser' => 'Should Fail',
+            'property' => 'Lot X',
+            'title_number' => 'PN 1',
+        ])->assertSessionHasErrors('case_type');
     }
 
     public function test_loan_and_litigation_registration_use_type_specific_fields(): void
@@ -98,6 +161,7 @@ class LrmsWorkflowTest extends TestCase
         $this->assertSame('Maybank', $loan->bank);
         $this->assertNull($loan->vendor);
         $this->assertNull($loan->suite_number);
+        $this->assertMatchesRegularExpression('/^LOA\/\d{4}\/\d{2}$/', $loan->reference_number);
 
         $this->actingAs($admin)->post(route('files.store'), [
             'case_type' => LegalFile::TYPE_LITIGATION,
@@ -351,7 +415,7 @@ class LrmsWorkflowTest extends TestCase
         $imported = LegalFile::query()->where('purchaser', 'Importer Sdn Bhd')->firstOrFail();
         $this->assertSame(LegalFile::STATUS_REGISTERED, $imported->status);
         $this->assertSame($category->id, $imported->case_category_id);
-        $this->assertMatchesRegularExpression('/^CON\/\d{4}\/\d{4}$/', $imported->reference_number);
+        $this->assertMatchesRegularExpression('/^CON\/\d{4}\/\d{3}$/', $imported->reference_number);
         $this->assertDatabaseHas('import_runs', ['status' => 'completed', 'imported_rows' => 1]);
     }
 

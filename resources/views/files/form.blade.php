@@ -18,11 +18,12 @@
         <a class="btn-secondary hidden shrink-0 lg:inline-flex" href="{{ route('files.index') }}">Back</a>
     </div>
 
-    <form
+        <form
         class="mt-8 space-y-8"
         method="POST"
         action="{{ $file->exists ? route('files.update', $file) : route('files.store') }}"
         data-case-type-form
+        @unless($file->exists) data-manual-case-register @endunless
     >
         @csrf
         @if($file->exists)
@@ -43,25 +44,53 @@
                     </div>
 
                     <div class="form-row">
+                        <span class="form-label form-row__label">Case category</span>
+                        <span class="form-row__control">
+                            <input class="form-input bg-stone-50" value="{{ $file->caseCategory?->code }} — {{ $file->caseCategory?->name ?? $file->matter_type }}" readonly>
+                        </span>
+                    </div>
+
+                    <div class="form-row">
                         <span class="form-label form-row__label">Case type</span>
                         <span class="form-row__control">
                             <input class="form-input bg-stone-50" value="{{ $file->caseTypeLabel() }}" readonly>
                         </span>
                     </div>
 
-                    <div class="form-row">
+                    @if($file->case_sub_type)
+                        <div class="form-row">
+                            <span class="form-label form-row__label">Case sub-type</span>
+                            <span class="form-row__control">
+                                <input class="form-input bg-stone-50" value="{{ $file->caseSubTypeLabel() }}" readonly>
+                            </span>
+                        </div>
+                    @endif
+                @else
+                    <label class="form-row">
                         <span class="form-label form-row__label">Case category</span>
                         <span class="form-row__control">
-                            <input class="form-input bg-stone-50" value="{{ $file->caseCategory?->code }} — {{ $file->caseCategory?->name ?? $file->matter_type }}" readonly>
+                            <select class="form-input" name="case_category_id" required autofocus data-case-category-select>
+                                <option value="">Select category</option>
+                                @foreach($categories as $category)
+                                    <option
+                                        value="{{ $category->id }}"
+                                        data-category-code="{{ $category->code }}"
+                                        @selected((string) old('case_category_id') === (string) $category->id)
+                                    >
+                                        {{ $category->code }} — {{ $category->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <span class="form-help">Running code only. File number will be generated as CODE/YEAR/NUMBER.</span>
                         </span>
-                    </div>
-                @else
+                    </label>
+
                     <label class="form-row">
                         <span class="form-label form-row__label">Case type</span>
                         <span class="form-row__control">
-                            <select class="form-input" name="case_type" required autofocus data-case-type-select>
+                            <select class="form-input" name="case_type" required data-case-type-select>
                                 <option value="">Select case type</option>
-                                @foreach (App\Models\LegalFile::caseTypes() as $type)
+                                @foreach (App\Models\LegalFile::manualCaseTypes() as $type)
                                     <option
                                         value="{{ $type }}"
                                         data-case-type-family="{{ App\Models\LegalFile::formPanel($type) }}"
@@ -73,18 +102,32 @@
                         </span>
                     </label>
 
-                    <label class="form-row">
-                        <span class="form-label form-row__label">Case category</span>
+                    <label class="form-row hidden" data-case-sub-type-row>
+                        <span class="form-label form-row__label">Case sub-type</span>
                         <span class="form-row__control">
-                            <select class="form-input" name="case_category_id" required>
-                                <option value="">Select category</option>
-                                @foreach($categories as $category)
-                                    <option value="{{ $category->id }}" @selected((string) old('case_category_id') === (string) $category->id)>
-                                        {{ $category->code }} — {{ $category->name }}
-                                    </option>
+                            <select
+                                class="form-input"
+                                name="case_sub_type"
+                                data-case-sub-type-select
+                                disabled
+                            >
+                                <option value="">Select sub-type</option>
+                                @foreach (App\Models\LegalFile::conSnpSubTypes() as $subType)
+                                    <option
+                                        value="{{ $subType }}"
+                                        data-sub-type-for="snp"
+                                        @selected((string) old('case_sub_type') === $subType)
+                                    >{{ App\Models\LegalFile::caseSubTypeLabelFor($subType) }}</option>
+                                @endforeach
+                                @foreach (App\Models\LegalFile::conMotSubTypes() as $subType)
+                                    <option
+                                        value="{{ $subType }}"
+                                        data-sub-type-for="mot"
+                                        @selected((string) old('case_sub_type') === $subType)
+                                    >{{ App\Models\LegalFile::caseSubTypeLabelFor($subType) }}</option>
                                 @endforeach
                             </select>
-                            <span class="form-help">Running code only. File number will be generated as CODE/YEAR/NUMBER.</span>
+                            <span class="form-help">Required for CON + Sales and purchase, or CON + Memorandum of transfer.</span>
                         </span>
                     </label>
                 @endif
@@ -115,7 +158,8 @@
                     <label class="form-row">
                         <span class="form-label form-row__label">Title number</span>
                         <span class="form-row__control">
-                            <input class="form-input" name="title_number" value="{{ old('title_number', $file->title_number) }}" data-case-type-required @required($selectedType === App\Models\LegalFile::TYPE_LOAN) @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+                            <input class="form-input" name="title_number" value="{{ old('title_number', $file->title_number) }}" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+                            <span class="form-help">Optional — leave blank if the customer did not provide one.</span>
                         </span>
                     </label>
                 </div>
@@ -146,8 +190,8 @@
                     <label class="form-row">
                         <span class="form-label form-row__label">Title number</span>
                         <span class="form-row__control">
-                            <input class="form-input" name="title_number" value="{{ old('title_number', $file->title_number) }}" data-case-type-required @required($isSnpSelected) @disabled(! $isSnpSelected)>
-                            <span class="form-help">If there is no subsidiary title, enter the master title.</span>
+                            <input class="form-input" name="title_number" value="{{ old('title_number', $file->title_number) }}" @disabled(! $isSnpSelected)>
+                            <span class="form-help">Optional. If there is no subsidiary title, enter the master title.</span>
                         </span>
                     </label>
                 </div>

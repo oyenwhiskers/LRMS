@@ -107,7 +107,7 @@ class ImportExportController extends Controller
                         return [
                             'file_identifier' => LegalFile::formatIdentifier($firstIdentifier + $index),
                             'qr_identifier' => (string) Str::uuid(),
-                            'reference_number' => $category->formatReference($number, $year),
+                            'reference_number' => $category->formatReference($number, $year, LegalFile::TYPE_SNP),
                             'purchaser' => $row['purchaser'],
                             'vendor' => $row['vendor'] ?: null,
                             'property' => $row['property'],

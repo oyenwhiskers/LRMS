@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -144,7 +145,7 @@ class LegalFileController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $data['reference_number'] = $category->nextReference();
+            $data['reference_number'] = $category->nextReference($data['case_type'] ?? null);
             $data['matter_type'] = $category->name;
 
             $file = LegalFile::create($data);
@@ -358,27 +359,56 @@ class LegalFileController extends Controller
         ];
 
         if (! $file?->exists) {
-            $rules['case_type'] = ['required', Rule::in(LegalFile::caseTypes())];
+            $rules['case_type'] = ['required', Rule::in(LegalFile::manualCaseTypes())];
             $rules['case_category_id'] = [
                 'required',
                 Rule::exists('case_categories', 'id')->where(fn ($query) => $query->where('is_active', true)),
             ];
+            $rules['case_sub_type'] = ['nullable', 'string', Rule::in(LegalFile::manualSubTypes())];
         }
 
         if ($caseType === LegalFile::TYPE_LOAN) {
             $rules['bank'] = ['required', 'string', 'max:255'];
             $rules['property'] = ['required', 'string', 'max:2000'];
-            $rules['title_number'] = ['required', 'string', 'max:255'];
         } elseif ($caseType === LegalFile::TYPE_LITIGATION) {
             $rules['suite_number'] = ['required', 'string', 'max:255'];
             $rules['ic_number'] = ['required', 'string', 'max:50'];
         } else {
-            // S&P (default shape)
+            // S&P (default shape) — title number optional (customers sometimes omit it)
             $rules['property'] = ['required', 'string', 'max:2000'];
-            $rules['title_number'] = ['required', 'string', 'max:255'];
         }
 
         $data = $request->validate($rules);
+
+        if (! $file?->exists) {
+            $category = CaseCategory::query()->find($data['case_category_id']);
+            $categoryCode = strtoupper((string) ($category?->code ?? ''));
+            $subType = trim((string) ($data['case_sub_type'] ?? ''));
+            $allowedSubTypes = match (true) {
+                $categoryCode === 'CON' && $caseType === LegalFile::TYPE_SNP => LegalFile::conSnpSubTypes(),
+                $categoryCode === 'CON' && $caseType === LegalFile::TYPE_MOT => LegalFile::conMotSubTypes(),
+                default => [],
+            };
+
+            if ($allowedSubTypes !== [] && $subType === '') {
+                throw ValidationException::withMessages([
+                    'case_sub_type' => 'Case sub-type is required for this category and case type.',
+                ]);
+            }
+
+            if ($allowedSubTypes === []) {
+                $data['case_sub_type'] = null;
+            } elseif (! in_array($subType, $allowedSubTypes, true)) {
+                throw ValidationException::withMessages([
+                    'case_sub_type' => 'The selected case sub-type is invalid for this category and case type.',
+                ]);
+            } else {
+                $data['case_sub_type'] = $subType;
+                if ($caseType === LegalFile::TYPE_SNP) {
+                    $caseType = LegalFile::caseTypeFromManualSubType($subType);
+                }
+            }
+        }
 
         return $this->normalizeCaseTypeFields($data, $caseType);
     }
