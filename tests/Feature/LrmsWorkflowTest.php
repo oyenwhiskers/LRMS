@@ -125,6 +125,19 @@ class LrmsWorkflowTest extends TestCase
         $doa = LegalFile::query()->where('purchaser', 'DOA Via Sub Type')->firstOrFail();
         $this->assertSame(LegalFile::TYPE_DOA, $doa->case_type);
         $this->assertSame(LegalFile::SUB_TYPE_DOA, $doa->case_sub_type);
+
+        $this->actingAs($admin)->post(route('files.store'), [
+            'case_type' => LegalFile::TYPE_SNP,
+            'case_sub_type' => LegalFile::SUB_TYPE_BY_CASH,
+            'case_category_id' => $category->id,
+            'purchaser' => 'By Cash Sdn Bhd',
+            'property' => 'Lot 4',
+            'person_in_charge_id' => $staff->id,
+        ])->assertSessionHasNoErrors();
+
+        $byCash = LegalFile::query()->where('purchaser', 'By Cash Sdn Bhd')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_SNP, $byCash->case_type);
+        $this->assertSame(LegalFile::SUB_TYPE_BY_CASH, $byCash->case_sub_type);
     }
 
     public function test_manual_register_rejects_plain_doa_as_top_level_type(): void

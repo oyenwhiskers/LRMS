@@ -61,7 +61,10 @@ class LegalFile extends Model
 
     public const SUB_TYPE_DOA = 'doa';
 
-    /** MOT registered by way of love and affection (manual CON + S&P path). */
+    /** Cash S&P (manual CON + Sales and purchase; stays as snp). */
+    public const SUB_TYPE_BY_CASH = 'by_cash';
+
+    /** MOT registered by way of love and affection (manual CON + MOT path). */
     public const SUB_TYPE_LOVE_AND_AFFECTION = 'love_and_affection';
 
     protected $fillable = [
@@ -341,6 +344,7 @@ class LegalFile extends Model
         return [
             self::SUB_TYPE_MOT,
             self::SUB_TYPE_DOA,
+            self::SUB_TYPE_BY_CASH,
         ];
     }
 
@@ -372,6 +376,7 @@ class LegalFile extends Model
         return match ($subType) {
             self::SUB_TYPE_MOT => 'Memorandum of transfer',
             self::SUB_TYPE_DOA => 'Deeds of Assignment',
+            self::SUB_TYPE_BY_CASH => 'By cash',
             self::SUB_TYPE_LOVE_AND_AFFECTION => 'By way love and affection',
             default => str($subType)->headline()->toString(),
         };
@@ -390,6 +395,7 @@ class LegalFile extends Model
         return match ($subType) {
             self::SUB_TYPE_MOT => self::TYPE_MOT,
             self::SUB_TYPE_DOA => self::TYPE_DOA,
+            self::SUB_TYPE_BY_CASH => self::TYPE_SNP,
             default => self::TYPE_SNP,
         };
     }
