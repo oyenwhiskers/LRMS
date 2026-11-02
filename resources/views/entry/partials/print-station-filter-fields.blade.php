@@ -67,21 +67,71 @@
     </select>
 </label>
 
-<label class="entry-filters__field">
+@php
+    $selectedShelfLabel = 'Semua shelf';
+    if (filled($shelfFilter)) {
+        foreach ($racks as $rack) {
+            $match = $rack->shelves->firstWhere('id', (int) $shelfFilter);
+            if ($match) {
+                $selectedShelfLabel = $rack->code.'/'.$match->code.($match->name ? ' — '.$match->name : '');
+                break;
+            }
+        }
+    }
+@endphp
+<div class="entry-filters__field entry-shelf-combobox" data-shelf-combobox>
     <span>Shelf</span>
-    <select name="shelf_id" {!! $shelfAttr !!}>
-        <option value="">Semua shelf</option>
+    <input type="hidden" name="shelf_id" value="{{ $shelfFilter }}" {!! $shelfAttr !!}>
+    <input
+        class="entry-shelf-combobox__search"
+        type="search"
+        value="{{ $selectedShelfLabel }}"
+        placeholder="Cari kod shelf, cth. G/A1"
+        autocomplete="off"
+        spellcheck="false"
+        data-shelf-combobox-search
+        aria-autocomplete="list"
+        aria-expanded="false"
+        aria-controls="print-station-shelf-options"
+    >
+    <div
+        id="print-station-shelf-options"
+        class="entry-shelf-combobox__list hidden"
+        data-shelf-combobox-list
+        role="listbox"
+        hidden
+    >
+        <button
+            class="entry-shelf-combobox__option"
+            type="button"
+            role="option"
+            data-shelf-combobox-option
+            data-value=""
+            data-label="Semua shelf"
+            aria-selected="{{ filled($shelfFilter) ? 'false' : 'true' }}"
+        >
+            Semua shelf
+        </button>
         @foreach ($racks as $rack)
             @foreach ($rack->shelves as $shelf)
-                <option
-                    value="{{ $shelf->id }}"
+                @php
+                    $label = $rack->code.'/'.$shelf->code.($shelf->name ? ' — '.$shelf->name : '');
+                @endphp
+                <button
+                    class="entry-shelf-combobox__option"
+                    type="button"
+                    role="option"
+                    data-shelf-combobox-option
+                    data-value="{{ $shelf->id }}"
                     data-rack-id="{{ $shelf->rack_id }}"
                     data-column="{{ $shelf->columnLabel() }}"
-                    @selected((string) $shelfFilter === (string) $shelf->id)
+                    data-label="{{ $label }}"
+                    aria-selected="{{ (string) $shelfFilter === (string) $shelf->id ? 'true' : 'false' }}"
                 >
-                    {{ $rack->code }}/{{ $shelf->code }}{{ $shelf->name ? ' — '.$shelf->name : '' }}
-                </option>
+                    {{ $label }}
+                </button>
             @endforeach
         @endforeach
-    </select>
-</label>
+    </div>
+    <p class="entry-shelf-combobox__hint hidden" data-shelf-combobox-empty>Tiada shelf sepadan.</p>
+</div>

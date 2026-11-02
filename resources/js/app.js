@@ -2320,49 +2320,144 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         };
 
-        const syncShelfOptions = (rackSelect, columnSelect, shelfSelect) => {
-            if (! shelfSelect) {
-                return;
+        const bindShelfCombobox = (root, rackSelect, columnSelect) => {
+            const box = root.querySelector('[data-shelf-combobox]');
+            if (! box) {
+                return null;
             }
 
-            const rackId = rackSelect?.value || '';
-            const column = columnSelect?.value || '';
-            const options = [...shelfSelect.querySelectorAll('option[data-rack-id]')];
-            let keep = false;
+            const hidden = box.querySelector('[data-print-station-filter-shelf]');
+            const search = box.querySelector('[data-shelf-combobox-search]');
+            const list = box.querySelector('[data-shelf-combobox-list]');
+            const emptyHint = box.querySelector('[data-shelf-combobox-empty]');
+            const options = [...box.querySelectorAll('[data-shelf-combobox-option]')];
+            if (! hidden || ! search || ! list || options.length === 0) {
+                return null;
+            }
 
-            options.forEach((option) => {
+            const locationAllows = (option) => {
+                const rackId = rackSelect?.value || '';
+                const column = columnSelect?.value || '';
+                if (! option.dataset.value) {
+                    return true;
+                }
                 const rackMatch = ! rackId || option.dataset.rackId === rackId;
                 const columnMatch = ! column || option.dataset.column === column;
-                const match = rackMatch && columnMatch;
-                option.hidden = ! match;
-                if (match && option.selected) {
-                    keep = true;
+                return rackMatch && columnMatch;
+            };
+
+            const setOpen = (open) => {
+                list.classList.toggle('hidden', ! open);
+                list.hidden = ! open;
+                search.setAttribute('aria-expanded', open ? 'true' : 'false');
+            };
+
+            const setValue = (option) => {
+                const value = option?.dataset.value || '';
+                const label = option?.dataset.label || 'Semua shelf';
+                hidden.value = value;
+                search.value = label;
+                options.forEach((entry) => {
+                    entry.setAttribute('aria-selected', entry === option ? 'true' : 'false');
+                });
+                setOpen(false);
+            };
+
+            const render = () => {
+                const needle = search.value.trim().toLowerCase();
+                let visible = 0;
+
+                options.forEach((option) => {
+                    const allowed = locationAllows(option);
+                    const label = (option.dataset.label || option.textContent || '').toLowerCase();
+                    const matchesSearch = ! needle || label.includes(needle);
+                    const show = allowed && matchesSearch;
+                    option.classList.toggle('is-filtered-out', ! show);
+                    if (show) {
+                        visible += 1;
+                    }
+                });
+
+                emptyHint?.classList.toggle('hidden', visible > 0);
+            };
+
+            const syncToLocation = () => {
+                const selected = options.find((option) => option.dataset.value === hidden.value);
+                if (selected && ! locationAllows(selected)) {
+                    const fallback = options.find((option) => ! option.dataset.value) || options[0];
+                    setValue(fallback);
+                }
+                render();
+            };
+
+            search.addEventListener('focus', () => {
+                setOpen(true);
+                render();
+                search.select();
+            });
+
+            search.addEventListener('input', () => {
+                setOpen(true);
+                render();
+            });
+
+            search.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    const firstVisible = options.find((option) => ! option.classList.contains('is-filtered-out'));
+                    if (firstVisible) {
+                        setValue(firstVisible);
+                    }
+                    return;
+                }
+
+                if (event.key === 'Escape') {
+                    const selected = options.find((option) => option.dataset.value === hidden.value);
+                    search.value = selected?.dataset.label || 'Semua shelf';
+                    setOpen(false);
+                    emptyHint?.classList.add('hidden');
                 }
             });
 
-            if (! keep) {
-                shelfSelect.value = '';
-            }
+            list.addEventListener('click', (event) => {
+                const option = event.target.closest('[data-shelf-combobox-option]');
+                if (! option || option.classList.contains('is-filtered-out')) {
+                    return;
+                }
+                setValue(option);
+            });
+
+            document.addEventListener('click', (event) => {
+                if (! box.contains(event.target)) {
+                    const selected = options.find((option) => option.dataset.value === hidden.value);
+                    search.value = selected?.dataset.label || 'Semua shelf';
+                    setOpen(false);
+                    emptyHint?.classList.add('hidden');
+                }
+            });
+
+            syncToLocation();
+
+            return { syncToLocation };
         };
 
         const bindLocationCascade = (root) => {
             const rackSelect = root.querySelector('[data-print-station-filter-rack]');
             const columnSelect = root.querySelector('[data-print-station-filter-column]');
-            const shelfSelect = root.querySelector('[data-print-station-filter-shelf]');
             if (! rackSelect || ! columnSelect) {
                 return;
             }
 
+            const shelfCombobox = bindShelfCombobox(root, rackSelect, columnSelect);
+
             const sync = () => {
                 syncColumnOptions(rackSelect, columnSelect);
-                syncShelfOptions(rackSelect, columnSelect, shelfSelect);
+                shelfCombobox?.syncToLocation();
             };
 
             sync();
             rackSelect.addEventListener('change', sync);
-            columnSelect.addEventListener('change', () => {
-                syncShelfOptions(rackSelect, columnSelect, shelfSelect);
-            });
+            columnSelect.addEventListener('change', sync);
         };
 
         const previewUrlFor = (job) => {
