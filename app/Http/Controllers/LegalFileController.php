@@ -343,7 +343,7 @@ class LegalFileController extends Controller
             'purchaser' => ['required', 'string', 'max:255'],
             'vendor' => ['nullable', 'string', 'max:255'],
             'bank' => ['nullable', 'string', 'max:255'],
-            'property' => ['nullable', 'string', 'max:2000'],
+            'property' => ['nullable', 'string'],
             'title_number' => ['nullable', 'string', 'max:255'],
             'suite_number' => ['nullable', 'string', 'max:255'],
             'ic_number' => ['nullable', 'string', 'max:50'],
@@ -369,13 +369,13 @@ class LegalFileController extends Controller
 
         if ($caseType === LegalFile::TYPE_LOAN) {
             $rules['bank'] = ['required', 'string', 'max:255'];
-            $rules['property'] = ['required', 'string', 'max:2000'];
+            $rules['property'] = ['required', 'string'];
         } elseif ($caseType === LegalFile::TYPE_LITIGATION) {
             $rules['suite_number'] = ['required', 'string', 'max:255'];
             $rules['ic_number'] = ['required', 'string', 'max:50'];
         } else {
             // S&P (default shape) — title number optional (customers sometimes omit it)
-            $rules['property'] = ['required', 'string', 'max:2000'];
+            $rules['property'] = ['required', 'string'];
         }
 
         $data = $request->validate($rules);

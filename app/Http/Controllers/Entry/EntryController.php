@@ -521,7 +521,7 @@ class EntryController extends Controller
             'borrowers.*.ic_number' => ['nullable', 'string', 'max:50'],
             'vendor' => ['nullable', 'string', 'max:255'],
             'bank' => ['nullable', 'string', 'max:255'],
-            'property' => ['nullable', 'string', 'max:2000'],
+            'property' => ['nullable', 'string'],
             'title_number' => ['nullable', 'string', 'max:255'],
             'suite_number' => ['nullable', 'string', 'max:255'],
             'ic_number' => ['nullable', 'string', 'max:50'],
