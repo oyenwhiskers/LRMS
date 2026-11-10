@@ -9,6 +9,7 @@
         $filters['rack_id'] ?? null,
         $filters['shelf_id'] ?? null,
         $filters['case_type'] ?? null,
+        $filters['case_category_id'] ?? null,
         $filters['review_status'] ?? null,
     ])->filter(fn ($value) => filled($value))->isNotEmpty();
 
@@ -23,6 +24,7 @@
         'rack_id' => $filters['rack_id'] ?: null,
         'shelf_id' => $filters['shelf_id'] ?: null,
         'case_type' => $filters['case_type'] ?: null,
+        'case_category_id' => $filters['case_category_id'] ?: null,
         'review_status' => $filters['review_status'] ?: null,
     ], fn ($value) => $value !== null && $value !== '');
 @endphp
@@ -71,6 +73,7 @@
             <input type="hidden" name="date_to" value="{{ $filters['date_to'] }}">
             <input type="hidden" name="rack_id" value="{{ $filters['rack_id'] }}">
             <input type="hidden" name="shelf_id" value="{{ $filters['shelf_id'] }}">
+            <input type="hidden" name="case_category_id" value="{{ $filters['case_category_id'] }}">
             <input type="hidden" name="review_status" value="{{ $filters['review_status'] }}">
 
             <label class="entry-ops__select entry-ops__select--operator">
@@ -342,6 +345,18 @@
                                 };
                             @endphp
                             <option value="{{ $type }}" @selected($filters['case_type'] === $type)>{{ $typeLabel }}</option>
+                        @endforeach
+                    </select>
+                </label>
+
+                <label class="entry-filters__field">
+                    <span>Kategori kes</span>
+                    <select name="case_category_id">
+                        <option value="">Semua kategori</option>
+                        @foreach ($categories as $category)
+                            <option value="{{ $category->id }}" @selected((string) $filters['case_category_id'] === (string) $category->id)>
+                                {{ $category->code }} — {{ $category->name }}
+                            </option>
                         @endforeach
                     </select>
                 </label>

@@ -24,6 +24,7 @@ class EntryOperatorBrowseTest extends TestCase
         $opA = User::factory()->entry()->create(['name' => 'Operator A']);
         $opB = User::factory()->entry()->create(['name' => 'Operator B']);
         $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $loanCategory = CaseCategory::query()->where('code', 'LOA')->firstOrFail();
 
         $rack = Rack::query()->create([
             'code' => 'R1',
@@ -51,10 +52,10 @@ class EntryOperatorBrowseTest extends TestCase
             'updated_by' => $opA->id,
         ]);
         $fileB = LegalFile::create([
-            'reference_number' => 'CON/2024/BBBB',
-            'case_category_id' => $category->id,
+            'reference_number' => 'LOA/2024/BBBB',
+            'case_category_id' => $loanCategory->id,
             'case_type' => LegalFile::TYPE_LOAN,
-            'matter_type' => $category->name,
+            'matter_type' => $loanCategory->name,
             'purchaser' => 'Beta Buyer',
             'property' => 'Lot B',
             'title_number' => 'PN B',
@@ -101,7 +102,7 @@ class EntryOperatorBrowseTest extends TestCase
             ->assertSee('Operator A', false)
             ->assertSee('Operator B', false)
             ->assertSee('CON/2024/AAAA', false)
-            ->assertSee('CON/2024/BBBB', false)
+            ->assertSee('LOA/2024/BBBB', false)
             ->assertSee('data-modal-open="operator-review-'.$scanA->id.'"', false)
             ->assertSee('data-modal-open="operator-review-'.$scanB->id.'"', false)
             ->assertDontSee('data-file-label-type="document"', false)
@@ -119,6 +120,7 @@ class EntryOperatorBrowseTest extends TestCase
             ->assertSee('operators/scans/'.$scanA->id.'/review', false)
             ->assertSee('Alpha Buyer', false)
             ->assertSee('Semua jenis', false)
+            ->assertSee('Semua kategori', false)
             ->assertSee('Semua rak', false)
             ->assertSee('Semua semakan', false)
             ->assertSee('entry-ops__table', false);
@@ -127,20 +129,26 @@ class EntryOperatorBrowseTest extends TestCase
             ->get(route('entry.operators.index', ['user_id' => $opA->id]))
             ->assertOk()
             ->assertSee('CON/2024/AAAA', false)
-            ->assertDontSee('CON/2024/BBBB', false)
+            ->assertDontSee('LOA/2024/BBBB', false)
             ->assertSee('class="entry-ops__metric-value">1</p>', false);
 
         $this->actingAs($viewer)
             ->get(route('entry.operators.index', ['case_type' => LegalFile::TYPE_LOAN]))
             ->assertOk()
-            ->assertSee('CON/2024/BBBB', false)
+            ->assertSee('LOA/2024/BBBB', false)
+            ->assertDontSee('CON/2024/AAAA', false);
+
+        $this->actingAs($viewer)
+            ->get(route('entry.operators.index', ['case_category_id' => $loanCategory->id]))
+            ->assertOk()
+            ->assertSee('LOA/2024/BBBB', false)
             ->assertDontSee('CON/2024/AAAA', false);
 
         $this->actingAs($viewer)
             ->get(route('entry.operators.index', ['rack_id' => $rack->id]))
             ->assertOk()
             ->assertSee('CON/2024/AAAA', false)
-            ->assertDontSee('CON/2024/BBBB', false);
+            ->assertDontSee('LOA/2024/BBBB', false);
 
         $this->actingAs($viewer)
             ->get(route('entry.operators.document', $scanB))

@@ -37,6 +37,7 @@ class EntryOperatorController extends Controller
             'rack_id' => ['nullable', 'integer', 'exists:racks,id'],
             'shelf_id' => ['nullable', 'integer', 'exists:shelves,id'],
             'case_type' => ['nullable', Rule::in(LegalFile::caseTypes())],
+            'case_category_id' => ['nullable', 'integer', 'exists:case_categories,id'],
             'review_status' => ['nullable', Rule::in(EntryScan::reviewStatuses())],
         ]);
 
@@ -160,6 +161,7 @@ class EntryOperatorController extends Controller
                 'rack_id' => $filters['rack_id'] ?? '',
                 'shelf_id' => $filters['shelf_id'] ?? '',
                 'case_type' => $filters['case_type'] ?? '',
+                'case_category_id' => $filters['case_category_id'] ?? '',
                 'review_status' => $filters['review_status'] ?? '',
             ],
         ]);
@@ -226,6 +228,7 @@ class EntryOperatorController extends Controller
      *     rack_id?: int|string|null,
      *     shelf_id?: int|string|null,
      *     case_type?: string|null,
+     *     case_category_id?: int|string|null,
      *     review_status?: string|null
      * }  $filters
      */
@@ -265,6 +268,13 @@ class EntryOperatorController extends Controller
             $query->whereHas(
                 'legalFile',
                 fn ($builder) => $builder->where('case_type', $filters['case_type']),
+            );
+        }
+
+        if (! empty($filters['case_category_id'])) {
+            $query->whereHas(
+                'legalFile',
+                fn ($builder) => $builder->where('case_category_id', $filters['case_category_id']),
             );
         }
 
