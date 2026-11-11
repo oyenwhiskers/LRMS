@@ -367,7 +367,7 @@ class LegalFileController extends Controller
             $rules['case_sub_type'] = ['nullable', 'string', Rule::in(LegalFile::manualSubTypes())];
         }
 
-        if ($caseType === LegalFile::TYPE_LOAN) {
+        if (LegalFile::isLoanType($caseType)) {
             $rules['bank'] = ['required', 'string', 'max:255'];
             $rules['property'] = ['required', 'string'];
         } elseif ($caseType === LegalFile::TYPE_LITIGATION) {
@@ -424,8 +424,8 @@ class LegalFileController extends Controller
     {
         $data['case_type'] = $caseType;
         $data['vendor'] = LegalFile::isSnpType($caseType) ? ($data['vendor'] ?? null) : null;
-        $data['bank'] = $caseType === LegalFile::TYPE_LOAN ? ($data['bank'] ?? null) : null;
-        $data['title_number'] = ($caseType === LegalFile::TYPE_LOAN || LegalFile::isSnpType($caseType))
+        $data['bank'] = LegalFile::isLoanType($caseType) ? ($data['bank'] ?? null) : null;
+        $data['title_number'] = (LegalFile::isLoanType($caseType) || LegalFile::isSnpType($caseType))
             ? ($data['title_number'] ?? null)
             : null;
         $data['suite_number'] = $caseType === LegalFile::TYPE_LITIGATION ? ($data['suite_number'] ?? null) : null;

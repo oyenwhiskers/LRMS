@@ -28,6 +28,8 @@ class LegalFile extends Model
 
     public const TYPE_LOAN = 'loan';
 
+    public const TYPE_FACILITY_AGREEMENT = 'facility_agreement';
+
     public const TYPE_LITIGATION = 'litigation';
 
     public const TYPE_SNP = 'snp';
@@ -56,6 +58,10 @@ class LegalFile extends Model
     public const TYPE_SATISFACTION_OF_CHARGE = 'satisfaction_of_charge';
 
     public const TYPE_MEMORANDUM_OF_CHARGE = 'memorandum_of_charge';
+
+    public const TYPE_CAVEAT = 'caveat';
+
+    public const TYPE_SETTLEMENT_AGREEMENT = 'settlement_agreement';
 
     public const SUB_TYPE_MOT = 'mot';
 
@@ -216,9 +222,11 @@ class LegalFile extends Model
     /** Front sticker fourth line: bank / title no. / suite by case type. */
     public function stickerDetail(): string
     {
-        return trim((string) match ($this->case_type) {
-            self::TYPE_LOAN => $this->bank ?? '',
-            self::TYPE_LITIGATION => $this->suite_number ?? '',
+        $type = (string) $this->case_type;
+
+        return trim((string) match (true) {
+            self::isLoanType($type) => $this->bank ?? '',
+            $type === self::TYPE_LITIGATION => $this->suite_number ?? '',
             default => $this->title_number ?? '',
         });
     }
@@ -292,7 +300,7 @@ class LegalFile extends Model
     public static function caseTypes(): array
     {
         return [
-            self::TYPE_LOAN,
+            ...self::loanTypes(),
             self::TYPE_LITIGATION,
             ...self::snpTypes(),
         ];
@@ -309,6 +317,19 @@ class LegalFile extends Model
             self::caseTypes(),
             fn (string $type): bool => $type !== self::TYPE_DOA,
         ));
+    }
+
+    /**
+     * Loan-shaped case types (borrowers / bank / property form fields).
+     *
+     * @return list<string>
+     */
+    public static function loanTypes(): array
+    {
+        return [
+            self::TYPE_LOAN,
+            self::TYPE_FACILITY_AGREEMENT,
+        ];
     }
 
     /**
@@ -331,6 +352,8 @@ class LegalFile extends Model
             self::TYPE_RECEIPT_REASSIGNMENT,
             self::TYPE_SATISFACTION_OF_CHARGE,
             self::TYPE_MEMORANDUM_OF_CHARGE,
+            self::TYPE_CAVEAT,
+            self::TYPE_SETTLEMENT_AGREEMENT,
         ];
     }
 
@@ -400,10 +423,15 @@ class LegalFile extends Model
         };
     }
 
-    /** Running-number pad width in CATEGORY/YEAR/NUMBER: loan = 2, all others = 3. */
+    /** Running-number pad width in CATEGORY/YEAR/NUMBER: loan-shaped = 2, all others = 3. */
     public static function referenceSequenceWidth(?string $caseType = null): int
     {
-        return self::normalizeCaseTypeCode((string) $caseType) === self::TYPE_LOAN ? 2 : 3;
+        return self::isLoanType((string) $caseType) ? 2 : 3;
+    }
+
+    public static function isLoanType(string $type): bool
+    {
+        return in_array(self::normalizeCaseTypeCode($type), self::loanTypes(), true);
     }
 
     public static function isSnpType(string $type): bool
@@ -423,6 +451,8 @@ class LegalFile extends Model
             'deed of trust', 'deeds of trust' => self::TYPE_DOT,
             'satisfaction of charge', 'soc' => self::TYPE_SATISFACTION_OF_CHARGE,
             'memorandum of charge', 'moc' => self::TYPE_MEMORANDUM_OF_CHARGE,
+            'facility agreement', 'facilities agreement' => self::TYPE_FACILITY_AGREEMENT,
+            'settlement agreement' => self::TYPE_SETTLEMENT_AGREEMENT,
             default => $type,
         };
     }
@@ -433,7 +463,7 @@ class LegalFile extends Model
         $type = self::normalizeCaseTypeCode($type);
 
         return match (true) {
-            $type === self::TYPE_LOAN => self::TYPE_LOAN,
+            self::isLoanType($type) => self::TYPE_LOAN,
             $type === self::TYPE_LITIGATION => self::TYPE_LITIGATION,
             default => self::TYPE_SNP,
         };
@@ -443,6 +473,7 @@ class LegalFile extends Model
     {
         return match ($type) {
             self::TYPE_LOAN => 'Loan',
+            self::TYPE_FACILITY_AGREEMENT => 'Facility Agreement',
             self::TYPE_LITIGATION => 'Litigation',
             self::TYPE_SNP => 'Sales and purchase',
             self::TYPE_MOT => 'Memorandum of transfer',
@@ -456,6 +487,8 @@ class LegalFile extends Model
             self::TYPE_RECEIPT_REASSIGNMENT => 'Receipt and Reassignment',
             self::TYPE_SATISFACTION_OF_CHARGE => 'Satisfaction of charge',
             self::TYPE_MEMORANDUM_OF_CHARGE => 'Memorandum of charge',
+            self::TYPE_CAVEAT => 'Caveat',
+            self::TYPE_SETTLEMENT_AGREEMENT => 'Settlement Agreement',
             default => str($type)->headline()->toString(),
         };
     }
@@ -467,9 +500,9 @@ class LegalFile extends Model
 
     public function partyNameLabel(): string
     {
-        return match ($this->case_type) {
-            self::TYPE_LOAN => 'Borrower',
-            self::TYPE_LITIGATION => "Person's name",
+        return match (true) {
+            self::isLoanType((string) $this->case_type) => 'Borrower',
+            $this->case_type === self::TYPE_LITIGATION => "Person's name",
             default => 'Purchaser',
         };
     }

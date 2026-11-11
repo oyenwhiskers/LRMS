@@ -197,6 +197,9 @@
                         data-file-label-delete
                     >Padam</button>
                 @endif
+                @if ($scan && $scan->status === App\Models\EntryScan::STATUS_STORED)
+                    <a class="btn-secondary" href="{{ route('entry.shelf', $scan) }}">Tukar rak</a>
+                @endif
                 <a class="btn-secondary" data-file-label-pdf href="{{ route('entry.files.label.pdf', ['file' => $file, 'type' => 'front']) }}">Muat turun PDF</a>
                 <button
                     class="btn-primary"

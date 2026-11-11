@@ -53,7 +53,7 @@ class UpdateEntryCase
                 'updated_by' => $user->id,
             ]);
 
-            if ($file->case_type === LegalFile::TYPE_LOAN) {
+            if (LegalFile::isLoanType((string) $file->case_type)) {
                 $file->syncBorrowers($borrowers);
             } else {
                 $file->parties()->delete();

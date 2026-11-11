@@ -201,6 +201,8 @@ class LrmsWorkflowTest extends TestCase
         foreach ([
             [LegalFile::TYPE_SATISFACTION_OF_CHARGE, 'Satisfaction of charge', 'SOC Party'],
             [LegalFile::TYPE_MEMORANDUM_OF_CHARGE, 'Memorandum of charge', 'MOC Party'],
+            [LegalFile::TYPE_CAVEAT, 'Caveat', 'Caveat Party'],
+            [LegalFile::TYPE_SETTLEMENT_AGREEMENT, 'Settlement Agreement', 'Settlement Party'],
         ] as [$type, $label, $purchaser]) {
             $this->actingAs($admin)->post(route('files.store'), [
                 'case_type' => $type,
@@ -216,12 +218,40 @@ class LrmsWorkflowTest extends TestCase
             $this->assertSame($type, $file->case_type);
             $this->assertSame($label, $file->caseTypeLabel());
             $this->assertTrue(LegalFile::isSnpType($file->case_type));
+            $this->assertFalse(LegalFile::isLoanType($file->case_type));
             $this->assertSame('Bank Chargee', $file->vendor);
             $this->assertSame('PN CHARGE', $file->title_number);
             $this->assertNull($file->bank);
             $this->assertNull($file->suite_number);
             $this->assertMatchesRegularExpression('/^CON\/\d{4}\/\d{3}$/', $file->reference_number);
         }
+    }
+
+    public function test_facility_agreement_uses_loan_shaped_fields(): void
+    {
+        [$admin, $shelf, $staff] = $this->records();
+        $loanCategory = CaseCategory::query()->where('code', 'LOA')->firstOrFail();
+
+        $this->actingAs($admin)->post(route('files.store'), [
+            'case_type' => LegalFile::TYPE_FACILITY_AGREEMENT,
+            'case_category_id' => $loanCategory->id,
+            'purchaser' => 'Facility Borrower',
+            'bank' => 'CIMB Bank',
+            'property' => 'Lot Facility, Sandakan',
+            'title_number' => 'CL FACILITY',
+            'person_in_charge_id' => $staff->id,
+        ])->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('purchaser', 'Facility Borrower')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_FACILITY_AGREEMENT, $file->case_type);
+        $this->assertSame('Facility Agreement', $file->caseTypeLabel());
+        $this->assertTrue(LegalFile::isLoanType($file->case_type));
+        $this->assertFalse(LegalFile::isSnpType($file->case_type));
+        $this->assertSame('CIMB Bank', $file->bank);
+        $this->assertNull($file->vendor);
+        $this->assertNull($file->suite_number);
+        $this->assertSame(LegalFile::TYPE_LOAN, LegalFile::formPanel($file->case_type));
+        $this->assertMatchesRegularExpression('/^LOA\/\d{4}\/\d{2}$/', $file->reference_number);
     }
 
     public function test_related_files_can_be_linked_many_to_many(): void

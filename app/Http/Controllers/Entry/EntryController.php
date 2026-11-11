@@ -271,8 +271,12 @@ class EntryController extends Controller
     public function shelf(Request $request, EntryScan $scan): View
     {
         $this->authorizeScan($request, $scan);
-        abort_unless($scan->status === EntryScan::STATUS_SAVED, 422, 'Save the case before scanning a shelf.');
-        $scan->load(['legalFile']);
+        abort_unless(
+            in_array($scan->status, [EntryScan::STATUS_SAVED, EntryScan::STATUS_STORED], true),
+            422,
+            'Save the case before scanning a shelf.',
+        );
+        $scan->load(['legalFile', 'shelf.rack']);
 
         $racks = Rack::query()
             ->where('is_active', true)
@@ -291,6 +295,7 @@ class EntryController extends Controller
     public function storeShelf(Request $request, EntryScan $scan, StoreEntryCaseOnShelf $store): RedirectResponse
     {
         $this->authorizeScan($request, $scan);
+        $changing = $scan->status === EntryScan::STATUS_STORED;
 
         $data = $request->validate([
             'shelf_qr' => ['nullable', 'string'],
@@ -314,7 +319,7 @@ class EntryController extends Controller
 
         return redirect()
             ->route('entry.home')
-            ->with('success', 'Fail disimpan di rak.');
+            ->with('success', $changing ? 'Lokasi rak dikemas kini.' : 'Fail disimpan di rak.');
     }
 
     public function destroy(Request $request, EntryScan $scan): RedirectResponse
@@ -530,15 +535,15 @@ class EntryController extends Controller
         ]);
         $data['case_type'] = $caseType;
         $data['borrowers'] = $this->normalizedBorrowers(
-            $caseType === LegalFile::TYPE_LOAN ? ($data['borrowers'] ?? []) : [],
+            LegalFile::isLoanType($caseType) ? ($data['borrowers'] ?? []) : [],
             trim((string) ($data['purchaser'] ?? '')),
         );
         $data['purchaser'] = $data['borrowers'] !== []
             ? LegalFile::joinPartyNames(array_column($data['borrowers'], 'name'))
             : trim((string) ($data['purchaser'] ?? ''));
         $data['vendor'] = LegalFile::isSnpType($caseType) ? ($data['vendor'] ?? null) : null;
-        $data['bank'] = $caseType === LegalFile::TYPE_LOAN ? ($data['bank'] ?? null) : null;
-        $data['title_number'] = ($caseType === LegalFile::TYPE_LOAN || LegalFile::isSnpType($caseType))
+        $data['bank'] = LegalFile::isLoanType($caseType) ? ($data['bank'] ?? null) : null;
+        $data['title_number'] = (LegalFile::isLoanType($caseType) || LegalFile::isSnpType($caseType))
             ? ($data['title_number'] ?? null)
             : null;
         $data['suite_number'] = $caseType === LegalFile::TYPE_LITIGATION ? ($data['suite_number'] ?? null) : null;

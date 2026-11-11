@@ -23,7 +23,7 @@ class StoreEntryCaseOnShelf
 
         $field = $shelfId ? 'shelf_id' : 'shelf_qr';
 
-        if ($scan->status !== EntryScan::STATUS_SAVED || ! $scan->legal_file_id) {
+        if (! in_array($scan->status, [EntryScan::STATUS_SAVED, EntryScan::STATUS_STORED], true) || ! $scan->legal_file_id) {
             throw ValidationException::withMessages([
                 $field => 'Simpan kes dahulu sebelum mengimbas rak.',
             ]);
@@ -35,6 +35,41 @@ class StoreEntryCaseOnShelf
 
         return DB::transaction(function () use ($scan, $user, $shelf, $field): EntryScan {
             $file = LegalFile::query()->whereKey($scan->legal_file_id)->lockForUpdate()->firstOrFail();
+            $changing = $scan->status === EntryScan::STATUS_STORED;
+
+            if ($changing) {
+                if ($file->status !== LegalFile::STATUS_STORED) {
+                    throw ValidationException::withMessages([
+                        $field => "{$file->reference_number} tidak boleh ditukar rak pada status semasa.",
+                    ]);
+                }
+
+                if ((int) $file->shelf_id === (int) $shelf->id) {
+                    throw ValidationException::withMessages([
+                        $field => 'Fail sudah berada di rak ini.',
+                    ]);
+                }
+
+                FileMovement::create([
+                    'legal_file_id' => $file->id,
+                    'type' => 'stored',
+                    'processed_by' => $user->id,
+                    'shelf_id' => $shelf->id,
+                    'previous_status' => LegalFile::STATUS_STORED,
+                    'new_status' => LegalFile::STATUS_STORED,
+                    'occurred_at' => now(),
+                    'notes' => 'Shelf changed via entry scan.',
+                ]);
+
+                $file->update([
+                    'shelf_id' => $shelf->id,
+                    'updated_by' => $user->id,
+                ]);
+
+                $scan->update(['shelf_id' => $shelf->id]);
+
+                return $scan->fresh(['legalFile', 'shelf.rack']);
+            }
 
             if ($file->status !== LegalFile::STATUS_REGISTERED) {
                 throw ValidationException::withMessages([

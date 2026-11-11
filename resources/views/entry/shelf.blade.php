@@ -1,23 +1,37 @@
 @extends('layouts.entry')
 
-@section('title', 'Simpan di rak')
+@php
+    $changing = $scan->status === App\Models\EntryScan::STATUS_STORED;
+@endphp
+
+@section('title', $changing ? 'Tukar rak' : 'Simpan di rak')
 
 @section('content')
 <div class="entry-shelf">
     <header class="entry-shelf__head">
-        <p class="entry-stat__label">Langkah 3 / 3</p>
-        <ol class="entry-shelf__steps" aria-label="Kemajuan">
-            <li class="entry-shelf__step is-done" aria-hidden="true"><span>1</span></li>
-            <li class="entry-shelf__step is-done" aria-hidden="true"><span>2</span></li>
-            <li class="entry-shelf__step is-current"><span>3</span></li>
-        </ol>
-        <h1 class="entry-page-title">Imbas QR rak</h1>
-        <p class="entry-page-lede">Imbas QR rak tempat fail ini diletakkan, atau pilih secara manual.</p>
+        @if ($changing)
+            <p class="entry-stat__label">Tukar lokasi</p>
+            <h1 class="entry-page-title">Tukar rak</h1>
+            <p class="entry-page-lede">Imbas QR rak baharu, atau pilih secara manual.</p>
+        @else
+            <p class="entry-stat__label">Langkah 3 / 3</p>
+            <ol class="entry-shelf__steps" aria-label="Kemajuan">
+                <li class="entry-shelf__step is-done" aria-hidden="true"><span>1</span></li>
+                <li class="entry-shelf__step is-done" aria-hidden="true"><span>2</span></li>
+                <li class="entry-shelf__step is-current"><span>3</span></li>
+            </ol>
+            <h1 class="entry-page-title">Imbas QR rak</h1>
+            <p class="entry-page-lede">Imbas QR rak tempat fail ini diletakkan, atau pilih secara manual.</p>
+        @endif
     </header>
 
     <section class="entry-shelf__file" aria-label="Fail untuk disimpan">
         <p class="entry-shelf__file-label">Fail</p>
         <p class="entry-shelf__file-ref">{{ $scan->legalFile?->reference_number ?: '—' }}</p>
+        @if ($changing && $scan->shelf)
+            <p class="entry-shelf__file-label mt-3">Rak semasa</p>
+            <p class="entry-shelf__file-ref">{{ $scan->shelf->full_location }}</p>
+        @endif
     </section>
 
     <form
@@ -61,8 +75,8 @@
             data-msg-camera-stop="Kamera ditutup."
             data-msg-wrong="Jenis QR salah. Imbas QR rak."
             data-msg-camera-fail="Kamera tidak tersedia. Pilih rak secara manual."
-            data-msg-ok="Menyimpan…"
-            data-msg-manual-ok="Rak dipilih. Tekan Sahkan simpan."
+            data-msg-ok="{{ $changing ? 'Mengemas kini…' : 'Menyimpan…' }}"
+            data-msg-manual-ok="Rak dipilih. Tekan {{ $changing ? 'Sahkan tukar rak' : 'Sahkan simpan' }}."
         ></p>
 
         {{-- Keep for camera / USB scanner wiring; not shown as a second scan path. --}}
@@ -117,7 +131,7 @@
         @enderror
 
         <button class="entry-shelf__confirm" type="submit" data-shelf-confirm disabled>
-            Sahkan simpan
+            {{ $changing ? 'Sahkan tukar rak' : 'Sahkan simpan' }}
         </button>
     </form>
 

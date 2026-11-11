@@ -47,7 +47,7 @@ class RegisterEntryCase
 
             $file = LegalFile::create($data);
 
-            if ($file->case_type === LegalFile::TYPE_LOAN && $borrowers !== []) {
+            if (LegalFile::isLoanType((string) $file->case_type) && $borrowers !== []) {
                 $file->syncBorrowers($borrowers);
             }
 

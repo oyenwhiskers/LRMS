@@ -44,7 +44,7 @@
                     $details['Case sub-type'] = $file->caseSubTypeLabel();
                 }
 
-                if ($file->case_type === App\Models\LegalFile::TYPE_LOAN) {
+                if (App\Models\LegalFile::isLoanType((string) $file->case_type)) {
                     $details['Bank'] = $file->bank;
                     $details['Property address'] = $file->property;
                     $details['Title number'] = $file->title_number;

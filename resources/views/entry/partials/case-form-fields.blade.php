@@ -45,6 +45,7 @@
     </label>
 
     @php
+        $isLoanSelected = App\Models\LegalFile::isLoanType($selectedType);
         $isSnpSelected = App\Models\LegalFile::isSnpType($selectedType);
     @endphp
     <label class="{{ $fieldClass }}">
@@ -55,6 +56,7 @@
                 @php
                     $typeLabel = match ($type) {
                         App\Models\LegalFile::TYPE_LOAN => 'Pinjaman',
+                        App\Models\LegalFile::TYPE_FACILITY_AGREEMENT => 'Facility Agreement',
                         App\Models\LegalFile::TYPE_LITIGATION => 'Litigasi',
                         default => App\Models\LegalFile::caseTypeLabelFor($type),
                     };
@@ -95,17 +97,17 @@
         $mainBorrower = $oldBorrowers[0] ?? ['name' => '', 'ic_number' => ''];
         $coBorrowers = array_values(array_slice($oldBorrowers, 1));
     @endphp
-    <div @class([$isModalLayout ? 'entry-case-fields__panel' : 'grid gap-4', 'hidden' => $selectedType !== App\Models\LegalFile::TYPE_LOAN]) data-case-type-panel="loan">
+    <div @class([$isModalLayout ? 'entry-case-fields__panel' : 'grid gap-4', 'hidden' => ! $isLoanSelected]) data-case-type-panel="loan">
         <div @class([$isModalLayout ? 'entry-case-fields__parties' : 'space-y-3']) data-borrowers-root>
             <div class="{{ $borrowerCardClass }}" data-borrower-row data-borrower-primary>
                 <p class="entry-case-fields__party-title">Peminjam utama <span class="font-normal text-stone-500">(pihak 1)</span></p>
                 <label class="{{ $fieldClass }}">
                     <span class="form-label">Nama</span>
-                    <textarea class="form-input" name="borrowers[0][name]" rows="1" data-entry-field="borrower_name_0" autocomplete="off" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $mainBorrower['name'] ?? '' }}</textarea>
+                    <textarea class="form-input" name="borrowers[0][name]" rows="1" data-entry-field="borrower_name_0" autocomplete="off" @disabled(! $isLoanSelected)>{{ $mainBorrower['name'] ?? '' }}</textarea>
                 </label>
                 <label class="{{ $fieldClass }}">
                     <span class="form-label">No. KP</span>
-                    <input class="form-input" name="borrowers[0][ic_number]" value="{{ $mainBorrower['ic_number'] ?? '' }}" data-entry-field="borrower_ic_0" autocomplete="off" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+                    <input class="form-input" name="borrowers[0][ic_number]" value="{{ $mainBorrower['ic_number'] ?? '' }}" data-entry-field="borrower_ic_0" autocomplete="off" @disabled(! $isLoanSelected)>
                 </label>
             </div>
             <div @class([$isModalLayout ? 'entry-case-fields__parties' : 'space-y-3']) data-co-borrowers>
@@ -115,11 +117,11 @@
                         <p class="entry-case-fields__party-title">Peminjam lain</p>
                         <label class="{{ $fieldClass }}">
                             <span class="form-label">Nama</span>
-                            <textarea class="form-input" name="borrowers[{{ $i }}][name]" rows="1" data-entry-field="borrower_name_{{ $i }}" autocomplete="off" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $co['name'] ?? '' }}</textarea>
+                            <textarea class="form-input" name="borrowers[{{ $i }}][name]" rows="1" data-entry-field="borrower_name_{{ $i }}" autocomplete="off" @disabled(! $isLoanSelected)>{{ $co['name'] ?? '' }}</textarea>
                         </label>
                         <label class="{{ $fieldClass }}">
                             <span class="form-label">No. KP</span>
-                            <input class="form-input" name="borrowers[{{ $i }}][ic_number]" value="{{ $co['ic_number'] ?? '' }}" data-entry-field="borrower_ic_{{ $i }}" autocomplete="off" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+                            <input class="form-input" name="borrowers[{{ $i }}][ic_number]" value="{{ $co['ic_number'] ?? '' }}" data-entry-field="borrower_ic_{{ $i }}" autocomplete="off" @disabled(! $isLoanSelected)>
                         </label>
                     </div>
                 @endforeach
@@ -144,15 +146,15 @@
         </div>
         <label class="{{ $fieldClass }}">
             <span class="form-label">Bank</span>
-            <textarea class="form-input" name="bank" rows="1" data-entry-field="bank" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $field('bank') }}</textarea>
+            <textarea class="form-input" name="bank" rows="1" data-entry-field="bank" @disabled(! $isLoanSelected)>{{ $field('bank') }}</textarea>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">Alamat hartanah</span>
-            <textarea class="form-input min-h-24" name="property" rows="1" data-entry-field="property" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $field('property') }}</textarea>
+            <textarea class="form-input min-h-24" name="property" rows="1" data-entry-field="property" @disabled(! $isLoanSelected)>{{ $field('property') }}</textarea>
         </label>
         <label class="{{ $fieldClass }}">
             <span class="form-label">No. hakmilik</span>
-            <textarea class="form-input" name="title_number" rows="1" data-entry-field="title_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ $field('title_number') }}</textarea>
+            <textarea class="form-input" name="title_number" rows="1" data-entry-field="title_number" @disabled(! $isLoanSelected)>{{ $field('title_number') }}</textarea>
         </label>
     </div>
 

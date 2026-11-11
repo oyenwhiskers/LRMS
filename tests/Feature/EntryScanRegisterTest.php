@@ -685,6 +685,8 @@ class EntryScanRegisterTest extends TestCase
         foreach ([
             [LegalFile::TYPE_SATISFACTION_OF_CHARGE, 'Satisfaction of charge', 'CON/2020/0888', 'soc.jpg'],
             [LegalFile::TYPE_MEMORANDUM_OF_CHARGE, 'Memorandum of charge', 'CON/2020/0889', 'moc.jpg'],
+            [LegalFile::TYPE_CAVEAT, 'Caveat', 'CON/2020/0890', 'caveat.jpg'],
+            [LegalFile::TYPE_SETTLEMENT_AGREEMENT, 'Settlement Agreement', 'CON/2020/0891', 'settlement.jpg'],
         ] as [$type, $label, $ref, $fileName]) {
             $tempPath = 'entry-scans/tmp/'.$entry->id.'/'.$fileName;
             Storage::disk('local')->put($tempPath, 'fake');
@@ -707,10 +709,140 @@ class EntryScanRegisterTest extends TestCase
             $this->assertSame($type, $file->case_type);
             $this->assertSame($label, $file->caseTypeLabel());
             $this->assertTrue(LegalFile::isSnpType($file->case_type));
+            $this->assertFalse(LegalFile::isLoanType($file->case_type));
             $this->assertSame('Chargor Sdn Bhd', $file->purchaser);
             $this->assertSame('Chargee Bank', $file->vendor);
             $this->assertNull($file->bank);
         }
+    }
+
+    public function test_analyze_accepts_caveat_settlement_and_facility_case_types_from_gemini(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence()
+                ->push([
+                    'candidates' => [[
+                        'content' => [
+                            'parts' => [[
+                                'text' => json_encode([
+                                    'reference_number' => 'CON/2021/0606',
+                                    'case_type' => 'Caveat',
+                                    'case_category_code' => 'CON',
+                                    'purchaser' => 'AI Caveatee',
+                                    'vendor' => 'AI Caveator',
+                                ]),
+                            ]],
+                        ],
+                    ]],
+                ])
+                ->push([
+                    'candidates' => [[
+                        'content' => [
+                            'parts' => [[
+                                'text' => json_encode([
+                                    'reference_number' => 'CON/2021/0707',
+                                    'case_type' => 'Settlement Agreement',
+                                    'case_category_code' => 'CON',
+                                    'purchaser' => 'AI Settlee',
+                                    'vendor' => 'AI Settlor',
+                                ]),
+                            ]],
+                        ],
+                    ]],
+                ])
+                ->push([
+                    'candidates' => [[
+                        'content' => [
+                            'parts' => [[
+                                'text' => json_encode([
+                                    'reference_number' => 'LOA/2021/08',
+                                    'case_type' => 'Facility Agreement',
+                                    'case_category_code' => 'LOA',
+                                    'purchaser' => 'AI Facility Borrower',
+                                    'bank' => 'Maybank',
+                                    'borrowers' => [['name' => 'AI Facility Borrower', 'ic_number' => null]],
+                                ]),
+                            ]],
+                        ],
+                    ]],
+                ]),
+        ]);
+
+        config([
+            'services.gemini.key' => 'test-key',
+            'services.gemini.model' => 'gemini-3.1-flash-lite',
+        ]);
+
+        $entry = User::factory()->entry()->create();
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('caveat.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_CAVEAT);
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('settlement.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_SETTLEMENT_AGREEMENT);
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('facility.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_FACILITY_AGREEMENT);
+
+        Http::assertSent(function ($request): bool {
+            $prompt = (string) data_get($request->data(), 'contents.0.parts.0.text');
+
+            return str_contains($prompt, '"caveat"')
+                && str_contains($prompt, '"settlement_agreement"')
+                && str_contains($prompt, '"facility_agreement"')
+                && str_contains($prompt, 'Facility Agreement / Facilities Agreement → facility_agreement')
+                && str_contains($prompt, 'Caveat / Private Caveat')
+                && str_contains($prompt, 'Settlement Agreement → settlement_agreement');
+        });
+    }
+
+    public function test_entry_save_accepts_facility_agreement_case_type(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'LOA')->firstOrFail();
+        $tempPath = 'entry-scans/tmp/'.$entry->id.'/facility.jpg';
+        Storage::disk('local')->put($tempPath, 'fake');
+
+        $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'reference_number' => 'LOA/2020/77',
+                'case_type' => LegalFile::TYPE_FACILITY_AGREEMENT,
+                'case_category_id' => $category->id,
+                'borrowers' => [
+                    ['name' => 'Facility Main', 'ic_number' => '900101-01-1111'],
+                    ['name' => 'Facility Co', 'ic_number' => ''],
+                ],
+                'bank' => 'Public Bank',
+                'property' => 'Lot Facility, Sandakan',
+                'title_number' => 'CL 77777',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('reference_number', 'LOA/2020/77')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_FACILITY_AGREEMENT, $file->case_type);
+        $this->assertSame('Facility Agreement', $file->caseTypeLabel());
+        $this->assertTrue(LegalFile::isLoanType($file->case_type));
+        $this->assertFalse(LegalFile::isSnpType($file->case_type));
+        $this->assertSame('Facility Main & Facility Co', $file->purchaser);
+        $this->assertSame('Public Bank', $file->bank);
+        $this->assertNull($file->vendor);
+        $this->assertSame(2, $file->parties()->count());
     }
 
     public function test_analyze_accepts_sublease_case_type_from_gemini(): void
@@ -1392,5 +1524,126 @@ class EntryScanRegisterTest extends TestCase
             'file_qrs' => $file->qr_identifier,
             'shelf_qr' => $shelf->qrPayload(),
         ])->assertSessionHasErrors('file_qrs');
+    }
+
+    public function test_entry_user_can_change_shelf_after_store(): void
+    {
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $rack = Rack::create(['code' => 'CHG', 'name' => 'Change Bay']);
+        $shelfA = Shelf::create(['rack_id' => $rack->id, 'code' => 'A1', 'name' => 'Shelf A']);
+        $shelfB = Shelf::create(['rack_id' => $rack->id, 'code' => 'B1', 'name' => 'Shelf B']);
+
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2019/8811',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Change Buyer',
+            'property' => 'Lot C',
+            'status' => LegalFile::STATUS_STORED,
+            'shelf_id' => $shelfA->id,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+        FileMovement::create([
+            'legal_file_id' => $file->id,
+            'type' => 'stored',
+            'processed_by' => $entry->id,
+            'shelf_id' => $shelfA->id,
+            'previous_status' => LegalFile::STATUS_REGISTERED,
+            'new_status' => LegalFile::STATUS_STORED,
+            'occurred_at' => now()->subMinute(),
+            'notes' => 'Stored via entry scan shortcut.',
+        ]);
+        $scan = EntryScan::create([
+            'user_id' => $entry->id,
+            'document_path' => 'entry-scans/change.jpg',
+            'legal_file_id' => $file->id,
+            'shelf_id' => $shelfA->id,
+            'status' => EntryScan::STATUS_STORED,
+        ]);
+
+        $this->actingAs($entry)
+            ->get(route('entry.home'))
+            ->assertOk()
+            ->assertSee(route('entry.shelf', $scan), false)
+            ->assertSee('Tukar rak', false);
+
+        $this->actingAs($entry)
+            ->get(route('entry.shelf', $scan))
+            ->assertOk()
+            ->assertSee('Tukar rak', false)
+            ->assertSee('Rak semasa', false)
+            ->assertSee($shelfA->full_location, false)
+            ->assertSee('Sahkan tukar rak', false);
+
+        $this->actingAs($entry)
+            ->post(route('entry.shelf.store', $scan), [
+                'shelf_id' => $shelfB->id,
+            ])
+            ->assertRedirect(route('entry.home'))
+            ->assertSessionHas('success', 'Lokasi rak dikemas kini.');
+
+        $this->assertSame($shelfB->id, $file->fresh()->shelf_id);
+        $this->assertSame($shelfB->id, $scan->fresh()->shelf_id);
+        $this->assertSame(LegalFile::STATUS_STORED, $file->fresh()->status);
+        $this->assertSame(EntryScan::STATUS_STORED, $scan->fresh()->status);
+        $this->assertSame(2, FileMovement::query()->where('legal_file_id', $file->id)->where('type', 'stored')->count());
+        $this->assertDatabaseHas('file_movements', [
+            'legal_file_id' => $file->id,
+            'type' => 'stored',
+            'shelf_id' => $shelfB->id,
+            'previous_status' => LegalFile::STATUS_STORED,
+            'new_status' => LegalFile::STATUS_STORED,
+            'notes' => 'Shelf changed via entry scan.',
+        ]);
+
+        $this->actingAs($entry)
+            ->from(route('entry.shelf', $scan))
+            ->post(route('entry.shelf.store', $scan), [
+                'shelf_id' => $shelfB->id,
+            ])
+            ->assertRedirect(route('entry.shelf', $scan))
+            ->assertSessionHasErrors('shelf_id');
+    }
+
+    public function test_entry_shelf_change_rejects_non_stored_legal_file(): void
+    {
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $rack = Rack::create(['code' => 'BRW', 'name' => 'Borrow Bay']);
+        $shelfA = Shelf::create(['rack_id' => $rack->id, 'code' => 'A1', 'name' => 'Shelf A']);
+        $shelfB = Shelf::create(['rack_id' => $rack->id, 'code' => 'B1', 'name' => 'Shelf B']);
+
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2019/8822',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Borrowed Buyer',
+            'property' => 'Lot B',
+            'status' => LegalFile::STATUS_BORROWED,
+            'shelf_id' => $shelfA->id,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+        $scan = EntryScan::create([
+            'user_id' => $entry->id,
+            'document_path' => 'entry-scans/borrowed.jpg',
+            'legal_file_id' => $file->id,
+            'shelf_id' => $shelfA->id,
+            'status' => EntryScan::STATUS_STORED,
+        ]);
+
+        $this->actingAs($entry)
+            ->from(route('entry.shelf', $scan))
+            ->post(route('entry.shelf.store', $scan), [
+                'shelf_id' => $shelfB->id,
+            ])
+            ->assertRedirect(route('entry.shelf', $scan))
+            ->assertSessionHasErrors('shelf_id');
+
+        $this->assertSame($shelfA->id, $file->fresh()->shelf_id);
     }
 }

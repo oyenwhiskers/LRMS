@@ -5,6 +5,7 @@
 
 @php
     $selectedType = old('case_type', $file->case_type ?: App\Models\LegalFile::TYPE_SNP);
+    $isLoanSelected = App\Models\LegalFile::isLoanType($selectedType);
     $isSnpSelected = App\Models\LegalFile::isSnpType($selectedType);
 @endphp
 
@@ -132,33 +133,33 @@
                     </label>
                 @endif
 
-                {{-- Loan fields --}}
-                <div class="grid gap-5 {{ $selectedType === App\Models\LegalFile::TYPE_LOAN ? '' : 'hidden' }}" data-case-type-panel="loan">
+                {{-- Loan fields (loan + facility agreement) --}}
+                <div class="grid gap-5 {{ $isLoanSelected ? '' : 'hidden' }}" data-case-type-panel="loan">
                     <label class="form-row">
                         <span class="form-label form-row__label">Borrower</span>
                         <span class="form-row__control">
-                            <input class="form-input" name="purchaser" value="{{ old('purchaser', $file->purchaser) }}" data-case-type-required @required($selectedType === App\Models\LegalFile::TYPE_LOAN) @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+                            <input class="form-input" name="purchaser" value="{{ old('purchaser', $file->purchaser) }}" data-case-type-required @required($isLoanSelected) @disabled(! $isLoanSelected)>
                         </span>
                     </label>
 
                     <label class="form-row">
                         <span class="form-label form-row__label">Bank</span>
                         <span class="form-row__control">
-                            <input class="form-input" name="bank" value="{{ old('bank', $file->bank) }}" data-case-type-required @required($selectedType === App\Models\LegalFile::TYPE_LOAN) @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+                            <input class="form-input" name="bank" value="{{ old('bank', $file->bank) }}" data-case-type-required @required($isLoanSelected) @disabled(! $isLoanSelected)>
                         </span>
                     </label>
 
                     <label class="form-row form-row--textarea">
                         <span class="form-label form-row__label">Property address</span>
                         <span class="form-row__control">
-                            <textarea class="form-input min-h-24" name="property" data-case-type-required @required($selectedType === App\Models\LegalFile::TYPE_LOAN) @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>{{ old('property', $file->property) }}</textarea>
+                            <textarea class="form-input min-h-24" name="property" data-case-type-required @required($isLoanSelected) @disabled(! $isLoanSelected)>{{ old('property', $file->property) }}</textarea>
                         </span>
                     </label>
 
                     <label class="form-row">
                         <span class="form-label form-row__label">Title number</span>
                         <span class="form-row__control">
-                            <input class="form-input" name="title_number" value="{{ old('title_number', $file->title_number) }}" @disabled($selectedType !== App\Models\LegalFile::TYPE_LOAN)>
+                            <input class="form-input" name="title_number" value="{{ old('title_number', $file->title_number) }}" @disabled(! $isLoanSelected)>
                             <span class="form-help">Optional — leave blank if the customer did not provide one.</span>
                         </span>
                     </label>
