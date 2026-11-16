@@ -215,5 +215,18 @@ class AiTokenUsageTest extends TestCase
             ->assertSee('Operator B', false)
             ->assertDontSee('Operator A', false)
             ->assertSee('RM 6.30', false);
+
+        // Year filter includes both operators in the same calendar year
+        $this->actingAs($viewer)
+            ->get(route('entry.ai-usage.index', [
+                'period' => 'year',
+                'year' => now()->year,
+            ]))
+            ->assertOk()
+            ->assertSee('Tahun', false)
+            ->assertSee('Pilih tahun', false)
+            ->assertSee('Operator A', false)
+            ->assertSee('Operator B', false)
+            ->assertSee('RM 7.35', false);
     }
 }

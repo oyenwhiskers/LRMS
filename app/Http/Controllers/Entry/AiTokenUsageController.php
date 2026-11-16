@@ -47,17 +47,19 @@ class AiTokenUsageController extends Controller
         $now = Carbon::now($tz);
 
         $filters = $request->validate([
-            'period' => ['nullable', 'in:today,month,date'],
+            'period' => ['nullable', 'in:today,month,date,year'],
             'month' => ['nullable', 'date_format:Y-m'],
             'date' => ['nullable', 'date'],
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
         ]);
 
         $period = $filters['period'] ?? 'today';
         $monthValue = $filters['month'] ?? $now->format('Y-m');
         $dateValue = $filters['date'] ?? $now->toDateString();
+        $yearValue = (int) ($filters['year'] ?? $now->year);
 
         $query = AiTokenUsage::query();
-        $this->applyPeriod($query, $period, $monthValue, $dateValue, $tz);
+        $this->applyPeriod($query, $period, $monthValue, $dateValue, $yearValue, $tz);
 
         $chunks = (clone $query)
             ->select(
@@ -129,6 +131,7 @@ class AiTokenUsageController extends Controller
         $periodLabel = match ($period) {
             'month' => Carbon::createFromFormat('Y-m', $monthValue, $tz)->translatedFormat('F Y'),
             'date' => Carbon::parse($dateValue, $tz)->translatedFormat('d M Y'),
+            'year' => (string) $yearValue,
             default => 'Hari ini',
         };
 
@@ -136,6 +139,7 @@ class AiTokenUsageController extends Controller
             'period' => $period,
             'monthValue' => $monthValue,
             'dateValue' => $dateValue,
+            'yearValue' => $yearValue,
             'periodLabel' => $periodLabel,
             'inputTokens' => $inputTokens,
             'outputTokens' => $outputTokens,
@@ -144,8 +148,14 @@ class AiTokenUsageController extends Controller
         ]);
     }
 
-    private function applyPeriod(Builder $query, string $period, string $monthValue, string $dateValue, string $tz): void
-    {
+    private function applyPeriod(
+        Builder $query,
+        string $period,
+        string $monthValue,
+        string $dateValue,
+        int $yearValue,
+        string $tz,
+    ): void {
         if ($period === 'month') {
             $start = Carbon::createFromFormat('Y-m', $monthValue, $tz)->startOfMonth();
             $end = $start->copy()->endOfMonth();
@@ -157,6 +167,13 @@ class AiTokenUsageController extends Controller
         if ($period === 'date') {
             $day = Carbon::parse($dateValue, $tz);
             $query->whereBetween('created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()]);
+
+            return;
+        }
+
+        if ($period === 'year') {
+            $start = Carbon::create($yearValue, 1, 1, 0, 0, 0, $tz)->startOfYear();
+            $query->whereBetween('created_at', [$start, $start->copy()->endOfYear()]);
 
             return;
         }

@@ -27,6 +27,10 @@
                 class="entry-ai__chip {{ $period === 'date' ? 'is-active' : '' }}"
                 href="{{ route('entry.ai-usage.index', ['period' => 'date', 'date' => $dateValue]) }}"
             >Tarikh</a>
+            <a
+                class="entry-ai__chip {{ $period === 'year' ? 'is-active' : '' }}"
+                href="{{ route('entry.ai-usage.index', ['period' => 'year', 'year' => $yearValue]) }}"
+            >Tahun</a>
         </div>
 
         @if ($period === 'month')
@@ -42,6 +46,22 @@
                 <span>Pilih tarikh</span>
                 <input type="hidden" name="period" value="date">
                 <input type="date" name="date" value="{{ $dateValue }}" onchange="this.form.submit()">
+            </label>
+        @endif
+
+        @if ($period === 'year')
+            <label class="entry-ai__pick">
+                <span>Pilih tahun</span>
+                <input type="hidden" name="period" value="year">
+                <input
+                    type="number"
+                    name="year"
+                    min="2000"
+                    max="2100"
+                    step="1"
+                    value="{{ $yearValue }}"
+                    onchange="this.form.submit()"
+                >
             </label>
         @endif
     </form>
