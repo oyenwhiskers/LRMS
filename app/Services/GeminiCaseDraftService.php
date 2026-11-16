@@ -73,7 +73,7 @@ Rules:
 {$categoryLines}
 - Document title drives case_type (pick the most specific match):
   - Facility Agreement / Facilities Agreement → facility_agreement. This is NOT loan — use only when the title is a Facility/Facilities Agreement.
-  - Loan Agreement / Financing-i / Murabahah / Deed of Assignment securing a bank loan or facility → loan.
+  - Loan Agreement / Financing-i / Murabahah / Deed of Assignment securing a bank loan or facility → loan. This is NOT musharakah_agreement.
   - Court / writ / summons / statement of claim → litigation.
   - Sale & Purchase / Sale and Purchase / SPA / Agreement for Sale → snp.
   - Memorandum of Transfer / MOT → mot.
@@ -89,7 +89,10 @@ Rules:
   - Memorandum of Charge / MOC → memorandum_of_charge. This is NOT memorandum of transfer (mot) and NOT satisfaction_of_charge.
   - Caveat / Private Caveat / Registrar's Caveat → caveat. Prefer CON (Conveyancing).
   - Settlement Agreement → settlement_agreement. Prefer CON (Conveyancing). This is NOT litigation unless the document is clearly a court pleading.
-- Bank financing / loan / facility docs → prefer LOA (Loan Documentation). Caveat and Settlement Agreement → prefer CON. Do NOT treat bank codes or middle tokens inside a firm ref (e.g. CON in THY/YFT/CON/BRAKYAT/2025/18, or ABMB/MIB/UOB) as the case category.
+  - Notice Termination / Notice of Termination / Termination Notice → notice_termination. Prefer CON (Conveyancing). This is NOT settlement_agreement and NOT cancellation_agreement.
+  - Cancellation Agreement → cancellation_agreement. Prefer CON (Conveyancing). This is NOT settlement_agreement and NOT notice_termination.
+  - Musharakah Agreement / Musyarakah Agreement / Musharakah / Musyarakah → musharakah_agreement. Prefer CON (Conveyancing). This is NOT loan and NOT facility_agreement — use only when the title is a Musharakah/Musyarakah Agreement.
+- Bank financing / loan / facility docs → prefer LOA (Loan Documentation). Caveat, Settlement Agreement, Notice Termination, Cancellation Agreement, and Musharakah Agreement → prefer CON. Do NOT treat bank codes or middle tokens inside a firm ref (e.g. CON in THY/YFT/CON/BRAKYAT/2025/18, or ABMB/MIB/UOB) as the case category.
 - Fill only what is clearly visible across the provided pages. Cover pages often lack property and title_number — leave those null unless a later page shows them. Do not invent or guess missing fields.
 - property: put the charged / subject property description OR postal / site address when printed (labels such as Property, Address, Alamat, Schedule of Property, Parcel, Lot, HS(D), Geran, PN, description of land). Prefer the property address from later pages over a letterhead office address. Copy the full address block into property when that is what the page shows.
 - For loan-family types ({$loanTypeCodes}): fill borrowers in document order — party (1) first (main), then (2), (3), …. Include each customer's NRIC in ic_number when printed. Do not drop co-borrowers. Also set purchaser to all borrower names joined with " & " (e.g. "LOOK KAR YANG & LIM PUI SHEE"). Fill bank and start_date if dated; property/title_number from any page if printed.

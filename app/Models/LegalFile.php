@@ -63,6 +63,12 @@ class LegalFile extends Model
 
     public const TYPE_SETTLEMENT_AGREEMENT = 'settlement_agreement';
 
+    public const TYPE_NOTICE_TERMINATION = 'notice_termination';
+
+    public const TYPE_CANCELLATION_AGREEMENT = 'cancellation_agreement';
+
+    public const TYPE_MUSHARAKAH_AGREEMENT = 'musharakah_agreement';
+
     public const SUB_TYPE_MOT = 'mot';
 
     public const SUB_TYPE_DOA = 'doa';
@@ -178,32 +184,60 @@ class LegalFile extends Model
     }
 
     /**
-     * @param  list<array{name?: string|null, ic_number?: string|null}>  $borrowers
+     * @param  list<array{name?: string|null, ic_number?: string|null, is_primary?: bool}>  $borrowers
      */
     public function syncBorrowers(array $borrowers): void
     {
-        $normalized = collect($borrowers)
-            ->map(fn (array $borrower): array => [
-                'name' => trim((string) ($borrower['name'] ?? '')),
-                'ic_number' => ($ic = trim((string) ($borrower['ic_number'] ?? ''))) !== '' ? $ic : null,
+        $this->syncParties($borrowers, updatePurchaser: true);
+    }
+
+    /**
+     * @param  list<array{name?: string|null, ic_number?: string|null, is_primary?: bool}>  $parties
+     */
+    public function syncParties(array $parties, bool $updatePurchaser = false): void
+    {
+        $normalized = collect($parties)
+            ->map(fn (array $party): array => [
+                'name' => trim((string) ($party['name'] ?? '')),
+                'ic_number' => ($ic = trim((string) ($party['ic_number'] ?? ''))) !== '' ? $ic : null,
+                'is_primary' => (bool) ($party['is_primary'] ?? false),
             ])
-            ->filter(fn (array $borrower): bool => $borrower['name'] !== '')
+            ->filter(fn (array $party): bool => $party['name'] !== '')
             ->values();
+
+        $primaryIndex = $normalized->search(fn (array $party): bool => $party['is_primary']);
+        if ($primaryIndex === false) {
+            $primaryIndex = 0;
+        }
 
         $this->parties()->delete();
 
-        foreach ($normalized as $index => $borrower) {
+        foreach ($normalized as $index => $party) {
             $this->parties()->create([
-                'name' => $borrower['name'],
-                'ic_number' => $borrower['ic_number'],
-                'is_primary' => $index === 0,
+                'name' => $party['name'],
+                'ic_number' => $party['ic_number'],
+                'is_primary' => $index === $primaryIndex,
                 'sort_order' => $index,
             ]);
         }
 
-        $this->forceFill([
-            'purchaser' => self::joinPartyNames($normalized->pluck('name')->all()),
-        ])->save();
+        if ($updatePurchaser) {
+            $this->forceFill([
+                'purchaser' => self::joinPartyNames($normalized->pluck('name')->all()),
+            ])->save();
+        }
+    }
+
+    /** S&P / litigation: purchaser (0) or vendor (1) for sticker. */
+    public function stickerPartySource(): string
+    {
+        $parties = $this->relationLoaded('parties')
+            ? $this->parties
+            : $this->parties()->get();
+
+        $primary = $parties->firstWhere('is_primary', true) ?? $parties->first();
+
+        return $primary && (int) $primary->sort_order === 1 ? 'vendor' : 'purchaser';
     }
 
     /**
@@ -217,9 +251,21 @@ class LegalFile extends Model
             ->implode(' & ');
     }
 
-    /** Main party only — stickers omit co-borrowers (`purchaser` stores "A & B"). */
+    /** Sticker name: selected primary party, else first party / first purchaser segment. */
     public function primaryPurchaserName(): string
     {
+        $parties = $this->relationLoaded('parties')
+            ? $this->parties
+            : $this->parties()->get();
+
+        if ($parties->isNotEmpty()) {
+            $primary = $parties->firstWhere('is_primary', true) ?? $parties->first();
+            $name = trim((string) ($primary?->name ?? ''));
+            if ($name !== '') {
+                return $name;
+            }
+        }
+
         $purchaser = trim((string) ($this->purchaser ?? ''));
 
         return $purchaser === '' ? '' : trim(explode(' & ', $purchaser, 2)[0]);
@@ -360,6 +406,9 @@ class LegalFile extends Model
             self::TYPE_MEMORANDUM_OF_CHARGE,
             self::TYPE_CAVEAT,
             self::TYPE_SETTLEMENT_AGREEMENT,
+            self::TYPE_NOTICE_TERMINATION,
+            self::TYPE_CANCELLATION_AGREEMENT,
+            self::TYPE_MUSHARAKAH_AGREEMENT,
         ];
     }
 
@@ -459,6 +508,9 @@ class LegalFile extends Model
             'memorandum of charge', 'moc' => self::TYPE_MEMORANDUM_OF_CHARGE,
             'facility agreement', 'facilities agreement' => self::TYPE_FACILITY_AGREEMENT,
             'settlement agreement' => self::TYPE_SETTLEMENT_AGREEMENT,
+            'notice termination', 'notice of termination', 'termination notice' => self::TYPE_NOTICE_TERMINATION,
+            'cancellation agreement' => self::TYPE_CANCELLATION_AGREEMENT,
+            'musharakah agreement', 'musyarakah agreement', 'musharakah', 'musyarakah' => self::TYPE_MUSHARAKAH_AGREEMENT,
             default => $type,
         };
     }
@@ -495,6 +547,9 @@ class LegalFile extends Model
             self::TYPE_MEMORANDUM_OF_CHARGE => 'Memorandum of charge',
             self::TYPE_CAVEAT => 'Caveat',
             self::TYPE_SETTLEMENT_AGREEMENT => 'Settlement Agreement',
+            self::TYPE_NOTICE_TERMINATION => 'Notice Termination',
+            self::TYPE_CANCELLATION_AGREEMENT => 'Cancellation Agreement',
+            self::TYPE_MUSHARAKAH_AGREEMENT => 'Musharakah Agreement',
             default => str($type)->headline()->toString(),
         };
     }

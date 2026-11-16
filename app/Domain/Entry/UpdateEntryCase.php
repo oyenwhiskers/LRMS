@@ -45,7 +45,8 @@ class UpdateEntryCase
             }
 
             $borrowers = is_array($data['borrowers'] ?? null) ? $data['borrowers'] : [];
-            unset($data['related_file_ids'], $data['borrowers']);
+            $stickerParties = is_array($data['sticker_parties'] ?? null) ? $data['sticker_parties'] : null;
+            unset($data['related_file_ids'], $data['borrowers'], $data['sticker_parties']);
 
             $file->update($data + [
                 'reference_number' => $reference,
@@ -55,6 +56,8 @@ class UpdateEntryCase
 
             if (LegalFile::isLoanType((string) $file->case_type)) {
                 $file->syncBorrowers($borrowers);
+            } elseif ($stickerParties !== null) {
+                $file->syncParties($stickerParties);
             } else {
                 $file->parties()->delete();
             }

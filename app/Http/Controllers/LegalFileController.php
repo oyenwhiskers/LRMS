@@ -484,6 +484,7 @@ class LegalFileController extends Controller
     {
         $type = $request->string('type')->toString() ?: 'front';
         abort_unless(in_array($type, ['front', 'side', 'both'], true), 404);
+        $file->loadMissing('parties');
 
         return [
             'file' => $file,

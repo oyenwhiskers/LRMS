@@ -204,6 +204,9 @@ class LrmsWorkflowTest extends TestCase
             [LegalFile::TYPE_MEMORANDUM_OF_CHARGE, 'Memorandum of charge', 'MOC Party'],
             [LegalFile::TYPE_CAVEAT, 'Caveat', 'Caveat Party'],
             [LegalFile::TYPE_SETTLEMENT_AGREEMENT, 'Settlement Agreement', 'Settlement Party'],
+            [LegalFile::TYPE_NOTICE_TERMINATION, 'Notice Termination', 'Notice Party'],
+            [LegalFile::TYPE_CANCELLATION_AGREEMENT, 'Cancellation Agreement', 'Cancellation Party'],
+            [LegalFile::TYPE_MUSHARAKAH_AGREEMENT, 'Musharakah Agreement', 'Musharakah Party'],
         ] as [$type, $label, $purchaser]) {
             $this->actingAs($admin)->post(route('files.store'), [
                 'case_type' => $type,

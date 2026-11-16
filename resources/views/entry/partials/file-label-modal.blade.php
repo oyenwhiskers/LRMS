@@ -38,8 +38,10 @@
             ? $file->parties->map(fn ($party) => [
                 'name' => $party->name,
                 'ic_number' => $party->ic_number,
+                'is_primary' => (bool) $party->is_primary,
             ])->values()->all()
             : [],
+        'sticker_party_source' => $file->stickerPartySource(),
     ];
     $selectedType = old('case_type', $file->case_type) ?: App\Models\LegalFile::TYPE_SNP;
     if ((string) old('_legal_file_id') !== (string) $file->id) {

@@ -3523,6 +3523,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             return borrowersRoot.querySelectorAll('[data-borrower-row]').length;
         };
 
+        const syncStickerPartyRadios = (preferredIndex = null) => {
+            if (! borrowersRoot) {
+                return;
+            }
+
+            const radios = [...borrowersRoot.querySelectorAll('[data-sticker-party-radio]')];
+            radios.forEach((radio, index) => {
+                radio.value = String(index);
+            });
+
+            if (preferredIndex != null && radios[preferredIndex]) {
+                radios[preferredIndex].checked = true;
+
+                return;
+            }
+
+            if (! radios.some((radio) => radio.checked) && radios[0]) {
+                radios[0].checked = true;
+            }
+        };
+
         const addBorrowerRow = (name = '', ic = '') => {
             if (! coBorrowersEl || ! borrowerTemplate) {
                 return;
@@ -3546,12 +3567,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 icInput.value = ic || '';
             }
             coBorrowersEl.appendChild(row);
+            syncStickerPartyRadios();
         };
 
         addBorrowerBtn?.addEventListener('click', (event) => {
             event.preventDefault();
             addBorrowerRow();
         });
+
+        syncStickerPartyRadios();
     });
 
     document.querySelectorAll('[data-related-files]').forEach((root) => {

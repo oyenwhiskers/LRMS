@@ -43,12 +43,15 @@ class RegisterEntryCase
             $data['created_by'] = $data['updated_by'] = $user->id;
             $data['person_in_charge_id'] = null;
             $borrowers = is_array($data['borrowers'] ?? null) ? $data['borrowers'] : [];
-            unset($data['related_file_ids'], $data['borrowers']);
+            $stickerParties = is_array($data['sticker_parties'] ?? null) ? $data['sticker_parties'] : null;
+            unset($data['related_file_ids'], $data['borrowers'], $data['sticker_parties']);
 
             $file = LegalFile::create($data);
 
             if (LegalFile::isLoanType((string) $file->case_type) && $borrowers !== []) {
                 $file->syncBorrowers($borrowers);
+            } elseif ($stickerParties !== null) {
+                $file->syncParties($stickerParties);
             }
 
             FileMovement::create([

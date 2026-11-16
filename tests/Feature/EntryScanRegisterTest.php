@@ -903,6 +903,9 @@ class EntryScanRegisterTest extends TestCase
             [LegalFile::TYPE_MEMORANDUM_OF_CHARGE, 'Memorandum of charge', 'CON/2020/0889', 'moc.jpg'],
             [LegalFile::TYPE_CAVEAT, 'Caveat', 'CON/2020/0890', 'caveat.jpg'],
             [LegalFile::TYPE_SETTLEMENT_AGREEMENT, 'Settlement Agreement', 'CON/2020/0891', 'settlement.jpg'],
+            [LegalFile::TYPE_NOTICE_TERMINATION, 'Notice Termination', 'CON/2020/0892', 'notice-termination.jpg'],
+            [LegalFile::TYPE_CANCELLATION_AGREEMENT, 'Cancellation Agreement', 'CON/2020/0893', 'cancellation.jpg'],
+            [LegalFile::TYPE_MUSHARAKAH_AGREEMENT, 'Musharakah Agreement', 'CON/2020/0894', 'musharakah.jpg'],
         ] as [$type, $label, $ref, $fileName]) {
             $tempPath = 'entry-scans/tmp/'.$entry->id.'/'.$fileName;
             Storage::disk('local')->put($tempPath, 'fake');
@@ -982,6 +985,51 @@ class EntryScanRegisterTest extends TestCase
                             ]],
                         ],
                     ]],
+                ])
+                ->push([
+                    'candidates' => [[
+                        'content' => [
+                            'parts' => [[
+                                'text' => json_encode([
+                                    'reference_number' => 'CON/2021/0909',
+                                    'case_type' => 'Notice of Termination',
+                                    'case_category_code' => 'CON',
+                                    'purchaser' => 'AI Noticee',
+                                    'vendor' => 'AI Notifier',
+                                ]),
+                            ]],
+                        ],
+                    ]],
+                ])
+                ->push([
+                    'candidates' => [[
+                        'content' => [
+                            'parts' => [[
+                                'text' => json_encode([
+                                    'reference_number' => 'CON/2021/1010',
+                                    'case_type' => 'Cancellation Agreement',
+                                    'case_category_code' => 'CON',
+                                    'purchaser' => 'AI Cancel Party A',
+                                    'vendor' => 'AI Cancel Party B',
+                                ]),
+                            ]],
+                        ],
+                    ]],
+                ])
+                ->push([
+                    'candidates' => [[
+                        'content' => [
+                            'parts' => [[
+                                'text' => json_encode([
+                                    'reference_number' => 'CON/2021/1111',
+                                    'case_type' => 'Musharakah Agreement',
+                                    'case_category_code' => 'CON',
+                                    'purchaser' => 'AI Musharakah Party A',
+                                    'vendor' => 'AI Musharakah Party B',
+                                ]),
+                            ]],
+                        ],
+                    ]],
                 ]),
         ]);
 
@@ -1013,15 +1061,42 @@ class EntryScanRegisterTest extends TestCase
             ->assertOk()
             ->assertJsonPath('draft.case_type', LegalFile::TYPE_FACILITY_AGREEMENT);
 
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('notice-termination.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_NOTICE_TERMINATION);
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('cancellation.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_CANCELLATION_AGREEMENT);
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('musharakah.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.case_type', LegalFile::TYPE_MUSHARAKAH_AGREEMENT);
+
         Http::assertSent(function ($request): bool {
             $prompt = (string) data_get($request->data(), 'contents.0.parts.0.text');
 
             return str_contains($prompt, '"caveat"')
                 && str_contains($prompt, '"settlement_agreement"')
                 && str_contains($prompt, '"facility_agreement"')
+                && str_contains($prompt, '"notice_termination"')
+                && str_contains($prompt, '"cancellation_agreement"')
+                && str_contains($prompt, '"musharakah_agreement"')
                 && str_contains($prompt, 'Facility Agreement / Facilities Agreement → facility_agreement')
                 && str_contains($prompt, 'Caveat / Private Caveat')
-                && str_contains($prompt, 'Settlement Agreement → settlement_agreement');
+                && str_contains($prompt, 'Settlement Agreement → settlement_agreement')
+                && str_contains($prompt, 'Notice Termination / Notice of Termination')
+                && str_contains($prompt, 'Cancellation Agreement → cancellation_agreement')
+                && str_contains($prompt, 'Musharakah Agreement / Musyarakah Agreement');
         });
     }
 
@@ -1168,6 +1243,138 @@ class EntryScanRegisterTest extends TestCase
         $this->assertFalse($parties[1]->is_primary);
         $this->assertSame('KAMISAH BINTI KILAN', $parties[1]->name);
         $this->assertSame('700618-12-5030', $parties[1]->ic_number);
+        $this->assertSame('ZETTY AKMAR BINTI SAMSUL', $file->primaryPurchaserName());
+    }
+
+    public function test_entry_save_can_select_co_borrower_for_sticker(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'LOA')->firstOrFail();
+        $tempPath = 'entry-scans/tmp/'.$entry->id.'/sticker-party.jpg';
+        Storage::disk('local')->put($tempPath, 'fake');
+
+        $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'reference_number' => 'THY/MW/MIB/2025/02',
+                'case_type' => LegalFile::TYPE_LOAN,
+                'case_category_id' => $category->id,
+                'bank' => 'MAYBANK ISLAMIC BERHAD',
+                'sticker_party_index' => 1,
+                'borrowers' => [
+                    ['name' => 'ZETTY AKMAR BINTI SAMSUL', 'ic_number' => '990930-12-7872'],
+                    ['name' => 'KAMISAH BINTI KILAN', 'ic_number' => '700618-12-5030'],
+                ],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('reference_number', 'THY/MW/MIB/2025/02')->firstOrFail();
+        $this->assertSame('ZETTY AKMAR BINTI SAMSUL & KAMISAH BINTI KILAN', $file->purchaser);
+
+        $parties = $file->parties()->orderBy('sort_order')->get();
+        $this->assertCount(2, $parties);
+        $this->assertFalse($parties[0]->is_primary);
+        $this->assertTrue($parties[1]->is_primary);
+        $this->assertSame('KAMISAH BINTI KILAN', $file->primaryPurchaserName());
+
+        $front = $this->actingAs($entry)
+            ->get(route('entry.files.label', ['file' => $file, 'type' => 'front']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('KAMISAH BINTI KILAN', $front);
+        $this->assertStringNotContainsString('ZETTY AKMAR BINTI SAMSUL &amp; KAMISAH', $front);
+        $this->assertStringNotContainsString('ZETTY AKMAR BINTI SAMSUL', $front);
+
+        $scan = EntryScan::query()->where('legal_file_id', $file->id)->firstOrFail();
+        $this->actingAs($entry)
+            ->from(route('entry.home'))
+            ->put(route('entry.scan.update', $scan), [
+                '_legal_file_id' => $file->id,
+                'reference_number' => 'THY/MW/MIB/2025/02',
+                'case_type' => LegalFile::TYPE_LOAN,
+                'case_category_id' => $category->id,
+                'bank' => 'MAYBANK ISLAMIC BERHAD',
+                'sticker_party_index' => 0,
+                'borrowers' => [
+                    ['name' => 'ZETTY AKMAR BINTI SAMSUL', 'ic_number' => '990930-12-7872'],
+                    ['name' => 'KAMISAH BINTI KILAN', 'ic_number' => '700618-12-5030'],
+                ],
+            ])
+            ->assertRedirect(route('entry.home'))
+            ->assertSessionHasNoErrors();
+
+        $file->refresh()->load('parties');
+        $this->assertTrue($file->parties->firstWhere('sort_order', 0)?->is_primary);
+        $this->assertSame('ZETTY AKMAR BINTI SAMSUL', $file->primaryPurchaserName());
+    }
+
+    public function test_entry_save_can_select_vendor_for_snp_sticker(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $tempPath = 'entry-scans/tmp/'.$entry->id.'/snp-sticker.jpg';
+        Storage::disk('local')->put($tempPath, 'fake');
+
+        $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'reference_number' => 'CON/2025/0303',
+                'case_type' => LegalFile::TYPE_SNP,
+                'case_category_id' => $category->id,
+                'purchaser' => 'PEMBELI SDN BHD',
+                'vendor' => 'PENJUAL SDN BHD',
+                'property' => 'Lot 1',
+                'title_number' => 'PN 1',
+                'sticker_party_source' => 'vendor',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('reference_number', 'CON/2025/0303')->firstOrFail();
+        $this->assertSame('PEMBELI SDN BHD', $file->purchaser);
+        $this->assertSame('PENJUAL SDN BHD', $file->vendor);
+        $this->assertSame('vendor', $file->stickerPartySource());
+        $this->assertSame('PENJUAL SDN BHD', $file->primaryPurchaserName());
+
+        $front = $this->actingAs($entry)
+            ->get(route('entry.files.label', ['file' => $file, 'type' => 'front']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('PENJUAL SDN BHD', $front);
+        $this->assertStringNotContainsString('PEMBELI SDN BHD', $front);
+    }
+
+    public function test_entry_save_litigation_uses_person_name_on_sticker(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'LIT')->firstOrFail();
+        $tempPath = 'entry-scans/tmp/'.$entry->id.'/lit-sticker.jpg';
+        Storage::disk('local')->put($tempPath, 'fake');
+
+        $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'reference_number' => 'LIT/2025/0404',
+                'case_type' => LegalFile::TYPE_LITIGATION,
+                'case_category_id' => $category->id,
+                'suite_number' => 'WA-22NCVC-1-01/2025',
+                'purchaser' => 'AHMAD BIN ALI',
+                'ic_number' => '900101-14-1234',
+                'sticker_party_source' => 'purchaser',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('reference_number', 'LIT/2025/0404')->firstOrFail();
+        $this->assertSame('AHMAD BIN ALI', $file->primaryPurchaserName());
+        $this->assertSame(1, $file->parties()->count());
+        $this->assertTrue($file->parties()->first()->is_primary);
     }
 
     public function test_entry_shelf_rejects_other_users_scan(): void

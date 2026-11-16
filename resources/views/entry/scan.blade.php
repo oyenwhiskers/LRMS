@@ -283,6 +283,22 @@
         return rootEl.querySelectorAll('[data-borrower-row]').length;
     };
 
+    const syncStickerPartyRadios = (preferredIndex = null) => {
+        const rootEl = borrowersRoot();
+        if (!rootEl) return;
+        const radios = [...rootEl.querySelectorAll('[data-sticker-party-radio]')];
+        radios.forEach((radio, index) => {
+            radio.value = String(index);
+        });
+        if (preferredIndex != null && radios[preferredIndex]) {
+            radios[preferredIndex].checked = true;
+            return;
+        }
+        if (!radios.some((radio) => radio.checked) && radios[0]) {
+            radios[0].checked = true;
+        }
+    };
+
     const addBorrowerRow = (name = '', ic = '') => {
         const list = coBorrowersEl();
         const tpl = borrowerTemplate();
@@ -298,6 +314,7 @@
         if (nameInput) nameInput.value = name || '';
         if (icInput) icInput.value = ic || '';
         list.appendChild(row);
+        syncStickerPartyRadios();
     };
 
     const fillBorrowers = (draft) => {
@@ -313,6 +330,8 @@
         if (primaryName && !primaryName.disabled) primaryName.value = first.name || '';
         if (primaryIc && !primaryIc.disabled) primaryIc.value = first.ic_number || '';
         borrowers.slice(1).forEach((b) => addBorrowerRow(b?.name || '', b?.ic_number || ''));
+        const preferred = borrowers.findIndex((b) => b?.is_primary);
+        syncStickerPartyRadios(preferred >= 0 ? preferred : 0);
     };
 
     const fillDraft = (draft) => {

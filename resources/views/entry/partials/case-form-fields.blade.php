@@ -96,18 +96,52 @@
         }
         $mainBorrower = $oldBorrowers[0] ?? ['name' => '', 'ic_number' => ''];
         $coBorrowers = array_values(array_slice($oldBorrowers, 1));
+        $stickerPartyIndex = null;
+        if ($useOld && old('sticker_party_index') !== null && old('sticker_party_index') !== '') {
+            $stickerPartyIndex = (int) old('sticker_party_index');
+        } else {
+            foreach ($oldBorrowers as $idx => $borrowerRow) {
+                if (! empty($borrowerRow['is_primary'])) {
+                    $stickerPartyIndex = (int) $idx;
+                    break;
+                }
+            }
+        }
+        if ($stickerPartyIndex === null || $stickerPartyIndex < 0 || $stickerPartyIndex >= count($oldBorrowers)) {
+            $stickerPartyIndex = 0;
+        }
+        $stickerRadioClass = 'size-4 shrink-0 border-stone-300 text-amber-700 focus:ring-amber-600';
+        $stickerLabelClass = 'entry-case-fields__sticker-radio';
+        $borrowerNameClass = $fieldClass.' entry-case-fields__borrower-name';
+        $borrowerIcClass = $fieldClass.' entry-case-fields__borrower-ic';
+        $stickerPartySource = (string) $field('sticker_party_source', $suggestion['sticker_party_source'] ?? 'purchaser');
+        if (! in_array($stickerPartySource, ['purchaser', 'vendor'], true)) {
+            $stickerPartySource = 'purchaser';
+        }
     @endphp
     <div @class([$isModalLayout ? 'entry-case-fields__panel' : 'grid gap-4', 'hidden' => ! $isLoanSelected]) data-case-type-panel="loan">
         <div @class([$isModalLayout ? 'entry-case-fields__parties' : 'space-y-3']) data-borrowers-root>
             <div class="{{ $borrowerCardClass }}" data-borrower-row data-borrower-primary>
                 <p class="entry-case-fields__party-title">Peminjam utama <span class="font-normal text-stone-500">(pihak 1)</span></p>
-                <label class="{{ $fieldClass }}">
+                <label class="{{ $borrowerNameClass }}">
                     <span class="form-label">Nama</span>
                     <textarea class="form-input" name="borrowers[0][name]" rows="1" data-entry-field="borrower_name_0" autocomplete="off" @disabled(! $isLoanSelected)>{{ $mainBorrower['name'] ?? '' }}</textarea>
                 </label>
-                <label class="{{ $fieldClass }}">
+                <label class="{{ $borrowerIcClass }}">
                     <span class="form-label">No. KP</span>
                     <input class="form-input" name="borrowers[0][ic_number]" value="{{ $mainBorrower['ic_number'] ?? '' }}" data-entry-field="borrower_ic_0" autocomplete="off" @disabled(! $isLoanSelected)>
+                </label>
+                <label class="{{ $stickerLabelClass }}">
+                    <input
+                        class="{{ $stickerRadioClass }}"
+                        type="radio"
+                        name="sticker_party_index"
+                        value="0"
+                        data-sticker-party-radio
+                        @checked($stickerPartyIndex === 0)
+                        @disabled(! $isLoanSelected)
+                    >
+                    <span>Paparan pada stiker</span>
                 </label>
             </div>
             <div @class([$isModalLayout ? 'entry-case-fields__parties' : 'space-y-3']) data-co-borrowers>
@@ -115,31 +149,53 @@
                     @php $i = $index + 1; @endphp
                     <div class="{{ $borrowerCardClass }}" data-borrower-row>
                         <p class="entry-case-fields__party-title">Peminjam lain</p>
-                        <label class="{{ $fieldClass }}">
+                        <label class="{{ $borrowerNameClass }}">
                             <span class="form-label">Nama</span>
                             <textarea class="form-input" name="borrowers[{{ $i }}][name]" rows="1" data-entry-field="borrower_name_{{ $i }}" autocomplete="off" @disabled(! $isLoanSelected)>{{ $co['name'] ?? '' }}</textarea>
                         </label>
-                        <label class="{{ $fieldClass }}">
+                        <label class="{{ $borrowerIcClass }}">
                             <span class="form-label">No. KP</span>
                             <input class="form-input" name="borrowers[{{ $i }}][ic_number]" value="{{ $co['ic_number'] ?? '' }}" data-entry-field="borrower_ic_{{ $i }}" autocomplete="off" @disabled(! $isLoanSelected)>
+                        </label>
+                        <label class="{{ $stickerLabelClass }}">
+                            <input
+                                class="{{ $stickerRadioClass }}"
+                                type="radio"
+                                name="sticker_party_index"
+                                value="{{ $i }}"
+                                data-sticker-party-radio
+                                @checked($stickerPartyIndex === $i)
+                                @disabled(! $isLoanSelected)
+                            >
+                            <span>Paparan pada stiker</span>
                         </label>
                     </div>
                 @endforeach
             </div>
             @unless ($readonly)
                 <button class="entry-app__logout" type="button" data-add-borrower>Tambah peminjam</button>
-                <span class="form-help">Semua nama akan dipaparkan pada label fail (disambung dengan &amp;).</span>
+                <span class="form-help">Hanya nama yang ditanda muncul pada stiker. Semua nama kekal disimpan pada fail.</span>
             @endunless
             <template data-borrower-template>
                 <div class="{{ $borrowerCardClass }}" data-borrower-row>
                     <p class="entry-case-fields__party-title">Peminjam lain</p>
-                    <label class="{{ $fieldClass }}">
+                    <label class="{{ $borrowerNameClass }}">
                         <span class="form-label">Nama</span>
                         <textarea class="form-input" name="borrowers[__INDEX__][name]" rows="1" data-entry-field="borrower_name___INDEX__" autocomplete="off"></textarea>
                     </label>
-                    <label class="{{ $fieldClass }}">
+                    <label class="{{ $borrowerIcClass }}">
                         <span class="form-label">No. KP</span>
                         <input class="form-input" name="borrowers[__INDEX__][ic_number]" value="" data-entry-field="borrower_ic___INDEX__" autocomplete="off">
+                    </label>
+                    <label class="{{ $stickerLabelClass }}">
+                        <input
+                            class="{{ $stickerRadioClass }}"
+                            type="radio"
+                            name="sticker_party_index"
+                            value="__INDEX__"
+                            data-sticker-party-radio
+                        >
+                        <span>Paparan pada stiker</span>
                     </label>
                 </div>
             </template>
@@ -159,14 +215,42 @@
     </div>
 
     <div @class([$isModalLayout ? 'entry-case-fields__panel' : 'grid gap-4', 'hidden' => ! $isSnpSelected]) data-case-type-panel="snp">
-        <label class="{{ $fieldClass }}">
-            <span class="form-label">Pembeli</span>
-            <textarea class="form-input" name="purchaser" rows="1" data-entry-field="purchaser" @disabled(! $isSnpSelected)>{{ $field('purchaser') }}</textarea>
-        </label>
-        <label class="{{ $fieldClass }}">
-            <span class="form-label">Penjual</span>
-            <textarea class="form-input" name="vendor" rows="1" data-entry-field="vendor" @disabled(! $isSnpSelected)>{{ $field('vendor') }}</textarea>
-        </label>
+        <div @class([$isModalLayout ? 'entry-case-fields__party' : 'grid gap-3 rounded border border-[#12352f]/10 p-3']) data-sticker-choice-row>
+            <p class="entry-case-fields__party-title">Pembeli</p>
+            <label class="{{ $borrowerNameClass }}">
+                <span class="form-label">Nama</span>
+                <textarea class="form-input" name="purchaser" rows="1" data-entry-field="purchaser" @disabled(! $isSnpSelected)>{{ $field('purchaser') }}</textarea>
+            </label>
+            <label class="{{ $stickerLabelClass }}">
+                <input
+                    class="{{ $stickerRadioClass }}"
+                    type="radio"
+                    name="sticker_party_source"
+                    value="purchaser"
+                    @checked($stickerPartySource === 'purchaser')
+                    @disabled(! $isSnpSelected)
+                >
+                <span>Paparan pada stiker</span>
+            </label>
+        </div>
+        <div @class([$isModalLayout ? 'entry-case-fields__party' : 'grid gap-3 rounded border border-[#12352f]/10 p-3']) data-sticker-choice-row>
+            <p class="entry-case-fields__party-title">Penjual</p>
+            <label class="{{ $borrowerNameClass }}">
+                <span class="form-label">Nama</span>
+                <textarea class="form-input" name="vendor" rows="1" data-entry-field="vendor" @disabled(! $isSnpSelected)>{{ $field('vendor') }}</textarea>
+            </label>
+            <label class="{{ $stickerLabelClass }}">
+                <input
+                    class="{{ $stickerRadioClass }}"
+                    type="radio"
+                    name="sticker_party_source"
+                    value="vendor"
+                    @checked($stickerPartySource === 'vendor')
+                    @disabled(! $isSnpSelected)
+                >
+                <span>Paparan pada stiker</span>
+            </label>
+        </div>
         <label class="{{ $fieldClass }}">
             <span class="form-label">Alamat hartanah</span>
             <textarea class="form-input min-h-24" name="property" rows="1" data-entry-field="property" @disabled(! $isSnpSelected)>{{ $field('property') }}</textarea>
@@ -175,6 +259,9 @@
             <span class="form-label">No. hakmilik</span>
             <textarea class="form-input" name="title_number" rows="1" data-entry-field="title_number" @disabled(! $isSnpSelected)>{{ $field('title_number') }}</textarea>
         </label>
+        @unless ($readonly)
+            <span class="form-help">Hanya nama yang ditanda muncul pada stiker.</span>
+        @endunless
     </div>
 
     <div @class([$isModalLayout ? 'entry-case-fields__panel' : 'grid gap-4', 'hidden' => $selectedType !== App\Models\LegalFile::TYPE_LITIGATION]) data-case-type-panel="litigation">
@@ -182,14 +269,31 @@
             <span class="form-label">No. guaman</span>
             <textarea class="form-input" name="suite_number" rows="1" data-entry-field="suite_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>{{ $field('suite_number') }}</textarea>
         </label>
-        <label class="{{ $fieldClass }}">
-            <span class="form-label">Nama individu</span>
-            <textarea class="form-input" name="purchaser" rows="1" data-entry-field="purchaser" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>{{ $field('purchaser') }}</textarea>
-        </label>
-        <label class="{{ $fieldClass }}">
-            <span class="form-label">No. KP</span>
-            <input class="form-input" name="ic_number" value="{{ $field('ic_number') }}" data-entry-field="ic_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>
-        </label>
+        <div @class([$isModalLayout ? 'entry-case-fields__party' : 'grid gap-3 rounded border border-[#12352f]/10 p-3']) data-sticker-choice-row data-borrower-row>
+            <p class="entry-case-fields__party-title">Nama individu</p>
+            <label class="{{ $borrowerNameClass }}">
+                <span class="form-label">Nama</span>
+                <textarea class="form-input" name="purchaser" rows="1" data-entry-field="purchaser" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>{{ $field('purchaser') }}</textarea>
+            </label>
+            <label class="{{ $borrowerIcClass }}">
+                <span class="form-label">No. KP</span>
+                <input class="form-input" name="ic_number" value="{{ $field('ic_number') }}" data-entry-field="ic_number" @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)>
+            </label>
+            <label class="{{ $stickerLabelClass }}">
+                <input
+                    class="{{ $stickerRadioClass }}"
+                    type="radio"
+                    name="sticker_party_source"
+                    value="purchaser"
+                    @checked(true)
+                    @disabled($selectedType !== App\Models\LegalFile::TYPE_LITIGATION)
+                >
+                <span>Paparan pada stiker</span>
+            </label>
+        </div>
+        @unless ($readonly)
+            <span class="form-help">Nama individu akan dipaparkan pada stiker.</span>
+        @endunless
     </div>
 
     <label class="{{ $fieldClass }}">

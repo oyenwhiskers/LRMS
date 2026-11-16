@@ -507,6 +507,7 @@ class EntryController extends Controller
     {
         $type = $request->string('type')->toString() ?: 'front';
         abort_unless(in_array($type, ['front', 'side', 'both'], true), 404);
+        $file->loadMissing('parties');
 
         return [
             'file' => $file,
@@ -607,6 +608,8 @@ class EntryController extends Controller
             'borrowers' => ['nullable', 'array'],
             'borrowers.*.name' => ['nullable', 'string', 'max:255'],
             'borrowers.*.ic_number' => ['nullable', 'string', 'max:50'],
+            'sticker_party_index' => ['nullable', 'integer', 'min:0'],
+            'sticker_party_source' => ['nullable', Rule::in(['purchaser', 'vendor'])],
             'vendor' => ['nullable', 'string', 'max:255'],
             'bank' => ['nullable', 'string', 'max:255'],
             'property' => ['nullable', 'string'],
@@ -619,13 +622,36 @@ class EntryController extends Controller
             'reference_number.unique' => 'Fail ini sudah didaftarkan. Sila semak no. rujukan.',
         ]);
         $data['case_type'] = $caseType;
-        $data['borrowers'] = $this->normalizedBorrowers(
-            LegalFile::isLoanType($caseType) ? ($data['borrowers'] ?? []) : [],
-            trim((string) ($data['purchaser'] ?? '')),
-        );
-        $data['purchaser'] = $data['borrowers'] !== []
-            ? LegalFile::joinPartyNames(array_column($data['borrowers'], 'name'))
-            : trim((string) ($data['purchaser'] ?? ''));
+        $stickerPartyIndex = array_key_exists('sticker_party_index', $data) && $data['sticker_party_index'] !== null
+            ? (int) $data['sticker_party_index']
+            : null;
+        $stickerPartySource = (string) ($data['sticker_party_source'] ?? 'purchaser');
+        if (! in_array($stickerPartySource, ['purchaser', 'vendor'], true)) {
+            $stickerPartySource = 'purchaser';
+        }
+        unset($data['sticker_party_index'], $data['sticker_party_source']);
+
+        if (LegalFile::isLoanType($caseType)) {
+            $data['borrowers'] = $this->normalizedBorrowers(
+                $data['borrowers'] ?? [],
+                trim((string) ($data['purchaser'] ?? '')),
+                $stickerPartyIndex,
+            );
+            $data['purchaser'] = $data['borrowers'] !== []
+                ? LegalFile::joinPartyNames(array_column($data['borrowers'], 'name'))
+                : trim((string) ($data['purchaser'] ?? ''));
+            $data['sticker_parties'] = null;
+        } else {
+            $data['purchaser'] = trim((string) ($data['purchaser'] ?? ''));
+            $data['borrowers'] = [];
+            $data['sticker_parties'] = $this->normalizedStickerParties(
+                $caseType,
+                $data['purchaser'],
+                trim((string) ($data['vendor'] ?? '')),
+                trim((string) ($data['ic_number'] ?? '')),
+                $stickerPartySource,
+            );
+        }
         $data['vendor'] = LegalFile::isSnpType($caseType) ? ($data['vendor'] ?? null) : null;
         $data['bank'] = LegalFile::isLoanType($caseType) ? ($data['bank'] ?? null) : null;
         $data['title_number'] = (LegalFile::isLoanType($caseType) || LegalFile::isSnpType($caseType))
@@ -639,10 +665,48 @@ class EntryController extends Controller
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $borrowers
-     * @return list<array{name: string, ic_number: ?string}>
+     * @return list<array{name: string, ic_number: ?string, is_primary: bool}>
      */
-    private function normalizedBorrowers(array $borrowers, string $fallbackPurchaser): array
+    private function normalizedStickerParties(
+        string $caseType,
+        string $purchaser,
+        string $vendor,
+        string $icNumber,
+        string $stickerPartySource,
+    ): array {
+        $rows = [];
+        if ($purchaser !== '') {
+            $rows[] = [
+                'name' => $purchaser,
+                'ic_number' => $caseType === LegalFile::TYPE_LITIGATION && $icNumber !== '' ? $icNumber : null,
+                'is_primary' => $stickerPartySource !== 'vendor',
+            ];
+        }
+
+        if (LegalFile::isSnpType($caseType) && $vendor !== '') {
+            $rows[] = [
+                'name' => $vendor,
+                'ic_number' => null,
+                'is_primary' => $stickerPartySource === 'vendor',
+            ];
+        }
+
+        if ($rows === []) {
+            return [];
+        }
+
+        if (! collect($rows)->contains(fn (array $row): bool => $row['is_primary'])) {
+            $rows[0]['is_primary'] = true;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $borrowers
+     * @return list<array{name: string, ic_number: ?string, is_primary: bool}>
+     */
+    private function normalizedBorrowers(array $borrowers, string $fallbackPurchaser, ?int $stickerPartyIndex = null): array
     {
         $rows = [];
         foreach ($borrowers as $borrower) {
@@ -662,6 +726,15 @@ class EntryController extends Controller
 
         if ($rows === [] && $fallbackPurchaser !== '') {
             $rows[] = ['name' => $fallbackPurchaser, 'ic_number' => null];
+        }
+
+        $primaryIndex = $stickerPartyIndex;
+        if ($primaryIndex === null || $primaryIndex < 0 || $primaryIndex >= count($rows)) {
+            $primaryIndex = 0;
+        }
+
+        foreach ($rows as $index => $row) {
+            $rows[$index]['is_primary'] = $index === $primaryIndex;
         }
 
         return $rows;
