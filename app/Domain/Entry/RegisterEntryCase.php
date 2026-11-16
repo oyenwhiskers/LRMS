@@ -33,7 +33,7 @@ class RegisterEntryCase
 
             if (LegalFile::query()->where('reference_number', $reference)->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages([
-                    'reference_number' => 'No. rujukan ini sudah wujud dalam sistem.',
+                    'reference_number' => 'Fail ini sudah didaftarkan. Sila semak no. rujukan.',
                 ]);
             }
 

@@ -13,6 +13,7 @@ use App\Models\EntryScan;
 use App\Models\LegalFile;
 use App\Models\Rack;
 use App\Models\Shelf;
+use App\Models\User;
 use App\Services\GeminiCaseDraftService;
 use App\Support\LegalFileQr;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -196,13 +197,33 @@ class EntryController extends Controller
         );
 
         $tempPaths = array_column($stored, 'path');
+        $warning = $result['error'];
+        $reference = trim((string) ($result['draft']['reference_number'] ?? ''));
+        $needsShelf = false;
+        $shelfUrl = null;
+        $existing = $this->legalFileByReference($reference);
+        if ($existing !== null) {
+            if ($this->needsShelfPlacement($existing)) {
+                $needsShelf = true;
+                $already = 'Fail sudah didaftarkan tetapi belum ada lokasi. Sila imbas rak tempat fail disimpan.';
+                $pendingScan = $this->pendingShelfScanFor($request->user(), $existing);
+                if ($pendingScan !== null) {
+                    $shelfUrl = route('entry.shelf', $pendingScan);
+                }
+            } else {
+                $already = 'Fail ini sudah didaftarkan. Sila semak no. rujukan.';
+            }
+            $warning = $warning ? $warning.' '.$already : $already;
+        }
 
         return response()->json([
             'temp_path' => $tempPaths[0],
             'temp_paths' => $tempPaths,
             'pages' => count($tempPaths),
             'draft' => $result['draft'],
-            'warning' => $result['error'],
+            'warning' => $warning,
+            'needs_shelf' => $needsShelf,
+            'shelf_url' => $shelfUrl,
             'save_url' => route('entry.save'),
         ]);
     }
@@ -210,6 +231,16 @@ class EntryController extends Controller
     public function save(Request $request, RegisterEntryCase $register): RedirectResponse
     {
         $tempPaths = $this->validatedTempPaths($request);
+        $reference = preg_replace('/\s+/', '', trim((string) $request->input('reference_number', ''))) ?: '';
+        $existing = $this->legalFileByReference($reference);
+        if ($existing !== null && $this->needsShelfPlacement($existing)) {
+            $scan = $this->ensureShelfScan($request->user(), $existing, $tempPaths);
+
+            return redirect()
+                ->route('entry.shelf', $scan)
+                ->with('success', 'Fail sudah didaftarkan tetapi belum ada lokasi. Imbas QR rak tempat fail disimpan.');
+        }
+
         $data = $this->validatedCase($request);
 
         $scan = EntryScan::create([
@@ -369,6 +400,58 @@ class EntryController extends Controller
     {
         $user = $request->user();
         abort_unless($scan->isOwnedBy($user) || $user->isAdmin(), 403);
+    }
+
+    private function legalFileByReference(string $reference): ?LegalFile
+    {
+        $reference = trim($reference);
+        if ($reference === '') {
+            return null;
+        }
+
+        return LegalFile::query()->where('reference_number', $reference)->first();
+    }
+
+    private function needsShelfPlacement(LegalFile $file): bool
+    {
+        return $file->status === LegalFile::STATUS_REGISTERED && $file->shelf_id === null;
+    }
+
+    private function pendingShelfScanFor(User $user, LegalFile $file): ?EntryScan
+    {
+        return EntryScan::query()
+            ->where('legal_file_id', $file->id)
+            ->where('user_id', $user->id)
+            ->where('status', EntryScan::STATUS_SAVED)
+            ->first();
+    }
+
+    /**
+     * @param  list<string>  $tempPaths
+     */
+    private function ensureShelfScan(User $user, LegalFile $file, array $tempPaths): EntryScan
+    {
+        $scan = $this->pendingShelfScanFor($user, $file);
+        if ($scan !== null) {
+            foreach ($tempPaths as $path) {
+                Storage::disk('local')->delete($path);
+            }
+
+            return $scan;
+        }
+
+        $scan = EntryScan::create([
+            'user_id' => $user->id,
+            'document_path' => $tempPaths[0],
+            'legal_file_id' => $file->id,
+            'ai_suggestion' => [
+                'reference_number' => $file->reference_number,
+            ],
+            'status' => EntryScan::STATUS_SAVED,
+        ]);
+        $this->persistScanDocuments($scan, $tempPaths);
+
+        return $scan;
     }
 
     /**
@@ -532,6 +615,8 @@ class EntryController extends Controller
             'ic_number' => ['nullable', 'string', 'max:50'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+        ], [
+            'reference_number.unique' => 'Fail ini sudah didaftarkan. Sila semak no. rujukan.',
         ]);
         $data['case_type'] = $caseType;
         $data['borrowers'] = $this->normalizedBorrowers(

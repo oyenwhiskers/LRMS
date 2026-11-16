@@ -4,12 +4,15 @@
 
 @section('content')
 @php
-    $selectedType = App\Models\LegalFile::TYPE_SNP;
+    $selectedType = old('case_type', App\Models\LegalFile::TYPE_SNP) ?: App\Models\LegalFile::TYPE_SNP;
+    $resumeStep = $errors->any() && (old('temp_path') || old('temp_paths')) ? '3' : '';
+    $oldTempPaths = array_values(array_filter((array) old('temp_paths', old('temp_path') ? [old('temp_path')] : [])));
 @endphp
 <div
     class="entry-home"
     data-entry-flow
     data-analyze-url="{{ route('entry.scan.store') }}"
+    data-resume-step="{{ $resumeStep }}"
 >
     <div data-entry-heading>
         <p class="entry-stat__label" data-entry-step-label>Langkah 1 / 3</p>
@@ -71,11 +74,17 @@
 
     {{-- Step 3: form --}}
     <div class="entry-camera__panel hidden" data-entry-step="3">
-        <p class="entry-app__flash entry-app__flash--warn hidden" data-entry-ai-warning></p>
+        <p class="entry-app__flash entry-app__flash--warn {{ $errors->has('reference_number') ? '' : 'hidden' }}" data-entry-ai-warning>
+            @error('reference_number'){{ $message }}@enderror
+        </p>
         <form class="entry-scan-save" method="POST" action="{{ $saveUrl }}" data-case-type-form data-entry-save-form>
             @csrf
-            <input type="hidden" name="temp_path" value="" data-entry-temp-path>
-            <div data-entry-temp-paths></div>
+            <input type="hidden" name="temp_path" value="{{ old('temp_path', $oldTempPaths[0] ?? '') }}" data-entry-temp-path>
+            <div data-entry-temp-paths>
+                @foreach ($oldTempPaths as $path)
+                    <input type="hidden" name="temp_paths[]" value="{{ $path }}">
+                @endforeach
+            </div>
             @include('entry.partials.case-form-fields', [
                 'categories' => $categories,
                 'suggestion' => [],
@@ -83,7 +92,8 @@
             ])
             <div class="entry-camera__actions entry-camera__actions--save">
                 <button class="entry-app__logout" type="button" data-entry-back-form>Kembali</button>
-                <button class="btn-primary w-full" type="submit">Simpan kes</button>
+                <a class="entry-auth__submit hidden" data-entry-shelf-cta href="#">Imbas rak sekarang</a>
+                <button class="btn-primary w-full" type="submit" data-entry-save-submit>Simpan kes</button>
             </div>
         </form>
     </div>
@@ -116,6 +126,8 @@
     const tempPathInput = root.querySelector('[data-entry-temp-path]');
     const tempPathsBox = root.querySelector('[data-entry-temp-paths]');
     const warningEl = root.querySelector('[data-entry-ai-warning]');
+    const shelfCta = root.querySelector('[data-entry-shelf-cta]');
+    const saveSubmit = root.querySelector('[data-entry-save-submit]');
     const stepLabel = root.querySelector('[data-entry-step-label]');
     const stepTitle = root.querySelector('[data-entry-step-title]');
     const stepLede = root.querySelector('[data-entry-step-lede]');
@@ -373,6 +385,23 @@
                     warningEl.classList.add('hidden');
                 }
             }
+            if (shelfCta && saveSubmit) {
+                if (payload.shelf_url) {
+                    shelfCta.href = payload.shelf_url;
+                    shelfCta.classList.remove('hidden');
+                    saveSubmit.classList.add('hidden');
+                } else if (payload.needs_shelf) {
+                    shelfCta.classList.add('hidden');
+                    shelfCta.removeAttribute('href');
+                    saveSubmit.classList.remove('hidden');
+                    saveSubmit.textContent = 'Imbas rak';
+                } else {
+                    shelfCta.classList.add('hidden');
+                    shelfCta.removeAttribute('href');
+                    saveSubmit.classList.remove('hidden');
+                    saveSubmit.textContent = 'Simpan kes';
+                }
+            }
             clearPages();
             showStep('3');
         } catch (err) {
@@ -437,7 +466,8 @@
         if (uploadInput.files?.length) addFiles(uploadInput.files);
     });
 
-    showStep('1');
+    const resumeStep = root.getAttribute('data-resume-step');
+    showStep(resumeStep === '3' ? '3' : '1');
     window.addEventListener('pagehide', () => {
         document.body.classList.remove('entry-app--camera-live');
         stopCamera();

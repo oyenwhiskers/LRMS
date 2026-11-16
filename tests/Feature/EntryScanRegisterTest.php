@@ -398,6 +398,222 @@ class EntryScanRegisterTest extends TestCase
         $this->assertSame(EntryScan::STATUS_STORED, $scan->fresh()->status);
     }
 
+    public function test_entry_save_rejects_already_registered_reference_with_shelf(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $rack = Rack::create(['code' => 'DUP', 'name' => 'Dup Bay']);
+        $shelf = Shelf::create(['rack_id' => $rack->id, 'code' => 'S1', 'name' => 'Shelf One']);
+        $tempPath = 'entry-scans/tmp/'.$entry->id.'/duplicate.jpg';
+        Storage::disk('local')->put($tempPath, 'fake');
+
+        LegalFile::create([
+            'reference_number' => 'CON/2019/0042',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Existing',
+            'property' => 'Lot Existing',
+            'title_number' => 'PN EXIST',
+            'status' => LegalFile::STATUS_STORED,
+            'shelf_id' => $shelf->id,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+
+        $this->actingAs($entry)
+            ->from(route('entry.scan'))
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'temp_paths' => [$tempPath],
+                'reference_number' => 'CON/2019/0042',
+                'case_type' => LegalFile::TYPE_SNP,
+                'case_category_id' => $category->id,
+                'purchaser' => 'Duplicate Attempt',
+            ])
+            ->assertRedirect(route('entry.scan'))
+            ->assertSessionHasErrors([
+                'reference_number' => 'Fail ini sudah didaftarkan. Sila semak no. rujukan.',
+            ]);
+
+        $this->assertDatabaseCount('entry_scans', 0);
+        $this->assertSame(1, LegalFile::query()->where('reference_number', 'CON/2019/0042')->count());
+
+        $this->actingAs($entry)
+            ->followingRedirects()
+            ->from(route('entry.scan'))
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'temp_paths' => [$tempPath],
+                'reference_number' => 'CON/2019/0042',
+                'case_type' => LegalFile::TYPE_SNP,
+                'case_category_id' => $category->id,
+                'purchaser' => 'Duplicate Attempt',
+            ])
+            ->assertOk()
+            ->assertSee('Fail ini sudah didaftarkan. Sila semak no. rujukan.', false)
+            ->assertSee('data-resume-step="3"', false)
+            ->assertSee('value="CON/2019/0042"', false);
+    }
+
+    public function test_entry_save_routes_registered_file_without_shelf_to_shelf_scan(): void
+    {
+        Storage::fake('local');
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $tempPath = 'entry-scans/tmp/'.$entry->id.'/needs-shelf.jpg';
+        Storage::disk('local')->put($tempPath, 'fake');
+
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2019/0555',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Needs Shelf',
+            'property' => 'Lot Shelf',
+            'title_number' => 'PN SHELF',
+            'status' => LegalFile::STATUS_REGISTERED,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+
+        $response = $this->actingAs($entry)
+            ->post(route('entry.save'), [
+                'temp_path' => $tempPath,
+                'temp_paths' => [$tempPath],
+                'reference_number' => 'CON/2019/0555',
+                'case_type' => LegalFile::TYPE_SNP,
+                'case_category_id' => $category->id,
+                'purchaser' => 'Needs Shelf',
+            ]);
+
+        $scan = EntryScan::query()->where('legal_file_id', $file->id)->firstOrFail();
+        $response->assertRedirect(route('entry.shelf', $scan))
+            ->assertSessionHas('success', 'Fail sudah didaftarkan tetapi belum ada lokasi. Imbas QR rak tempat fail disimpan.');
+
+        $this->assertSame(EntryScan::STATUS_SAVED, $scan->status);
+        $this->assertSame($entry->id, $scan->user_id);
+        $this->assertSame(1, LegalFile::query()->where('reference_number', 'CON/2019/0555')->count());
+        $this->assertSame(LegalFile::STATUS_REGISTERED, $file->fresh()->status);
+        Storage::disk('local')->assertMissing($tempPath);
+        Storage::disk('local')->assertExists($scan->document_path);
+    }
+
+    public function test_analyze_warns_when_reference_already_registered_with_shelf(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'text' => json_encode([
+                                'reference_number' => 'CON/2019/0042',
+                                'case_type' => LegalFile::TYPE_SNP,
+                                'case_category_code' => 'CON',
+                                'purchaser' => 'AI Purchaser',
+                            ]),
+                        ]],
+                    ],
+                ]],
+            ]),
+        ]);
+
+        config([
+            'services.gemini.key' => 'test-key',
+            'services.gemini.model' => 'gemini-3.1-flash-lite',
+        ]);
+
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $rack = Rack::create(['code' => 'ANA', 'name' => 'Analyze Bay']);
+        $shelf = Shelf::create(['rack_id' => $rack->id, 'code' => 'S1', 'name' => 'Shelf One']);
+        LegalFile::create([
+            'reference_number' => 'CON/2019/0042',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Existing',
+            'property' => 'Lot Existing',
+            'title_number' => 'PN EXIST',
+            'status' => LegalFile::STATUS_STORED,
+            'shelf_id' => $shelf->id,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('case.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.reference_number', 'CON/2019/0042')
+            ->assertJsonPath('warning', 'Fail ini sudah didaftarkan. Sila semak no. rujukan.')
+            ->assertJsonPath('needs_shelf', false)
+            ->assertJsonPath('shelf_url', null);
+    }
+
+    public function test_analyze_prompts_shelf_when_registered_without_location(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'text' => json_encode([
+                                'reference_number' => 'CON/2019/0666',
+                                'case_type' => LegalFile::TYPE_SNP,
+                                'case_category_code' => 'CON',
+                                'purchaser' => 'AI Purchaser',
+                            ]),
+                        ]],
+                    ],
+                ]],
+            ]),
+        ]);
+
+        config([
+            'services.gemini.key' => 'test-key',
+            'services.gemini.model' => 'gemini-3.1-flash-lite',
+        ]);
+
+        $entry = User::factory()->entry()->create();
+        $category = CaseCategory::query()->where('code', 'CON')->firstOrFail();
+        $file = LegalFile::create([
+            'reference_number' => 'CON/2019/0666',
+            'case_category_id' => $category->id,
+            'case_type' => LegalFile::TYPE_SNP,
+            'matter_type' => $category->name,
+            'purchaser' => 'Existing',
+            'property' => 'Lot Existing',
+            'title_number' => 'PN EXIST',
+            'status' => LegalFile::STATUS_REGISTERED,
+            'created_by' => $entry->id,
+            'updated_by' => $entry->id,
+        ]);
+        $pending = EntryScan::create([
+            'user_id' => $entry->id,
+            'document_path' => 'entry-scans/pending.jpg',
+            'legal_file_id' => $file->id,
+            'status' => EntryScan::STATUS_SAVED,
+        ]);
+
+        $this->actingAs($entry)
+            ->post(route('entry.scan.store'), [
+                'documents' => [UploadedFile::fake()->image('case.jpg')],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('draft.reference_number', 'CON/2019/0666')
+            ->assertJsonPath(
+                'warning',
+                'Fail sudah didaftarkan tetapi belum ada lokasi. Sila imbas rak tempat fail disimpan.',
+            )
+            ->assertJsonPath('needs_shelf', true)
+            ->assertJsonPath('shelf_url', route('entry.shelf', $pending));
+    }
+
     public function test_entry_save_allows_loan_fields_missing_from_cover(): void
     {
         Storage::fake('local');
@@ -1315,7 +1531,9 @@ class EntryScanRegisterTest extends TestCase
                 'reference_number' => 'CON/2019/0809',
             ])
             ->assertRedirect(route('entry.home'))
-            ->assertSessionHasErrors('reference_number');
+            ->assertSessionHasErrors([
+                'reference_number' => 'Fail ini sudah didaftarkan. Sila semak no. rujukan.',
+            ]);
 
         $this->assertSame('CON/2019/0808', $file->fresh()->reference_number);
     }
