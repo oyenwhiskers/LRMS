@@ -57,15 +57,19 @@ class DashboardController extends Controller
         return view('dashboard', [
             'registry' => [
                 'registered_today' => LegalFile::active()
+                    ->notFromEntry()
                     ->whereBetween('created_at', [$todayStart, $todayEnd])
                     ->count(),
                 'registered_week' => LegalFile::active()
+                    ->notFromEntry()
                     ->whereBetween('created_at', [$weekStart, $todayEnd])
                     ->count(),
                 'registered_month' => LegalFile::active()
+                    ->notFromEntry()
                     ->whereBetween('created_at', [$monthStart, $todayEnd])
                     ->count(),
                 'registered_year' => LegalFile::active()
+                    ->notFromEntry()
                     ->whereBetween('created_at', [$yearStart, $todayEnd])
                     ->count(),
             ],
@@ -124,6 +128,7 @@ class DashboardController extends Controller
 
         $countsFor = function (Carbon $from, Carbon $to): Collection {
             return LegalFile::active()
+                ->notFromEntry()
                 ->whereBetween('created_at', [$from, $to])
                 ->whereNotNull('case_category_id')
                 ->selectRaw('case_category_id, COUNT(*) as aggregate')
@@ -263,6 +268,7 @@ class DashboardController extends Controller
     private function registeredCountsByDay(Carbon $start, Carbon $end): Collection
     {
         return LegalFile::query()
+            ->notFromEntry()
             ->whereBetween('created_at', [$start, $end])
             ->get(['created_at'])
             ->groupBy(fn (LegalFile $file) => $file->created_at->toDateString())
@@ -272,6 +278,7 @@ class DashboardController extends Controller
     private function registeredCountsByMonth(Carbon $start, Carbon $end): Collection
     {
         return LegalFile::query()
+            ->notFromEntry()
             ->whereBetween('created_at', [$start, $end])
             ->get(['created_at'])
             ->groupBy(fn (LegalFile $file) => $file->created_at->format('Y-m'))

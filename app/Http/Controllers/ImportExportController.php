@@ -520,16 +520,16 @@ class ImportExportController extends Controller
         $yearStart = Carbon::today()->startOfYear();
 
         return [
-            'registered_today' => LegalFile::active()->whereBetween('created_at', [$todayStart, $todayEnd])->count(),
-            'registered_week' => LegalFile::active()->whereBetween('created_at', [$weekStart, $todayEnd])->count(),
-            'registered_month' => LegalFile::active()->whereBetween('created_at', [$monthStart, $todayEnd])->count(),
-            'registered_year' => LegalFile::active()->whereBetween('created_at', [$yearStart, $todayEnd])->count(),
+            'registered_today' => LegalFile::active()->notFromEntry()->whereBetween('created_at', [$todayStart, $todayEnd])->count(),
+            'registered_week' => LegalFile::active()->notFromEntry()->whereBetween('created_at', [$weekStart, $todayEnd])->count(),
+            'registered_month' => LegalFile::active()->notFromEntry()->whereBetween('created_at', [$monthStart, $todayEnd])->count(),
+            'registered_year' => LegalFile::active()->notFromEntry()->whereBetween('created_at', [$yearStart, $todayEnd])->count(),
         ];
     }
 
     private function dashboardRegistrationRecords(string $scope): Collection
     {
-        $query = LegalFile::active()->orderByDesc('created_at');
+        $query = LegalFile::active()->notFromEntry()->orderByDesc('created_at');
         $todayStart = Carbon::today()->startOfDay();
         $todayEnd = Carbon::today()->endOfDay();
 
@@ -641,6 +641,7 @@ class ImportExportController extends Controller
     private function dashboardRegisteredCountsByDay(Carbon $start, Carbon $end): Collection
     {
         return LegalFile::query()
+            ->notFromEntry()
             ->whereBetween('created_at', [$start, $end])
             ->get(['created_at'])
             ->groupBy(fn (LegalFile $file) => $file->created_at->toDateString())
@@ -650,6 +651,7 @@ class ImportExportController extends Controller
     private function dashboardRegisteredCountsByMonth(Carbon $start, Carbon $end): Collection
     {
         return LegalFile::query()
+            ->notFromEntry()
             ->whereBetween('created_at', [$start, $end])
             ->get(['created_at'])
             ->groupBy(fn (LegalFile $file) => $file->created_at->format('Y-m'))

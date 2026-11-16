@@ -242,7 +242,7 @@ class CaseCategoryController extends Controller
                 'required',
                 'string',
                 'max:20',
-                'regex:/^[A-Za-z0-9]+$/',
+                'regex:/^[A-Za-z0-9._()-]{1,20}$/',
                 Rule::unique('case_categories', 'code')->ignore($category),
             ],
             'confirm_linked_updates' => ['sometimes', 'boolean'],

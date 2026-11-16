@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CaseCategory;
+use App\Models\EntryScan;
 use App\Models\FileMovement;
 use App\Models\LegalFile;
 use App\Models\Rack;
@@ -517,6 +518,16 @@ class LrmsWorkflowTest extends TestCase
         $this->setCreatedAt($borrowed, '2026-07-22 09:00:00');
         $this->setCreatedAt($missing, '2026-07-23 09:00:00');
 
+        // Entry digitization must not inflate Case Registration summary.
+        $fromEntry = LegalFile::create($this->fileData($category, $admin, 'CON/2026/0199'));
+        $this->setCreatedAt($fromEntry, '2026-08-16 09:30:00');
+        EntryScan::create([
+            'user_id' => $admin->id,
+            'document_path' => 'entry-scans/dashboard-exclude.jpg',
+            'legal_file_id' => $fromEntry->id,
+            'status' => EntryScan::STATUS_SAVED,
+        ]);
+
         FileMovement::create([
             'legal_file_id' => $stored->id,
             'type' => 'borrow',
@@ -545,7 +556,7 @@ class LrmsWorkflowTest extends TestCase
             ->assertViewHas('categoryRegistry', fn ($rows) => $rows->contains(
                 fn (array $row) => $row['code'] === 'CON' && $row['today'] === 1 && $row['week'] === 2 && $row['month'] === 3
             ))
-            ->assertViewHas('statusSummary', fn (array $summary) => $summary['active_registered'] === 4
+            ->assertViewHas('statusSummary', fn (array $summary) => $summary['active_registered'] === 5
                 && $summary['pending_review'] === 0
                 && $summary['ready_for_storage'] === 0
                 && $summary['currently_stored'] === 1

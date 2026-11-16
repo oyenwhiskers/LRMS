@@ -136,6 +136,12 @@ class LegalFile extends Model
         return $query;
     }
 
+    /** Case Register only — exclude Entry module storage digitization. */
+    public function scopeNotFromEntry(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('entryScan');
+    }
+
     public function caseCategory(): BelongsTo
     {
         return $this->belongsTo(CaseCategory::class);
