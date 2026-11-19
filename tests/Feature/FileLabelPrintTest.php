@@ -107,6 +107,33 @@ class FileLabelPrintTest extends TestCase
         $this->assertStringNotContainsString($file->file_identifier, $html);
     }
 
+    public function test_front_label_shows_selected_sticker_party_among_purchasers_and_vendors(): void
+    {
+        [$admin, $file] = $this->adminWithFile();
+        $file->forceFill([
+            'case_type' => LegalFile::TYPE_SNP,
+            'purchaser' => 'Alice Buyer & Bob Buyer',
+            'vendor' => 'Carol Seller & Dan Seller',
+            'property' => 'Lot 1',
+        ])->save();
+        $file->syncParties([
+            ['name' => 'Alice Buyer', 'is_primary' => false],
+            ['name' => 'Bob Buyer', 'is_primary' => false],
+            ['name' => 'Carol Seller', 'is_primary' => false],
+            ['name' => 'Dan Seller', 'is_primary' => true],
+        ]);
+
+        $html = $this->actingAs($admin)
+            ->get(route('files.label', ['file' => $file, 'type' => 'front']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('Dan Seller', $html);
+        $this->assertStringNotContainsString('Alice Buyer', $html);
+        $this->assertStringNotContainsString('Bob Buyer', $html);
+        $this->assertStringNotContainsString('Carol Seller', $html);
+    }
+
     public function test_front_label_shows_type_aware_detail(): void
     {
         [$admin, $loan] = $this->adminWithFile();

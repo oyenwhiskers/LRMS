@@ -7,6 +7,10 @@
     $selectedType = old('case_type', $file->case_type ?: App\Models\LegalFile::TYPE_SNP);
     $isLoanSelected = App\Models\LegalFile::isLoanType($selectedType);
     $isSnpSelected = App\Models\LegalFile::isSnpType($selectedType);
+    $formPurchasers = $formPurchasers ?? [''];
+    $formVendors = $formVendors ?? [''];
+    $formStickerParty = $formStickerParty ?? 'purchaser:0';
+    $stickerRadioClass = 'size-4 shrink-0 border-stone-300 text-amber-700 focus:ring-amber-600';
 @endphp
 
 @section('content')
@@ -112,7 +116,7 @@
                                 data-case-sub-type-select
                                 disabled
                             >
-                                <option value="">Select sub-type</option>
+                                <option value="">None</option>
                                 @foreach (App\Models\LegalFile::conSnpSubTypes() as $subType)
                                     <option
                                         value="{{ $subType }}"
@@ -128,7 +132,7 @@
                                     >{{ App\Models\LegalFile::caseSubTypeLabelFor($subType) }}</option>
                                 @endforeach
                             </select>
-                            <span class="form-help">Required for CON + Sales and purchase, or CON + Memorandum of transfer.</span>
+                            <span class="form-help">Optional for CON + Sales and purchase, or CON + Memorandum of transfer.</span>
                         </span>
                     </label>
                 @endif
@@ -167,19 +171,105 @@
 
                 {{-- S&P-shaped fields (sales, MOT, DOA, gift, POA, etc.) --}}
                 <div class="grid gap-5 {{ $isSnpSelected ? '' : 'hidden' }}" data-case-type-panel="snp">
-                    <label class="form-row">
+                    <div class="form-row form-row--textarea" data-party-list data-party-source="purchaser">
                         <span class="form-label form-row__label">Purchaser</span>
                         <span class="form-row__control">
-                            <input class="form-input" name="purchaser" value="{{ old('purchaser', $file->purchaser) }}" data-case-type-required @required($isSnpSelected) @disabled(! $isSnpSelected)>
+                            <div class="case-party-list" data-party-rows>
+                                @foreach ($formPurchasers as $index => $purchaserName)
+                                    <div class="case-party-row" data-party-row>
+                                        <input
+                                            class="form-input"
+                                            name="purchasers[{{ $index }}]"
+                                            value="{{ $purchaserName }}"
+                                            autocomplete="off"
+                                            @if ($index === 0) data-case-type-required @required($isSnpSelected) @endif
+                                            @disabled(! $isSnpSelected)
+                                        >
+                                        <label class="case-party-row__sticker">
+                                            <input
+                                                class="{{ $stickerRadioClass }}"
+                                                type="radio"
+                                                name="sticker_party"
+                                                value="purchaser:{{ $index }}"
+                                                data-sticker-party-radio
+                                                @checked($formStickerParty === 'purchaser:'.$index)
+                                                @disabled(! $isSnpSelected)
+                                            >
+                                            <span>Sticker</span>
+                                        </label>
+                                        <button class="case-party-remove" type="button" data-remove-party aria-label="Remove purchaser" @disabled(! $isSnpSelected)>Remove</button>
+                                    </div>
+                                @endforeach
+                            </div>
+                            <button class="case-party-add" type="button" data-add-party @disabled(! $isSnpSelected)>+ Add purchaser</button>
+                            @error('purchasers')<p class="text-sm text-red-700">{{ $message }}</p>@enderror
+                            <template data-party-template>
+                                <div class="case-party-row" data-party-row>
+                                    <input class="form-input" name="purchasers[__INDEX__]" value="" autocomplete="off">
+                                    <label class="case-party-row__sticker">
+                                        <input
+                                            class="{{ $stickerRadioClass }}"
+                                            type="radio"
+                                            name="sticker_party"
+                                            value="purchaser:__INDEX__"
+                                            data-sticker-party-radio
+                                        >
+                                        <span>Sticker</span>
+                                    </label>
+                                    <button class="case-party-remove" type="button" data-remove-party aria-label="Remove purchaser">Remove</button>
+                                </div>
+                            </template>
                         </span>
-                    </label>
+                    </div>
 
-                    <label class="form-row">
+                    <div class="form-row form-row--textarea" data-party-list data-party-source="vendor">
                         <span class="form-label form-row__label">Vendor</span>
                         <span class="form-row__control">
-                            <input class="form-input" name="vendor" value="{{ old('vendor', $file->vendor) }}" @disabled(! $isSnpSelected)>
+                            <div class="case-party-list" data-party-rows>
+                                @foreach ($formVendors as $index => $vendorName)
+                                    <div class="case-party-row" data-party-row>
+                                        <input
+                                            class="form-input"
+                                            name="vendors[{{ $index }}]"
+                                            value="{{ $vendorName }}"
+                                            autocomplete="off"
+                                            @disabled(! $isSnpSelected)
+                                        >
+                                        <label class="case-party-row__sticker">
+                                            <input
+                                                class="{{ $stickerRadioClass }}"
+                                                type="radio"
+                                                name="sticker_party"
+                                                value="vendor:{{ $index }}"
+                                                data-sticker-party-radio
+                                                @checked($formStickerParty === 'vendor:'.$index)
+                                                @disabled(! $isSnpSelected)
+                                            >
+                                            <span>Sticker</span>
+                                        </label>
+                                        <button class="case-party-remove" type="button" data-remove-party aria-label="Remove vendor" @disabled(! $isSnpSelected)>Remove</button>
+                                    </div>
+                                @endforeach
+                            </div>
+                            <button class="case-party-add" type="button" data-add-party @disabled(! $isSnpSelected)>+ Add vendor</button>
+                            <template data-party-template>
+                                <div class="case-party-row" data-party-row>
+                                    <input class="form-input" name="vendors[__INDEX__]" value="" autocomplete="off">
+                                    <label class="case-party-row__sticker">
+                                        <input
+                                            class="{{ $stickerRadioClass }}"
+                                            type="radio"
+                                            name="sticker_party"
+                                            value="vendor:__INDEX__"
+                                            data-sticker-party-radio
+                                        >
+                                        <span>Sticker</span>
+                                    </label>
+                                    <button class="case-party-remove" type="button" data-remove-party aria-label="Remove vendor">Remove</button>
+                                </div>
+                            </template>
                         </span>
-                    </label>
+                    </div>
 
                     <label class="form-row form-row--textarea">
                         <span class="form-label form-row__label">Property address</span>

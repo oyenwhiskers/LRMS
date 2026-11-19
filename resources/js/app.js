@@ -3565,7 +3565,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             panels.forEach((panel) => {
                 const active = panel.dataset.caseTypePanel === panelType;
                 panel.classList.toggle('hidden', ! active);
-                panel.querySelectorAll('input, textarea, select').forEach((field) => {
+                panel.querySelectorAll('input, textarea, select, button').forEach((field) => {
                     field.disabled = ! active;
                     if (field.hasAttribute('data-case-type-required')) {
                         field.required = active;
@@ -3580,7 +3580,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             syncCaseTypePanels(resolvePanelType());
         });
 
-        // Manual register only: CON + S&P|MOT requires case sub-type.
+        // Manual register only: CON + S&P|MOT shows optional case sub-type.
         if (form.hasAttribute('data-manual-case-register')) {
             const categorySelect = form.querySelector('[data-case-category-select]');
             const subTypeRow = form.querySelector('[data-case-sub-type-row]');
@@ -3609,7 +3609,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const active = optionFor !== '';
                 subTypeRow.classList.toggle('hidden', ! active);
                 subTypeSelect.disabled = ! active;
-                subTypeSelect.required = active;
+                subTypeSelect.required = false;
 
                 const selected = subTypeSelect.selectedOptions?.[0];
                 if (! active || selected?.disabled || selected?.hidden) {
@@ -3690,6 +3690,95 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         syncStickerPartyRadios();
+
+        // S&P register form: multiple purchasers/vendors with one sticker radio across both lists.
+        const syncSnpStickerRadios = () => {
+            const radios = [...form.querySelectorAll('[data-case-type-panel="snp"] [data-sticker-party-radio]')];
+            if (radios.length === 0) {
+                return;
+            }
+            if (! radios.some((radio) => radio.checked)) {
+                radios[0].checked = true;
+            }
+        };
+
+        const reindexPartyList = (list) => {
+            const source = list.dataset.partySource || 'purchaser';
+            const rowsRoot = list.querySelector('[data-party-rows]');
+            if (! rowsRoot) {
+                return;
+            }
+
+            const panel = list.closest('[data-case-type-panel]');
+            const panelActive = ! panel?.classList.contains('hidden');
+            const rows = [...rowsRoot.querySelectorAll('[data-party-row]')];
+            rows.forEach((row, index) => {
+                const nameInput = row.querySelector('input.form-input, textarea.form-input');
+                const radio = row.querySelector('[data-sticker-party-radio]');
+                if (nameInput) {
+                    nameInput.name = `${source}s[${index}]`;
+                    if (source === 'purchaser' && index === 0) {
+                        nameInput.setAttribute('data-case-type-required', '');
+                        nameInput.required = panelActive;
+                    } else {
+                        nameInput.removeAttribute('data-case-type-required');
+                        nameInput.required = false;
+                    }
+                }
+                if (radio) {
+                    radio.value = `${source}:${index}`;
+                }
+            });
+
+            rowsRoot.querySelectorAll('[data-remove-party]').forEach((button) => {
+                button.hidden = rows.length <= 1;
+            });
+        };
+
+        form.querySelectorAll('[data-party-list]').forEach((list) => {
+            const rowsRoot = list.querySelector('[data-party-rows]');
+            const template = list.querySelector('[data-party-template]');
+            const addBtn = list.querySelector('[data-add-party]');
+            if (! rowsRoot || ! template || ! addBtn) {
+                return;
+            }
+
+            const syncList = () => {
+                reindexPartyList(list);
+                syncSnpStickerRadios();
+            };
+
+            addBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                const index = rowsRoot.querySelectorAll('[data-party-row]').length;
+                const html = template.innerHTML.replaceAll('__INDEX__', String(index));
+                const wrap = document.createElement('div');
+                wrap.innerHTML = html.trim();
+                const row = wrap.firstElementChild;
+                if (! row) {
+                    return;
+                }
+                rowsRoot.appendChild(row);
+                syncList();
+            });
+
+            rowsRoot.addEventListener('click', (event) => {
+                const removeBtn = event.target.closest('[data-remove-party]');
+                if (! removeBtn || ! rowsRoot.contains(removeBtn)) {
+                    return;
+                }
+                event.preventDefault();
+                if (rowsRoot.querySelectorAll('[data-party-row]').length <= 1) {
+                    return;
+                }
+                removeBtn.closest('[data-party-row]')?.remove();
+                syncList();
+            });
+
+            syncList();
+        });
+
+        syncSnpStickerRadios();
     });
 
     document.querySelectorAll('[data-related-files]').forEach((root) => {

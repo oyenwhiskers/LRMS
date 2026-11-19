@@ -1101,6 +1101,34 @@
         @apply min-w-0;
     }
 
+    .case-party-list {
+        @apply space-y-2;
+    }
+
+    .case-party-row {
+        @apply flex flex-col gap-2 sm:flex-row sm:items-center;
+    }
+
+    .case-party-row .form-input {
+        @apply min-w-0 flex-1;
+    }
+
+    .case-party-row__sticker {
+        @apply inline-flex shrink-0 items-center gap-2 text-sm text-stone-600 sm:min-w-[7.5rem];
+    }
+
+    .case-party-add {
+        @apply mt-2 inline-flex items-center border-0 bg-transparent p-0 text-sm font-medium text-amber-800 hover:text-amber-950 disabled:cursor-not-allowed disabled:opacity-40;
+    }
+
+    .case-party-remove {
+        @apply shrink-0 border-0 bg-transparent p-0 text-sm text-stone-500 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40;
+    }
+
+    .case-party-remove[hidden] {
+        display: none;
+    }
+
     .btn-primary,
     .btn-secondary,
     .btn-success,

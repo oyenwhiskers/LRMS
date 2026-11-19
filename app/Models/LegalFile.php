@@ -228,7 +228,7 @@ class LegalFile extends Model
         }
     }
 
-    /** S&P / litigation: purchaser (0) or vendor (1) for sticker. */
+    /** S&P / litigation: which side the sticker primary belongs to. */
     public function stickerPartySource(): string
     {
         $parties = $this->relationLoaded('parties')
@@ -236,8 +236,17 @@ class LegalFile extends Model
             : $this->parties()->get();
 
         $primary = $parties->firstWhere('is_primary', true) ?? $parties->first();
+        $primaryName = trim((string) ($primary?->name ?? ''));
+        if ($primaryName !== '' && in_array($primaryName, self::splitPartyNames($this->vendor), true)) {
+            return 'vendor';
+        }
 
-        return $primary && (int) $primary->sort_order === 1 ? 'vendor' : 'purchaser';
+        // Legacy two-row parties: sort_order 1 was vendor before multi-party lists.
+        if ($primary && $parties->count() <= 2 && (int) $primary->sort_order === 1) {
+            return 'vendor';
+        }
+
+        return 'purchaser';
     }
 
     /**
@@ -249,6 +258,25 @@ class LegalFile extends Model
             ->map(fn (string $name): string => trim($name))
             ->filter()
             ->implode(' & ');
+    }
+
+    /**
+     * Inverse of joinPartyNames. ponytail: names containing " & " cannot round-trip.
+     *
+     * @return list<string>
+     */
+    public static function splitPartyNames(?string $joined): array
+    {
+        $joined = trim((string) $joined);
+        if ($joined === '') {
+            return [];
+        }
+
+        return collect(explode(' & ', $joined))
+            ->map(fn (string $name): string => trim($name))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     /** Sticker name: selected primary party, else first party / first purchaser segment. */
@@ -266,9 +294,9 @@ class LegalFile extends Model
             }
         }
 
-        $purchaser = trim((string) ($this->purchaser ?? ''));
+        $names = self::splitPartyNames($this->purchaser);
 
-        return $purchaser === '' ? '' : trim(explode(' & ', $purchaser, 2)[0]);
+        return $names[0] ?? '';
     }
 
     /** Front sticker fourth line: bank / title no. / suite by case type. */

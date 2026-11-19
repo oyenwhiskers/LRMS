@@ -81,6 +81,39 @@ class LrmsWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_snp_registration_accepts_multiple_purchasers_and_vendors_with_sticker_party(): void
+    {
+        [$admin, $shelf, $staff, $category] = $this->records();
+
+        $this->actingAs($admin)->post(route('files.store'), [
+            'case_type' => LegalFile::TYPE_SNP,
+            'case_sub_type' => LegalFile::SUB_TYPE_BY_CASH,
+            'case_category_id' => $category->id,
+            'purchasers' => ['Alice Buyer', 'Bob Buyer'],
+            'vendors' => ['Carol Seller', 'Dan Seller'],
+            'sticker_party' => 'vendor:1',
+            'property' => 'Lot 88, Sandakan',
+            'person_in_charge_id' => $staff->id,
+        ])->assertSessionHasNoErrors();
+
+        $file = LegalFile::query()->where('purchaser', 'Alice Buyer & Bob Buyer')->firstOrFail();
+        $this->assertSame('Carol Seller & Dan Seller', $file->vendor);
+        $parties = $file->parties()->orderBy('sort_order')->get();
+        $this->assertCount(4, $parties);
+        $this->assertSame('Dan Seller', $file->primaryPurchaserName());
+        $this->assertTrue($parties[3]->is_primary);
+        $this->assertSame('vendor', $file->stickerPartySource());
+
+        $this->actingAs($admin)->post(route('files.store'), [
+            'case_type' => LegalFile::TYPE_SNP,
+            'case_sub_type' => LegalFile::SUB_TYPE_BY_CASH,
+            'case_category_id' => $category->id,
+            'purchasers' => ['', ''],
+            'vendors' => ['Only Vendor'],
+            'property' => 'Lot 89',
+        ])->assertSessionHasErrors('purchasers');
+    }
+
     public function test_manual_register_con_snp_and_mot_sub_types_and_allows_blank_title(): void
     {
         [$admin, $shelf, $staff, $category] = $this->records();
@@ -90,14 +123,24 @@ class LrmsWorkflowTest extends TestCase
             'case_category_id' => $category->id,
             'purchaser' => 'No Sub Type Sdn Bhd',
             'property' => 'Lot 1',
-        ])->assertSessionHasErrors('case_sub_type');
+            'person_in_charge_id' => $staff->id,
+        ])->assertSessionHasNoErrors();
+
+        $plainSnp = LegalFile::query()->where('purchaser', 'No Sub Type Sdn Bhd')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_SNP, $plainSnp->case_type);
+        $this->assertNull($plainSnp->case_sub_type);
 
         $this->actingAs($admin)->post(route('files.store'), [
             'case_type' => LegalFile::TYPE_MOT,
             'case_category_id' => $category->id,
-            'purchaser' => 'MOT Needs Sub Type',
+            'purchaser' => 'MOT No Sub Type',
             'property' => 'Lot 1A',
-        ])->assertSessionHasErrors('case_sub_type');
+            'person_in_charge_id' => $staff->id,
+        ])->assertSessionHasNoErrors();
+
+        $plainMot = LegalFile::query()->where('purchaser', 'MOT No Sub Type')->firstOrFail();
+        $this->assertSame(LegalFile::TYPE_MOT, $plainMot->case_type);
+        $this->assertNull($plainMot->case_sub_type);
 
         $this->actingAs($admin)->post(route('files.store'), [
             'case_type' => LegalFile::TYPE_MOT,

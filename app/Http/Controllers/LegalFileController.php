@@ -135,10 +135,11 @@ class LegalFileController extends Controller
         abort_unless($request->user()->can('files.create'), 403);
         $data = $this->validated($request);
         $relatedIds = $data['related_file_ids'] ?? [];
-        unset($data['related_file_ids']);
+        $stickerParties = is_array($data['sticker_parties'] ?? null) ? $data['sticker_parties'] : null;
+        unset($data['related_file_ids'], $data['sticker_parties'], $data['purchasers'], $data['vendors'], $data['sticker_party']);
         $data['created_by'] = $data['updated_by'] = $request->user()->id;
 
-        $file = DB::transaction(function () use ($data, $relatedIds, $request): LegalFile {
+        $file = DB::transaction(function () use ($data, $relatedIds, $stickerParties, $request): LegalFile {
             $category = CaseCategory::query()
                 ->whereKey($data['case_category_id'])
                 ->where('is_active', true)
@@ -150,6 +151,9 @@ class LegalFileController extends Controller
 
             $file = LegalFile::create($data);
             $file->syncRelatedFiles($relatedIds);
+            if ($stickerParties !== null) {
+                $file->syncParties($stickerParties);
+            }
 
             FileMovement::create([
                 'legal_file_id' => $file->id,
@@ -206,11 +210,23 @@ class LegalFileController extends Controller
         abort_unless($request->user()->can('files.update'), 403);
         $data = $this->validated($request, $file);
         $relatedIds = $data['related_file_ids'] ?? [];
-        unset($data['related_file_ids'], $data['case_category_id'], $data['case_type']);
+        $stickerParties = is_array($data['sticker_parties'] ?? null) ? $data['sticker_parties'] : null;
+        unset(
+            $data['related_file_ids'],
+            $data['case_category_id'],
+            $data['case_type'],
+            $data['sticker_parties'],
+            $data['purchasers'],
+            $data['vendors'],
+            $data['sticker_party'],
+        );
 
-        DB::transaction(function () use ($file, $data, $relatedIds, $request): void {
+        DB::transaction(function () use ($file, $data, $relatedIds, $stickerParties, $request): void {
             $file->update($data + ['updated_by' => $request->user()->id]);
             $file->syncRelatedFiles($relatedIds);
+            if ($stickerParties !== null) {
+                $file->syncParties($stickerParties);
+            }
         });
 
         return redirect()->route('files.show', $file)->with('success', 'File record updated.');
@@ -339,9 +355,15 @@ class LegalFileController extends Controller
             $request->merge(['case_type' => $caseType]);
         }
 
+        $isSnp = LegalFile::isSnpType($caseType);
         $rules = [
-            'purchaser' => ['required', 'string', 'max:255'],
+            'purchaser' => [$isSnp ? 'nullable' : 'required', 'string', 'max:255'],
+            'purchasers' => ['nullable', 'array'],
+            'purchasers.*' => ['nullable', 'string', 'max:255'],
             'vendor' => ['nullable', 'string', 'max:255'],
+            'vendors' => ['nullable', 'array'],
+            'vendors.*' => ['nullable', 'string', 'max:255'],
+            'sticker_party' => ['nullable', 'string', 'max:40'],
             'bank' => ['nullable', 'string', 'max:255'],
             'property' => ['nullable', 'string'],
             'title_number' => ['nullable', 'string', 'max:255'],
@@ -390,13 +412,8 @@ class LegalFileController extends Controller
                 default => [],
             };
 
-            if ($allowedSubTypes !== [] && $subType === '') {
-                throw ValidationException::withMessages([
-                    'case_sub_type' => 'Case sub-type is required for this category and case type.',
-                ]);
-            }
-
-            if ($allowedSubTypes === []) {
+            // Sub-type is optional even for CON + S&P / MOT; blank means plain type.
+            if ($allowedSubTypes === [] || $subType === '') {
                 $data['case_sub_type'] = null;
             } elseif (! in_array($subType, $allowedSubTypes, true)) {
                 throw ValidationException::withMessages([
@@ -423,7 +440,6 @@ class LegalFileController extends Controller
     private function normalizeCaseTypeFields(array $data, string $caseType): array
     {
         $data['case_type'] = $caseType;
-        $data['vendor'] = LegalFile::isSnpType($caseType) ? ($data['vendor'] ?? null) : null;
         $data['bank'] = LegalFile::isLoanType($caseType) ? ($data['bank'] ?? null) : null;
         $data['title_number'] = (LegalFile::isLoanType($caseType) || LegalFile::isSnpType($caseType))
             ? ($data['title_number'] ?? null)
@@ -437,11 +453,87 @@ class LegalFileController extends Controller
             $data['property'] = $data['property'] ?? '';
         }
 
+        if (LegalFile::isSnpType($caseType)) {
+            [$purchasers, $vendors, $stickerParties] = $this->normalizedSnpParties($data);
+            if ($purchasers === []) {
+                throw ValidationException::withMessages([
+                    'purchasers' => 'At least one purchaser is required.',
+                ]);
+            }
+            $data['purchasers'] = $purchasers;
+            $data['vendors'] = $vendors;
+            $data['purchaser'] = LegalFile::joinPartyNames($purchasers);
+            $data['vendor'] = $vendors === [] ? null : LegalFile::joinPartyNames($vendors);
+            $data['sticker_parties'] = $stickerParties;
+        } else {
+            $data['vendor'] = null;
+            $data['sticker_parties'] = null;
+            $data['purchaser'] = trim((string) ($data['purchaser'] ?? ''));
+        }
+
         return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array{0: list<string>, 1: list<string>, 2: list<array{name: string, ic_number: null, is_primary: bool}>}
+     */
+    private function normalizedSnpParties(array $data): array
+    {
+        $purchasers = $this->normalizedNameList($data['purchasers'] ?? null, $data['purchaser'] ?? null);
+        $vendors = $this->normalizedNameList($data['vendors'] ?? null, $data['vendor'] ?? null);
+
+        $stickerParty = trim((string) ($data['sticker_party'] ?? ''));
+        $primarySource = 'purchaser';
+        $primaryIndex = 0;
+        if (preg_match('/^(purchaser|vendor):(\d+)$/', $stickerParty, $matches) === 1) {
+            $primarySource = $matches[1];
+            $primaryIndex = (int) $matches[2];
+        }
+
+        $rows = [];
+        foreach ($purchasers as $index => $name) {
+            $rows[] = [
+                'name' => $name,
+                'ic_number' => null,
+                'is_primary' => $primarySource === 'purchaser' && $index === $primaryIndex,
+            ];
+        }
+        foreach ($vendors as $index => $name) {
+            $rows[] = [
+                'name' => $name,
+                'ic_number' => null,
+                'is_primary' => $primarySource === 'vendor' && $index === $primaryIndex,
+            ];
+        }
+
+        if ($rows !== [] && ! collect($rows)->contains(fn (array $row): bool => $row['is_primary'])) {
+            $rows[0]['is_primary'] = true;
+        }
+
+        return [$purchasers, $vendors, $rows];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizedNameList(mixed $names, mixed $fallback): array
+    {
+        if (is_array($names)) {
+            return collect($names)
+                ->map(fn ($name): string => trim((string) $name))
+                ->filter()
+                ->values()
+                ->all();
+        }
+
+        return LegalFile::splitPartyNames(is_string($fallback) ? $fallback : null);
     }
 
     private function formData(LegalFile $file): array
     {
+        $file->loadMissing('parties');
+
         $selectedRelatedIds = collect(old('related_file_ids', $file->exists
             ? $file->relatedFiles()->pluck('id')->all()
             : []))->map(fn ($id) => (int) $id)->filter()->values()->all();
@@ -459,6 +551,29 @@ class LegalFileController extends Controller
                 ->orderBy('reference_number')
                 ->get(['id', 'reference_number', 'purchaser']);
 
+        $purchasers = old('purchasers');
+        if (! is_array($purchasers)) {
+            $purchasers = LegalFile::splitPartyNames(old('purchaser', $file->purchaser));
+        }
+        $purchasers = array_values(array_map(fn ($name) => trim((string) $name), $purchasers));
+        if ($purchasers === []) {
+            $purchasers = [''];
+        }
+
+        $vendors = old('vendors');
+        if (! is_array($vendors)) {
+            $vendors = LegalFile::splitPartyNames(old('vendor', $file->vendor));
+        }
+        $vendors = array_values(array_map(fn ($name) => trim((string) $name), $vendors));
+        if ($vendors === []) {
+            $vendors = [''];
+        }
+
+        $stickerParty = old('sticker_party');
+        if (! is_string($stickerParty) || $stickerParty === '') {
+            $stickerParty = $this->stickerPartyValueFromFile($file, $purchasers, $vendors);
+        }
+
         return [
             'file' => $file,
             'staff' => Staff::where('is_active', true)->orderBy('full_name')->get(),
@@ -474,7 +589,32 @@ class LegalFileController extends Controller
                 ->all(),
             'selectedRelatedFiles' => $selectedRelatedFiles,
             'selectedRelatedIds' => $selectedRelatedIds,
+            'formPurchasers' => $purchasers,
+            'formVendors' => $vendors,
+            'formStickerParty' => $stickerParty,
         ];
+    }
+
+    /**
+     * @param  list<string>  $purchasers
+     * @param  list<string>  $vendors
+     */
+    private function stickerPartyValueFromFile(LegalFile $file, array $purchasers, array $vendors): string
+    {
+        $primary = $file->parties->firstWhere('is_primary', true) ?? $file->parties->first();
+        $primaryName = trim((string) ($primary?->name ?? ''));
+        if ($primaryName !== '') {
+            $vendorIndex = array_search($primaryName, $vendors, true);
+            if ($vendorIndex !== false) {
+                return 'vendor:'.$vendorIndex;
+            }
+            $purchaserIndex = array_search($primaryName, $purchasers, true);
+            if ($purchaserIndex !== false) {
+                return 'purchaser:'.$purchaserIndex;
+            }
+        }
+
+        return 'purchaser:0';
     }
 
     /**
