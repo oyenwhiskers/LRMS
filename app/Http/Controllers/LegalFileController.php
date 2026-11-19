@@ -12,6 +12,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -69,6 +70,14 @@ class LegalFileController extends Controller
         if ($status = $request->input('status')) {
             $query->where('status', $status);
         }
+
+        $this->applyRegisterDateFilter(
+            $query,
+            $request->string('period')->value(),
+            $request->string('date')->value(),
+            $request->string('date_from')->value(),
+            $request->string('date_to')->value(),
+        );
 
         if ($viewMode === 'customer') {
             $customers = $query
@@ -321,6 +330,44 @@ class LegalFileController extends Controller
         $this->changeStatus($file, LegalFile::STATUS_STORED, 'found', $data['notes'] ?? null, $request, $shelf->id);
 
         return back()->with('success', 'File marked found and restored to storage.');
+    }
+
+    private function applyRegisterDateFilter(
+        $query,
+        string $period,
+        string $selectedDate,
+        string $dateFrom,
+        string $dateTo,
+    ): void {
+        match ($period) {
+            'today' => $query->whereBetween('created_at', [now()->startOfDay(), now()->endOfDay()]),
+            'this_week' => $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()]),
+            'this_month' => $query->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()]),
+            'specific_date' => $this->applySpecificRegisterDate($query, $selectedDate),
+            'custom_range' => $this->applyCustomRegisterDateRange($query, $dateFrom, $dateTo),
+            default => null,
+        };
+    }
+
+    private function applySpecificRegisterDate($query, string $selectedDate): void
+    {
+        if ($selectedDate === '') {
+            return;
+        }
+
+        $date = Carbon::parse($selectedDate);
+        $query->whereBetween('created_at', [$date->copy()->startOfDay(), $date->copy()->endOfDay()]);
+    }
+
+    private function applyCustomRegisterDateRange($query, string $dateFrom, string $dateTo): void
+    {
+        if ($dateFrom !== '') {
+            $query->where('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
+        }
+
+        if ($dateTo !== '') {
+            $query->where('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
+        }
     }
 
     private function changeStatus(LegalFile $file, string $status, string $type, ?string $notes, Request $request, ?int $shelfId = null): void

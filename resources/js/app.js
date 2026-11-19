@@ -938,6 +938,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('[data-list-filter-form], [data-case-filter-form]').forEach((form) => {
         const searchInput = form.querySelector('[data-list-filter-search], [data-case-filter-search]');
         const selects = form.querySelectorAll('select[data-list-filter-select], [data-case-filter-status]');
+        const periodSelect = form.querySelector('[data-case-filter-period]');
+        const specificDateField = form.querySelector('[data-case-filter-date]');
+        const rangeFields = form.querySelector('[data-case-filter-range]');
+        const dateInputs = form.querySelectorAll('[data-case-filter-date-input]');
         let submitTimer = null;
 
         const submitForm = (delay = 0) => {
@@ -947,12 +951,51 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, delay);
         };
 
+        const syncRegisterDateFields = () => {
+            if (! periodSelect) {
+                return;
+            }
+
+            const period = periodSelect.value;
+            const showSpecificDate = period === 'specific_date';
+            const showCustomRange = period === 'custom_range';
+
+            specificDateField?.classList.toggle('hidden', ! showSpecificDate);
+            rangeFields?.classList.toggle('hidden', ! showCustomRange);
+
+            dateInputs.forEach((input) => {
+                const isRangeInput = input.name === 'date_from' || input.name === 'date_to';
+                const isSpecificInput = input.name === 'date';
+                const enabled = (showSpecificDate && isSpecificInput) || (showCustomRange && isRangeInput);
+                input.disabled = ! enabled;
+            });
+        };
+
+        syncRegisterDateFields();
+
         searchInput?.addEventListener('input', () => {
             submitForm(350);
         });
 
         selects.forEach((select) => {
             select.addEventListener('change', () => {
+                if (select === periodSelect) {
+                    syncRegisterDateFields();
+
+                    if (periodSelect.value === 'specific_date' || periodSelect.value === 'custom_range') {
+                        const needsDate = [...dateInputs].some((input) => ! input.disabled && input.value);
+                        if (! needsDate) {
+                            return;
+                        }
+                    }
+                }
+
+                submitForm();
+            });
+        });
+
+        dateInputs.forEach((input) => {
+            input.addEventListener('change', () => {
                 submitForm();
             });
         });

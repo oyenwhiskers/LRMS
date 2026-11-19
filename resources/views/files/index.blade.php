@@ -26,15 +26,43 @@
         </div>
     </div>
 
-    <form class="list-page__filters grid gap-3 border border-stone-200 bg-white p-4 sm:grid-cols-[1fr_240px]" method="GET" data-case-filter-form>
+    @php
+        $registerPeriod = request('period', '');
+        $registerDate = request('date', '');
+        $registerDateFrom = request('date_from', '');
+        $registerDateTo = request('date_to', '');
+    @endphp
+    <form class="list-page__filters grid gap-3 border border-stone-200 bg-white p-4 sm:grid-cols-[1fr_200px_200px]" method="GET" data-case-filter-form>
         <input type="hidden" name="view" value="{{ $viewMode }}">
-        <input class="form-input" type="search" name="search" value="{{ request('search') }}" placeholder="Reference, purchaser, vendor, agent, property or holder" data-case-filter-search>
+        <input class="form-input sm:col-span-3 lg:col-span-1" type="search" name="search" value="{{ request('search') }}" placeholder="Reference, purchaser, vendor, agent, property or holder" data-case-filter-search>
+        <select class="form-input" name="period" data-case-filter-period data-list-filter-select>
+            <option value="" @selected($registerPeriod === '')>All register dates</option>
+            <option value="today" @selected($registerPeriod === 'today')>Today</option>
+            <option value="this_week" @selected($registerPeriod === 'this_week')>This week</option>
+            <option value="this_month" @selected($registerPeriod === 'this_month')>This month</option>
+            <option value="specific_date" @selected($registerPeriod === 'specific_date')>Specific date</option>
+            <option value="custom_range" @selected($registerPeriod === 'custom_range')>Date range</option>
+        </select>
         <select class="form-input" name="status" data-case-filter-status data-list-filter-select>
             <option value="">All statuses</option>
             @foreach(\App\Models\LegalFile::statuses() as $status)
                 <option value="{{ $status }}" @selected(request('status') === $status)>{{ \App\Models\LegalFile::make(['status' => $status])->statusLabel() }}</option>
             @endforeach
         </select>
+        <label @class(['sm:col-span-3', 'hidden' => $registerPeriod !== 'specific_date']) data-case-filter-date>
+            <span class="form-label">Register date</span>
+            <input class="form-input" type="date" name="date" value="{{ $registerDate }}" data-case-filter-date-input>
+        </label>
+        <div @class(['grid gap-3 sm:col-span-3 sm:grid-cols-2', 'hidden' => $registerPeriod !== 'custom_range']) data-case-filter-range>
+            <label>
+                <span class="form-label">From</span>
+                <input class="form-input" type="date" name="date_from" value="{{ $registerDateFrom }}" data-case-filter-date-input>
+            </label>
+            <label>
+                <span class="form-label">To</span>
+                <input class="form-input" type="date" name="date_to" value="{{ $registerDateTo }}" data-case-filter-date-input>
+            </label>
+        </div>
     </form>
 
     @php
@@ -141,7 +169,7 @@
                 @include('layouts.partials.table-empty', [
                     'icon' => 'files',
                     'title' => 'No cases match this search',
-                    'message' => 'Try another search or status filter, or register a new case.',
+                    'message' => 'Try another search, register date, or status filter, or register a new case.',
                 ])
             @endif
         @endif
@@ -184,7 +212,7 @@
                 @include('layouts.partials.table-empty', [
                     'icon' => 'files',
                     'title' => 'No cases match this search',
-                    'message' => 'Try another search or status filter, or register a new case.',
+                    'message' => 'Try another search, register date, or status filter, or register a new case.',
                 ])
             @endif
         @endif

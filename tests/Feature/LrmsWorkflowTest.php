@@ -541,6 +541,54 @@ class LrmsWorkflowTest extends TestCase
         $this->assertDatabaseHas('import_runs', ['status' => 'completed', 'imported_rows' => 1]);
     }
 
+    public function test_case_register_can_filter_by_register_date_period_and_range(): void
+    {
+        Carbon::setTestNow(Carbon::create(2026, 8, 16, 10, 0, 0, config('app.timezone')));
+        [$admin, $shelf, $staff, $category] = $this->records();
+
+        $today = LegalFile::create($this->fileData($category, $admin, 'CON/2026/0200'));
+        $thisWeek = LegalFile::create($this->fileData($category, $admin, 'CON/2026/0201'));
+        $older = LegalFile::create($this->fileData($category, $admin, 'CON/2026/0202'));
+        $this->setCreatedAt($today, '2026-08-16 09:00:00');
+        $this->setCreatedAt($thisWeek, '2026-08-13 09:00:00');
+        $this->setCreatedAt($older, '2026-07-01 09:00:00');
+
+        $this->actingAs($admin)
+            ->get(route('files.index', ['period' => 'today']))
+            ->assertOk()
+            ->assertSee('CON/2026/0200')
+            ->assertDontSee('CON/2026/0201')
+            ->assertDontSee('CON/2026/0202');
+
+        $this->actingAs($admin)
+            ->get(route('files.index', ['period' => 'this_week']))
+            ->assertOk()
+            ->assertSee('CON/2026/0200')
+            ->assertSee('CON/2026/0201')
+            ->assertDontSee('CON/2026/0202');
+
+        $this->actingAs($admin)
+            ->get(route('files.index', [
+                'period' => 'custom_range',
+                'date_from' => '2026-07-01',
+                'date_to' => '2026-07-31',
+            ]))
+            ->assertOk()
+            ->assertSee('CON/2026/0202')
+            ->assertDontSee('CON/2026/0200')
+            ->assertDontSee('CON/2026/0201');
+
+        $this->actingAs($admin)
+            ->get(route('files.index', [
+                'period' => 'specific_date',
+                'date' => '2026-08-13',
+            ]))
+            ->assertOk()
+            ->assertSee('CON/2026/0201')
+            ->assertDontSee('CON/2026/0200')
+            ->assertDontSee('CON/2026/0202');
+    }
+
     public function test_dashboard_shows_management_kpis_live_status_and_chart_modes(): void
     {
         Carbon::setTestNow(Carbon::create(2026, 8, 16, 10, 0, 0, config('app.timezone')));
