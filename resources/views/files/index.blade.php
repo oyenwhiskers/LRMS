@@ -28,7 +28,7 @@
 
     <form class="list-page__filters grid gap-3 border border-stone-200 bg-white p-4 sm:grid-cols-[1fr_240px]" method="GET" data-case-filter-form>
         <input type="hidden" name="view" value="{{ $viewMode }}">
-        <input class="form-input" type="search" name="search" value="{{ request('search') }}" placeholder="Reference, purchaser, vendor, property or holder" data-case-filter-search>
+        <input class="form-input" type="search" name="search" value="{{ request('search') }}" placeholder="Reference, purchaser, vendor, agent, property or holder" data-case-filter-search>
         <select class="form-input" name="status" data-case-filter-status data-list-filter-select>
             <option value="">All statuses</option>
             @foreach(\App\Models\LegalFile::statuses() as $status)

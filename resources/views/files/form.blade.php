@@ -9,6 +9,7 @@
     $isSnpSelected = App\Models\LegalFile::isSnpType($selectedType);
     $formPurchasers = $formPurchasers ?? [''];
     $formVendors = $formVendors ?? [''];
+    $formAgents = $formAgents ?? [''];
     $formStickerParty = $formStickerParty ?? 'purchaser:0';
     $stickerRadioClass = 'size-4 shrink-0 border-stone-300 text-amber-700 focus:ring-amber-600';
 @endphp
@@ -266,6 +267,34 @@
                                         <span>Sticker</span>
                                     </label>
                                     <button class="case-party-remove" type="button" data-remove-party aria-label="Remove vendor">Remove</button>
+                                </div>
+                            </template>
+                        </span>
+                    </div>
+
+                    <div class="form-row form-row--textarea" data-party-list data-party-source="agent">
+                        <span class="form-label form-row__label">Agent</span>
+                        <span class="form-row__control">
+                            <div class="case-party-list" data-party-rows>
+                                @foreach ($formAgents as $index => $agentName)
+                                    <div class="case-party-row" data-party-row>
+                                        <input
+                                            class="form-input"
+                                            name="agents[{{ $index }}]"
+                                            value="{{ $agentName }}"
+                                            autocomplete="off"
+                                            @disabled(! $isSnpSelected)
+                                        >
+                                        <button class="case-party-remove" type="button" data-remove-party aria-label="Remove agent" @disabled(! $isSnpSelected)>Remove</button>
+                                    </div>
+                                @endforeach
+                            </div>
+                            <button class="case-party-add" type="button" data-add-party @disabled(! $isSnpSelected)>+ Add agent</button>
+                            <span class="form-help">Optional.</span>
+                            <template data-party-template>
+                                <div class="case-party-row" data-party-row>
+                                    <input class="form-input" name="agents[__INDEX__]" value="" autocomplete="off">
+                                    <button class="case-party-remove" type="button" data-remove-party aria-label="Remove agent">Remove</button>
                                 </div>
                             </template>
                         </span>

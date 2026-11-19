@@ -91,6 +91,7 @@ class LrmsWorkflowTest extends TestCase
             'case_category_id' => $category->id,
             'purchasers' => ['Alice Buyer', 'Bob Buyer'],
             'vendors' => ['Carol Seller', 'Dan Seller'],
+            'agents' => ['Eve Agent', 'Frank Agent'],
             'sticker_party' => 'vendor:1',
             'property' => 'Lot 88, Sandakan',
             'person_in_charge_id' => $staff->id,
@@ -98,6 +99,7 @@ class LrmsWorkflowTest extends TestCase
 
         $file = LegalFile::query()->where('purchaser', 'Alice Buyer & Bob Buyer')->firstOrFail();
         $this->assertSame('Carol Seller & Dan Seller', $file->vendor);
+        $this->assertSame('Eve Agent & Frank Agent', $file->agent);
         $parties = $file->parties()->orderBy('sort_order')->get();
         $this->assertCount(4, $parties);
         $this->assertSame('Dan Seller', $file->primaryPurchaserName());

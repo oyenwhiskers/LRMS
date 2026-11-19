@@ -80,7 +80,7 @@ class LegalFile extends Model
     public const SUB_TYPE_LOVE_AND_AFFECTION = 'love_and_affection';
 
     protected $fillable = [
-        'reference_number', 'purchaser', 'vendor', 'bank', 'property', 'title_number',
+        'reference_number', 'purchaser', 'vendor', 'agent', 'bank', 'property', 'title_number',
         'suite_number', 'ic_number', 'case_category_id', 'case_type', 'case_sub_type', 'matter_type',
         'start_date', 'end_date', 'person_in_charge_id', 'shelf_id',
         'current_holder_id', 'status', 'archived_at', 'created_by', 'updated_by',

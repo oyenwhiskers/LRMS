@@ -35,9 +35,10 @@ class LegalFileController extends Controller
                 $query->where(function ($q) use ($search, $escapedSearch, $containsSearch): void {
                     $q->where('reference_number', 'like', "{$escapedSearch}%")
                         ->orWhereFullText(
-                            ['reference_number', 'purchaser', 'vendor', 'property'],
+                            ['reference_number', 'purchaser', 'vendor', 'agent', 'property'],
                             $search,
                         )
+                        ->orWhere('agent', 'like', $containsSearch)
                         ->orWhere('bank', 'like', $containsSearch)
                         ->orWhere('title_number', 'like', $containsSearch)
                         ->orWhere('suite_number', 'like', $containsSearch)
@@ -52,6 +53,7 @@ class LegalFileController extends Controller
                     $q->where('reference_number', 'like', $containsSearch)
                         ->orWhere('purchaser', 'like', $containsSearch)
                         ->orWhere('vendor', 'like', $containsSearch)
+                        ->orWhere('agent', 'like', $containsSearch)
                         ->orWhere('bank', 'like', $containsSearch)
                         ->orWhere('property', 'like', $containsSearch)
                         ->orWhere('title_number', 'like', $containsSearch)
@@ -136,7 +138,7 @@ class LegalFileController extends Controller
         $data = $this->validated($request);
         $relatedIds = $data['related_file_ids'] ?? [];
         $stickerParties = is_array($data['sticker_parties'] ?? null) ? $data['sticker_parties'] : null;
-        unset($data['related_file_ids'], $data['sticker_parties'], $data['purchasers'], $data['vendors'], $data['sticker_party']);
+        unset($data['related_file_ids'], $data['sticker_parties'], $data['purchasers'], $data['vendors'], $data['agents'], $data['sticker_party']);
         $data['created_by'] = $data['updated_by'] = $request->user()->id;
 
         $file = DB::transaction(function () use ($data, $relatedIds, $stickerParties, $request): LegalFile {
@@ -218,6 +220,7 @@ class LegalFileController extends Controller
             $data['sticker_parties'],
             $data['purchasers'],
             $data['vendors'],
+            $data['agents'],
             $data['sticker_party'],
         );
 
@@ -363,6 +366,9 @@ class LegalFileController extends Controller
             'vendor' => ['nullable', 'string', 'max:255'],
             'vendors' => ['nullable', 'array'],
             'vendors.*' => ['nullable', 'string', 'max:255'],
+            'agent' => ['nullable', 'string', 'max:255'],
+            'agents' => ['nullable', 'array'],
+            'agents.*' => ['nullable', 'string', 'max:255'],
             'sticker_party' => ['nullable', 'string', 'max:40'],
             'bank' => ['nullable', 'string', 'max:255'],
             'property' => ['nullable', 'string'],
@@ -460,13 +466,17 @@ class LegalFileController extends Controller
                     'purchasers' => 'At least one purchaser is required.',
                 ]);
             }
+            $agents = $this->normalizedNameList($data['agents'] ?? null, $data['agent'] ?? null);
             $data['purchasers'] = $purchasers;
             $data['vendors'] = $vendors;
+            $data['agents'] = $agents;
             $data['purchaser'] = LegalFile::joinPartyNames($purchasers);
             $data['vendor'] = $vendors === [] ? null : LegalFile::joinPartyNames($vendors);
+            $data['agent'] = $agents === [] ? null : LegalFile::joinPartyNames($agents);
             $data['sticker_parties'] = $stickerParties;
         } else {
             $data['vendor'] = null;
+            $data['agent'] = null;
             $data['sticker_parties'] = null;
             $data['purchaser'] = trim((string) ($data['purchaser'] ?? ''));
         }
@@ -569,6 +579,15 @@ class LegalFileController extends Controller
             $vendors = [''];
         }
 
+        $agents = old('agents');
+        if (! is_array($agents)) {
+            $agents = LegalFile::splitPartyNames(old('agent', $file->agent));
+        }
+        $agents = array_values(array_map(fn ($name) => trim((string) $name), $agents));
+        if ($agents === []) {
+            $agents = [''];
+        }
+
         $stickerParty = old('sticker_party');
         if (! is_string($stickerParty) || $stickerParty === '') {
             $stickerParty = $this->stickerPartyValueFromFile($file, $purchasers, $vendors);
@@ -591,6 +610,7 @@ class LegalFileController extends Controller
             'selectedRelatedIds' => $selectedRelatedIds,
             'formPurchasers' => $purchasers,
             'formVendors' => $vendors,
+            'formAgents' => $agents,
             'formStickerParty' => $stickerParty,
         ];
     }

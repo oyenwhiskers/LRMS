@@ -53,6 +53,7 @@
                     $details['IC'] = $file->ic_number;
                 } else {
                     $details['Vendor'] = $file->vendor;
+                    $details['Agent'] = $file->agent;
                     $details['Property address'] = $file->property;
                     $details['Title number'] = $file->title_number;
                 }
