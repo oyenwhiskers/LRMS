@@ -68,3 +68,4 @@ VITE_APP_NAME="${APP_NAME}"
 LRMS_ADMIN_NAME=Admin        
 LRMS_ADMIN_EMAIL=admin@example.com
 LRMS_ADMIN_PASSWORD=password
+S
