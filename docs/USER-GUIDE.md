@@ -4,9 +4,9 @@
 
 1. Create storage locations and job positions before staff accounts are approved.
    Open each rack in **Storage Locations** to print its rack sign and shelf QR labels. Attach each shelf label at its physical shelf. Reprint labels after changing rack or shelf names; the shelf QR stays the same.
-2. Register every employee in Staff and print their Employee QR.
-3. Assign action permissions to positions using least privilege.
-4. Review pending account registrations. Verify the staff number and selected position, correct the position if needed, then approve or reject.
+2. Assign action permissions to positions using least privilege.
+3. Review pending account registrations. Verify the applicant name, email and selected position, correct the position if needed, then approve or reject.
+4. Print Employee QR codes from Staff after accounts are approved.
 5. Deactivate staff or positions when access is no longer required. Historical movements are retained.
 
 ## Register and label a file

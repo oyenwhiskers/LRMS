@@ -6,6 +6,23 @@
 @php
     $greeting = now()->hour < 12 ? 'morning' : (now()->hour < 18 ? 'afternoon' : 'evening');
     $chartPayload = json_encode($registrationChart, JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_TAG | JSON_HEX_QUOT);
+    $registrationScopes = [
+        'all' => 'All metrics',
+        'today' => 'Today only',
+        'week' => 'This week only',
+        'month' => 'This month only',
+        'year' => 'This year only',
+    ];
+    $custodyScopes = [
+        'all' => 'All statuses',
+        'registered' => 'Active registered',
+        'pending' => 'Pending review',
+        'completed' => 'Ready for storage',
+        'stored' => 'Currently stored',
+        'borrowed' => 'Currently borrowed',
+        'missing' => 'Missing',
+    ];
+    $exportCategories = \App\Models\CaseCategory::query()->orderBy('code')->get(['id', 'code', 'name']);
 @endphp
 
 <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -30,21 +47,28 @@
 <section class="mt-10">
     <div class="flex items-center justify-between gap-3">
         <div><p class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Case Registration</p><h2 class="mt-1 text-2xl font-semibold text-stone-900">Registration summary</h2></div>
-        <div class="dashboard-export">
+        <div class="dashboard-export flex items-center gap-2">
+            <button type="button" class="btn-secondary lg:hidden" data-modal-open="preview-registration">Preview</button>
+            <div class="relative hidden lg:block" data-dropdown>
+                <button type="button" class="btn-secondary" data-dropdown-trigger aria-expanded="false" aria-haspopup="true">Preview</button>
+                <div class="dashboard-export__popover hidden" data-dropdown-menu>
+                    @include('dashboard.partials.preview-form', [
+                        'action' => route('exports.dashboard', 'registration-summary'),
+                        'scopeLabel' => 'Include',
+                        'scopes' => $registrationScopes,
+                        'categories' => $exportCategories,
+                    ])
+                </div>
+            </div>
             <button type="button" class="btn-secondary lg:hidden" data-modal-open="export-registration">Export</button>
-            <div class="hidden lg:block" data-dropdown>
+            <div class="relative hidden lg:block" data-dropdown>
                 <button type="button" class="btn-secondary" data-dropdown-trigger aria-expanded="false" aria-haspopup="true">Export</button>
                 <div class="dashboard-export__popover hidden" data-dropdown-menu>
                     @include('dashboard.partials.export-form', [
                         'action' => route('exports.dashboard', 'registration-summary'),
                         'scopeLabel' => 'Include',
-                        'scopes' => [
-                            'all' => 'All metrics',
-                            'today' => 'Today only',
-                            'week' => 'This week only',
-                            'month' => 'This month only',
-                            'year' => 'This year only',
-                        ],
+                        'scopes' => $registrationScopes,
+                        'categories' => $exportCategories,
                     ])
                 </div>
             </div>
@@ -134,23 +158,26 @@
 <section class="mt-8">
     <div class="flex items-center justify-between gap-3">
         <div><p class="text-xs font-bold uppercase tracking-[0.16em] text-stone-500">Current File Status</p><h2 class="mt-1 text-2xl font-semibold text-stone-900">Live custody view</h2></div>
-        <div class="dashboard-export">
+        <div class="dashboard-export flex items-center gap-2">
+            <button type="button" class="btn-secondary lg:hidden" data-modal-open="preview-custody">Preview</button>
+            <div class="relative hidden lg:block" data-dropdown>
+                <button type="button" class="btn-secondary" data-dropdown-trigger aria-expanded="false" aria-haspopup="true">Preview</button>
+                <div class="dashboard-export__popover hidden" data-dropdown-menu>
+                    @include('dashboard.partials.preview-form', [
+                        'action' => route('exports.dashboard', 'custody-view'),
+                        'scopeLabel' => 'Status scope',
+                        'scopes' => $custodyScopes,
+                    ])
+                </div>
+            </div>
             <button type="button" class="btn-secondary lg:hidden" data-modal-open="export-custody">Export</button>
-            <div class="hidden lg:block" data-dropdown>
+            <div class="relative hidden lg:block" data-dropdown>
                 <button type="button" class="btn-secondary" data-dropdown-trigger aria-expanded="false" aria-haspopup="true">Export</button>
                 <div class="dashboard-export__popover hidden" data-dropdown-menu>
                     @include('dashboard.partials.export-form', [
                         'action' => route('exports.dashboard', 'custody-view'),
                         'scopeLabel' => 'Status scope',
-                        'scopes' => [
-                            'all' => 'All statuses',
-                            'registered' => 'Active registered',
-                            'pending' => 'Pending review',
-                            'completed' => 'Ready for storage',
-                            'stored' => 'Currently stored',
-                            'borrowed' => 'Currently borrowed',
-                            'missing' => 'Missing',
-                        ],
+                        'scopes' => $custodyScopes,
                     ])
                 </div>
             </div>
@@ -307,6 +334,26 @@
     </div>
 </section>
 
+<div class="modal-overlay hidden" data-modal="preview-registration" aria-hidden="true">
+    <div class="modal-panel max-w-lg" role="dialog" aria-modal="true" aria-labelledby="preview-registration-title">
+        <div class="modal-header">
+            <div>
+                <p class="eyebrow text-amber-700">Case Registration</p>
+                <h2 id="preview-registration-title" class="mt-1 text-2xl font-semibold">Preview registration summary</h2>
+            </div>
+            <button class="modal-close" type="button" data-modal-close aria-label="Close modal">Close</button>
+        </div>
+        <div class="mt-5">
+            @include('dashboard.partials.preview-form', [
+                'action' => route('exports.dashboard', 'registration-summary'),
+                'scopeLabel' => 'Include',
+                'scopes' => $registrationScopes,
+                'categories' => $exportCategories,
+            ])
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay hidden" data-modal="export-registration" aria-hidden="true">
     <div class="modal-panel max-w-lg" role="dialog" aria-modal="true" aria-labelledby="export-registration-title">
         <div class="modal-header">
@@ -320,13 +367,27 @@
             @include('dashboard.partials.export-form', [
                 'action' => route('exports.dashboard', 'registration-summary'),
                 'scopeLabel' => 'Include',
-                'scopes' => [
-                    'all' => 'All metrics',
-                    'today' => 'Today only',
-                    'week' => 'This week only',
-                    'month' => 'This month only',
-                    'year' => 'This year only',
-                ],
+                'scopes' => $registrationScopes,
+                'categories' => $exportCategories,
+            ])
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay hidden" data-modal="preview-custody" aria-hidden="true">
+    <div class="modal-panel max-w-lg" role="dialog" aria-modal="true" aria-labelledby="preview-custody-title">
+        <div class="modal-header">
+            <div>
+                <p class="eyebrow text-amber-700">Current File Status</p>
+                <h2 id="preview-custody-title" class="mt-1 text-2xl font-semibold">Preview custody view</h2>
+            </div>
+            <button class="modal-close" type="button" data-modal-close aria-label="Close modal">Close</button>
+        </div>
+        <div class="mt-5">
+            @include('dashboard.partials.preview-form', [
+                'action' => route('exports.dashboard', 'custody-view'),
+                'scopeLabel' => 'Status scope',
+                'scopes' => $custodyScopes,
             ])
         </div>
     </div>
@@ -345,15 +406,7 @@
             @include('dashboard.partials.export-form', [
                 'action' => route('exports.dashboard', 'custody-view'),
                 'scopeLabel' => 'Status scope',
-                'scopes' => [
-                    'all' => 'All statuses',
-                    'registered' => 'Active registered',
-                    'pending' => 'Pending review',
-                    'completed' => 'Ready for storage',
-                    'stored' => 'Currently stored',
-                    'borrowed' => 'Currently borrowed',
-                    'missing' => 'Missing',
-                ],
+                'scopes' => $custodyScopes,
             ])
         </div>
     </div>

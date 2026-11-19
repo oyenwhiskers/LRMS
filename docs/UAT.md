@@ -6,10 +6,10 @@ Record the tester, date, browser/device, scanner, printer, result and evidence f
 
 1. Create positions for Records Clerk, Lawyer and Management.
 2. Assign only the minimum action permissions required by each position.
-3. Create an active staff record and print its employee QR.
-4. Submit a self-registration using that staff number.
-5. Confirm a pending account cannot enter LRMS.
-6. Approve the registration, correcting its requested position.
+3. Submit a self-registration with name, email, position and password.
+4. Confirm a pending account cannot enter LRMS.
+5. Approve the registration, correcting its requested position.
+6. Print the approved staff employee QR from Staff.
 7. Confirm the approved account receives exactly that position’s permissions.
 8. Deactivate the position and confirm access is removed without deleting history.
 

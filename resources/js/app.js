@@ -518,6 +518,120 @@ document.addEventListener('DOMContentLoaded', async () => {
         syncMonthField();
     });
 
+    const writeDashboardPdfPreviewLoader = (tab, message) => {
+        if (! tab || tab.closed) {
+            return;
+        }
+
+        tab.document.open();
+        tab.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Generating PDF preview…</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            font-family: Georgia, "Times New Roman", serif;
+            background: #fafaf9;
+            color: #57534e;
+        }
+        .wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.85rem;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .spinner {
+            width: 1.75rem;
+            height: 1.75rem;
+            border: 2px solid #e7e5e4;
+            border-top-color: #b78626;
+            border-radius: 9999px;
+            animation: spin 0.7s linear infinite;
+        }
+        p { margin: 0; font-size: 0.95rem; font-weight: 600; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>${message}</p>
+    </div>
+</body>
+</html>`);
+        tab.document.close();
+    };
+
+    document.querySelectorAll('[data-dashboard-pdf-preview]').forEach((form) => {
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            const action = form.getAttribute('action');
+            if (! action) {
+                return;
+            }
+
+            const params = new URLSearchParams(new FormData(form));
+            const url = `${action}?${params.toString()}`;
+            const submitButton = form.querySelector('button[type="submit"]');
+            const tab = window.open('', '_blank');
+
+            if (! tab) {
+                window.location.assign(url);
+
+                return;
+            }
+
+            writeDashboardPdfPreviewLoader(tab, 'Generating PDF preview…');
+
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+
+            void (async () => {
+                try {
+                    const response = await fetch(url, {
+                        credentials: 'same-origin',
+                        headers: {
+                            Accept: 'application/pdf',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+
+                    if (! response.ok) {
+                        throw new Error(`Preview failed with ${response.status}`);
+                    }
+
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+
+                    if (tab.closed) {
+                        URL.revokeObjectURL(blobUrl);
+
+                        return;
+                    }
+
+                    tab.location.replace(blobUrl);
+                    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+                } catch (error) {
+                    window.console.error(error);
+                    writeDashboardPdfPreviewLoader(tab, 'Could not generate the PDF preview. Close this tab and try again.');
+                } finally {
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
+                }
+            })();
+        });
+    });
+
     document.querySelectorAll('[data-dashboard-chart]').forEach((container) => {
         const payload = container.getAttribute('data-chart');
         if (!payload) {
@@ -3868,7 +3982,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.title = titles[mode] || document.title;
 
             const focusTarget = mode === 'register'
-                ? document.getElementById('staff_number')
+                ? document.getElementById('full_name')
                 : document.getElementById('login_email');
 
             focusTarget?.focus({ preventScroll: true });
@@ -3919,7 +4033,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const focusTarget = mode === 'register'
-                ? document.getElementById('staff_number')
+                ? document.getElementById('full_name')
                 : document.getElementById('login_email');
 
             focusTarget?.focus({ preventScroll: true });

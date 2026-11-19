@@ -29,7 +29,7 @@ class RegistrationApprovalController extends Controller
             $query->where(function ($builder) use ($search): void {
                 $builder
                     ->where('name', 'like', "%{$search}%")
-                    ->orWhereHas('staff', fn ($staff) => $staff->where('staff_number', 'like', "%{$search}%"));
+                    ->orWhere('email', 'like', "%{$search}%");
             });
         }
 

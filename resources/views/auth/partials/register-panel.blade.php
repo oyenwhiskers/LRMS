@@ -19,7 +19,7 @@
 
         <div class="grid gap-5 sm:grid-cols-2">
             <div>
-                <label class="form-label" for="staff_number">Staff number</label>
+                <label class="form-label" for="full_name">Full name</label>
                 <div class="auth-input-wrap">
                     <span class="auth-input-icon" aria-hidden="true">
                         <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
@@ -28,16 +28,15 @@
                     </span>
                     <input
                         class="form-input auth-input"
-                        id="staff_number"
-                        name="staff_number"
-                        value="{{ ($authMode ?? 'login') === 'register' ? old('staff_number') : '' }}"
-                        placeholder="Enter staff number"
+                        id="full_name"
+                        name="full_name"
+                        value="{{ ($authMode ?? 'login') === 'register' ? old('full_name') : '' }}"
+                        placeholder="Enter your full name"
                         required
                         @if(($authMode ?? 'login') === 'register') autofocus @endif
-                        autocomplete="off"
+                        autocomplete="name"
                     >
                 </div>
-                <p class="form-help">Enter the number exactly as issued.</p>
             </div>
 
             <div>

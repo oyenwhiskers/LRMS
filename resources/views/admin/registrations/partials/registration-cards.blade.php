@@ -16,12 +16,8 @@
 
                 <dl class="approval-card__summary {{ $isPending ? '' : 'approval-card__summary--history' }}">
                     <div class="approval-card__summary-item">
-                        <dt class="approval-card__label">Staff number</dt>
-                        <dd class="approval-card__value">{{ $registration->staff?->staff_number ?? 'Unavailable' }}</dd>
-                    </div>
-                    <div class="approval-card__summary-item">
                         <dt class="approval-card__label">Email</dt>
-                        <dd class="approval-card__value approval-card__value--break">{{ $registration->staff?->email ?? 'No email on record' }}</dd>
+                        <dd class="approval-card__value approval-card__value--break">{{ $registration->email }}</dd>
                     </div>
                     <div class="approval-card__summary-item">
                         <dt class="approval-card__label">Submitted</dt>

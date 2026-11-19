@@ -7,6 +7,7 @@
             @endforeach
         </select>
     </label>
+    @include('dashboard.partials.category-checklist', ['categories' => $categories ?? null])
     <label>
         <span class="form-label">Format</span>
         <select class="form-input" name="format">

@@ -105,6 +105,7 @@
             letter-spacing: 0.04em;
             text-transform: uppercase;
             color: #44403c;
+            page-break-after: avoid;
         }
 
         table {
@@ -131,13 +132,54 @@
             letter-spacing: 0.08em;
         }
 
+        thead {
+            display: table-header-group;
+        }
+
+        tfoot {
+            display: table-row-group;
+        }
+
+        tr {
+            page-break-inside: avoid;
+        }
+
         .empty-note {
             padding: 14px 0 0;
             color: #78716c;
         }
 
+        .truncation-note {
+            margin: 12px 0 0;
+            padding: 10px 12px;
+            border: 1px solid #f5d78e;
+            background: #fffbeb;
+            color: #92400e;
+            font-size: 11px;
+            line-height: 1.4;
+            page-break-inside: avoid;
+        }
+
         .summary-block {
             margin-top: 6px;
+            page-break-inside: avoid;
+        }
+
+        .metrics-section,
+        .category-summary-section {
+            page-break-inside: avoid;
+        }
+
+        .detail-group {
+            page-break-inside: auto;
+        }
+
+        .detail-group .section-title {
+            page-break-after: avoid;
+        }
+
+        .detail-table {
+            margin-bottom: 18px;
         }
 
         .detail-table th:first-child,
@@ -185,53 +227,114 @@
         </table>
     </div>
 
-    @if(!empty($summaryTitle))
-        <div class="section-title">{{ $summaryTitle }}</div>
-    @endif
+    <div class="metrics-section">
+        @if(!empty($summaryTitle))
+            <div class="section-title">{{ $summaryTitle }}</div>
+        @endif
 
-    <table class="summary-block">
-                <thead>
-                    <tr>
-                @foreach($columns as $column)
-                    <th @class(['text-right' => str($column)->lower()->toString() === 'value'])>{{ $column }}</th>
-                @endforeach
-                    </tr>
-                </thead>
-                <tbody>
-            @foreach($rows as $row)
+        @if(!empty($truncated) && !empty($totalRows) && empty($detailColumns))
+            <p class="truncation-note">Showing first {{ $shownRows ?? count($rows) }} of {{ $totalRows }} — download CSV for the full list.</p>
+        @endif
+
+        <table class="summary-block">
+            <thead>
                 <tr>
-                    @foreach($row as $index => $value)
-                        <td @class(['text-right' => ($columns[$index] ?? null) === 'Value'])>{{ $value }}</td>
+                    @foreach($columns as $column)
+                        <th @class(['text-right' => str($column)->lower()->toString() === 'value'])>{{ $column }}</th>
                     @endforeach
                 </tr>
-            @endforeach
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach($rows as $row)
+                    <tr>
+                        @foreach($row as $index => $value)
+                            <td @class(['text-right' => ($columns[$index] ?? null) === 'Value'])>{{ $value }}</td>
+                        @endforeach
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
 
-    @if(!empty($detailColumns))
-        <div class="section-title">{{ $detailTitle ?? 'Detail records' }}</div>
-
-        @if(!empty($detailRows))
-            <table class="detail-table">
+    @if(!empty($categorySummaryRows))
+        <div class="category-summary-section">
+            <div class="section-title">{{ $categorySummaryTitle ?? 'Total cases by category' }}</div>
+            <table class="summary-block">
                 <thead>
                     <tr>
-                        @foreach($detailColumns as $column)
-                            <th>{{ $column }}</th>
+                        @foreach(($categorySummaryColumns ?? ['Category', 'Total']) as $column)
+                            <th @class(['text-right' => str($column)->lower()->toString() === 'total'])>{{ $column }}</th>
                         @endforeach
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($detailRows as $row)
+                    @foreach($categorySummaryRows as $row)
                         <tr>
-                            @foreach($row as $value)
-                                <td>{{ $value }}</td>
+                            @foreach($row as $index => $value)
+                                <td @class(['text-right' => $index === 1])>{{ $value }}</td>
                             @endforeach
                         </tr>
                     @endforeach
                 </tbody>
             </table>
+        </div>
+    @endif
+
+    @if(!empty($detailColumns))
+        @if(!empty($truncated) && !empty($totalRows))
+            <p class="truncation-note">Showing first {{ $shownRows ?? 0 }} of {{ $totalRows }} registered cases — download CSV for the full list.</p>
+        @endif
+        @if(!empty($detailGroups))
+            @foreach($detailGroups as $group)
+                <div class="detail-group">
+                    <div class="section-title">{{ $group['title'] }}</div>
+                    <table class="detail-table">
+                        <thead>
+                            <tr>
+                                @foreach($detailColumns as $column)
+                                    <th>{{ $column }}</th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($group['rows'] as $row)
+                                <tr>
+                                    @foreach($row as $value)
+                                        <td>{{ $value }}</td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endforeach
         @else
-            <p class="empty-note">No records found for this report period.</p>
+            <div class="detail-group">
+                <div class="section-title">{{ $detailTitle ?? 'Detail records' }}</div>
+
+                @if(!empty($detailRows))
+                    <table class="detail-table">
+                        <thead>
+                            <tr>
+                                @foreach($detailColumns as $column)
+                                    <th>{{ $column }}</th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($detailRows as $row)
+                                <tr>
+                                    @foreach($row as $value)
+                                        <td>{{ $value }}</td>
+                                    @endforeach
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @else
+                    <p class="empty-note">No records found for this report period.</p>
+                @endif
+            </div>
         @endif
     @endif
 

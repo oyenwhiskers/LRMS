@@ -27,6 +27,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ImportExportController extends Controller
 {
+    private const PDF_PREVIEW_ROW_LIMIT = 500;
+
+    private const PDF_DOWNLOAD_ROW_LIMIT = 2000;
+
     public function index(Request $request): View
     {
         abort_unless($request->user()->can('imports.view'), 403);
@@ -267,7 +271,7 @@ class ImportExportController extends Controller
         }, 'lrms-movements-'.now()->format('Ymd').'.xlsx');
     }
 
-    public function dashboard(Request $request, string $section): StreamedResponse|BinaryFileResponse|Response
+    public function dashboard(Request $request, string $section): StreamedResponse|BinaryFileResponse|Response|RedirectResponse
     {
         abort_unless($request->user()->can('dashboard.view'), 403);
 
@@ -364,11 +368,12 @@ class ImportExportController extends Controller
         };
     }
 
-    private function dashboardRegistrationExport(Request $request): StreamedResponse|BinaryFileResponse|Response
+    private function dashboardRegistrationExport(Request $request): StreamedResponse|BinaryFileResponse|Response|RedirectResponse
     {
         $scope = $request->string('scope')->value() ?: 'all';
         $format = $this->dashboardExportFormat($request);
-        $summary = $this->dashboardRegistrationSummary();
+        $categoryIds = $this->dashboardCategoryFilterIds($request);
+        $summary = $this->dashboardRegistrationSummary($categoryIds);
 
         $rows = collect([
             ['key' => 'today', 'label' => 'Cases registered today', 'value' => $summary['registered_today'], 'context' => 'Added to LRMS'],
@@ -381,7 +386,6 @@ class ImportExportController extends Controller
             $rows = $rows->where('key', $scope)->values();
         }
 
-        $records = $this->dashboardRegistrationRecords($scope);
         $reportPeriod = match ($scope) {
             'today' => 'Today',
             'week' => 'This week',
@@ -390,26 +394,39 @@ class ImportExportController extends Controller
             default => 'Year to date summary',
         };
 
+        $categoryFilterLabel = $this->dashboardCategoryFilterLabel($categoryIds);
+        $subtitle = 'Case registration report for '.$reportPeriod.' as of '.now()->format('d M Y, h:i A');
+        if ($categoryFilterLabel !== null) {
+            $subtitle .= ' · Categories: '.$categoryFilterLabel;
+        }
+
         if ($format === 'pdf') {
+            $total = $this->dashboardRegistrationRecordCount($scope, $categoryIds);
+            $budget = $this->dashboardPdfRowBudget($request, $total);
+            if ($budget === null) {
+                return $this->dashboardPdfTooLargeRedirect();
+            }
+
+            $records = $this->dashboardRegistrationRecords($scope, $budget['limit'], $categoryIds);
+            $categoryTotals = $this->dashboardRegistrationCategoryTotals($scope, $categoryIds);
+
             return $this->dashboardPdf('exports.dashboard-section', [
                 'title' => 'Registration summary export',
-                'subtitle' => 'Case registration report for '.$reportPeriod.' as of '.now()->format('d M Y, h:i A'),
+                'subtitle' => $subtitle,
                 'logo' => $this->dashboardLogoDataUri(),
                 'summaryTitle' => 'Registration metrics',
                 'columns' => ['Metric', 'Value', 'Context'],
                 'rows' => $rows->map(fn (array $row) => [$row['label'], (string) $row['value'], $row['context']])->all(),
+                'categorySummaryTitle' => 'Total cases by category',
+                'categorySummaryColumns' => ['Category', 'Total'],
+                'categorySummaryRows' => $categoryTotals,
                 'detailTitle' => 'Registered case list',
                 'detailColumns' => ['#', 'Reference', 'Purchaser', 'Vendor', 'Property', 'Registered at', 'Current status'],
-                'detailRows' => $records->values()->map(fn (LegalFile $file, int $index) => [
-                    $index + 1,
-                    $file->reference_number,
-                    $file->purchaser,
-                    $file->vendor ?: '—',
-                    $file->property,
-                    $file->created_at?->format('d M Y, H:i') ?: '—',
-                    $file->statusLabel(),
-                ])->all(),
-            ])->setPaper('a4', 'landscape')->download('dashboard-registration-summary-'.now()->format('Ymd-His').'.pdf');
+                'detailGroups' => $this->dashboardRegistrationDetailGroups($records),
+                'truncated' => $budget['truncated'],
+                'totalRows' => $budget['total'],
+                'shownRows' => $records->count(),
+            ], 'dashboard-registration-summary-'.now()->format('Ymd-His').'.pdf', $request, landscape: true);
         }
 
         return $this->streamCsvDownload(
@@ -419,42 +436,36 @@ class ImportExportController extends Controller
         );
     }
 
-    private function dashboardCustodyExport(Request $request): StreamedResponse|BinaryFileResponse|Response
+    private function dashboardCustodyExport(Request $request): StreamedResponse|BinaryFileResponse|Response|RedirectResponse
     {
         $scope = $request->string('scope')->value() ?: 'all';
         $format = $this->dashboardExportFormat($request);
-        $query = LegalFile::active()
-            ->with(['currentHolder:id,full_name', 'shelf.rack'])
-            ->orderBy('reference_number');
-
-        $statusMap = [
-            'registered' => LegalFile::STATUS_REGISTERED,
-            'pending' => LegalFile::STATUS_PENDING,
-            'completed' => LegalFile::STATUS_COMPLETED,
-            'stored' => LegalFile::STATUS_STORED,
-            'borrowed' => LegalFile::STATUS_BORROWED,
-            'missing' => LegalFile::STATUS_MISSING,
-        ];
-
-        if (isset($statusMap[$scope])) {
-            $query->where('status', $statusMap[$scope]);
-        }
-
-        $files = $query->get();
-
-        $rows = $files->values()->map(function (LegalFile $file, int $index): array {
-            return [
-                $index + 1,
-                $file->reference_number,
-                $file->purchaser,
-                $file->statusLabel(),
-                $file->currentHolder?->full_name ?? '—',
-                $file->shelf?->full_location ?? 'Not stored yet',
-                optional($file->updated_at)?->format('d M Y, H:i'),
-            ];
-        });
+        $query = $this->dashboardCustodyQuery($scope);
 
         if ($format === 'pdf') {
+            $total = (clone $query)->count();
+            $budget = $this->dashboardPdfRowBudget($request, $total);
+            if ($budget === null) {
+                return $this->dashboardPdfTooLargeRedirect();
+            }
+
+            if ($budget['limit'] !== null) {
+                $query->limit($budget['limit']);
+            }
+
+            $files = $query->get();
+            $rows = $files->values()->map(function (LegalFile $file, int $index): array {
+                return [
+                    $index + 1,
+                    $file->reference_number,
+                    $file->purchaser,
+                    $file->statusLabel(),
+                    $file->currentHolder?->full_name ?? '—',
+                    $file->shelf?->full_location ?? 'Not stored yet',
+                    optional($file->updated_at)?->format('d M Y, H:i'),
+                ];
+            });
+
             return $this->dashboardPdf('exports.dashboard-section', [
                 'title' => 'Live custody export',
                 'subtitle' => 'Scope: '.match ($scope) {
@@ -469,8 +480,24 @@ class ImportExportController extends Controller
                 'logo' => $this->dashboardLogoDataUri(),
                 'columns' => ['#', 'Reference', 'Purchaser', 'Status', 'Current holder', 'Location', 'Last updated'],
                 'rows' => $rows->all(),
-            ])->setPaper('a4', 'landscape')->download('dashboard-custody-view-'.now()->format('Ymd-His').'.pdf');
+                'truncated' => $budget['truncated'],
+                'totalRows' => $budget['total'],
+                'shownRows' => $rows->count(),
+            ], 'dashboard-custody-view-'.now()->format('Ymd-His').'.pdf', $request, landscape: true);
         }
+
+        $files = $query->get();
+        $rows = $files->values()->map(function (LegalFile $file, int $index): array {
+            return [
+                $index + 1,
+                $file->reference_number,
+                $file->purchaser,
+                $file->statusLabel(),
+                $file->currentHolder?->full_name ?? '—',
+                $file->shelf?->full_location ?? 'Not stored yet',
+                optional($file->updated_at)?->format('d M Y, H:i'),
+            ];
+        });
 
         return $this->streamCsvDownload(
             'dashboard-custody-view-'.now()->format('Ymd-His').'.csv',
@@ -496,7 +523,7 @@ class ImportExportController extends Controller
                 'logo' => $this->dashboardLogoDataUri(),
                 'columns' => ['Period', 'Registered cases'],
                 'rows' => $rows->all(),
-            ])->setPaper('a4')->download('dashboard-registration-trend-'.now()->format('Ymd-His').'.pdf');
+            ], 'dashboard-registration-trend-'.now()->format('Ymd-His').'.pdf', $request);
         }
 
         return $this->streamCsvDownload(
@@ -506,12 +533,20 @@ class ImportExportController extends Controller
         );
     }
 
-    private function dashboardPdf(string $view, array $data)
+    private function dashboardPdf(string $view, array $data, string $filename, Request $request, bool $landscape = false): Response
     {
-        return Pdf::loadView($view, $data)->setOption('enable_php', true);
+        $pdf = Pdf::loadView($view, $data)->setOption('enable_php', true);
+        $pdf->setPaper('a4', $landscape ? 'landscape' : 'portrait');
+
+        return $request->boolean('preview')
+            ? $pdf->stream($filename)
+            : $pdf->download($filename);
     }
 
-    private function dashboardRegistrationSummary(): array
+    /**
+     * @param  list<int>  $categoryIds
+     */
+    private function dashboardRegistrationSummary(array $categoryIds = []): array
     {
         $todayStart = Carbon::today()->startOfDay();
         $todayEnd = Carbon::today()->endOfDay();
@@ -519,17 +554,112 @@ class ImportExportController extends Controller
         $monthStart = Carbon::today()->startOfMonth();
         $yearStart = Carbon::today()->startOfYear();
 
+        $countBetween = function (Carbon $from, Carbon $to) use ($categoryIds): int {
+            $query = LegalFile::active()->notFromEntry()->whereBetween('created_at', [$from, $to]);
+            $this->applyDashboardCategoryFilter($query, $categoryIds);
+
+            return $query->count();
+        };
+
         return [
-            'registered_today' => LegalFile::active()->notFromEntry()->whereBetween('created_at', [$todayStart, $todayEnd])->count(),
-            'registered_week' => LegalFile::active()->notFromEntry()->whereBetween('created_at', [$weekStart, $todayEnd])->count(),
-            'registered_month' => LegalFile::active()->notFromEntry()->whereBetween('created_at', [$monthStart, $todayEnd])->count(),
-            'registered_year' => LegalFile::active()->notFromEntry()->whereBetween('created_at', [$yearStart, $todayEnd])->count(),
+            'registered_today' => $countBetween($todayStart, $todayEnd),
+            'registered_week' => $countBetween($weekStart, $todayEnd),
+            'registered_month' => $countBetween($monthStart, $todayEnd),
+            'registered_year' => $countBetween($yearStart, $todayEnd),
         ];
     }
 
-    private function dashboardRegistrationRecords(string $scope): Collection
+    /**
+     * @return list<int>
+     */
+    private function dashboardCategoryFilterIds(Request $request): array
     {
-        $query = LegalFile::active()->notFromEntry()->orderByDesc('created_at');
+        $ids = collect($request->input('categories', []))
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return CaseCategory::query()
+            ->whereIn('id', $ids)
+            ->orderBy('code')
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $categoryIds
+     */
+    private function dashboardCategoryFilterLabel(array $categoryIds): ?string
+    {
+        if ($categoryIds === []) {
+            return null;
+        }
+
+        $codes = CaseCategory::query()
+            ->whereIn('id', $categoryIds)
+            ->orderBy('code')
+            ->pluck('code')
+            ->all();
+
+        return $codes === [] ? null : implode(', ', $codes);
+    }
+
+    /**
+     * @param  list<int>  $categoryIds
+     */
+    private function applyDashboardCategoryFilter($query, array $categoryIds): void
+    {
+        if ($categoryIds !== []) {
+            $query->whereIn('case_category_id', $categoryIds);
+        }
+    }
+
+    /**
+     * @return array{limit: int|null, truncated: bool, total: int}|null null = PDF download too large
+     */
+    private function dashboardPdfRowBudget(Request $request, int $total): ?array
+    {
+        if ($request->boolean('preview')) {
+            $limit = self::PDF_PREVIEW_ROW_LIMIT;
+
+            return [
+                'limit' => $limit,
+                'truncated' => $total > $limit,
+                'total' => $total,
+            ];
+        }
+
+        if ($total > self::PDF_DOWNLOAD_ROW_LIMIT) {
+            return null;
+        }
+
+        return [
+            'limit' => null,
+            'truncated' => false,
+            'total' => $total,
+        ];
+    }
+
+    private function dashboardPdfTooLargeRedirect(): RedirectResponse
+    {
+        return back()->withErrors([
+            'export' => 'This PDF has too many rows to generate safely. Narrow the scope or download CSV for the full list.',
+        ]);
+    }
+
+    /**
+     * @param  list<int>  $categoryIds
+     */
+    private function dashboardRegistrationQuery(string $scope, array $categoryIds = [])
+    {
+        $query = LegalFile::active()->notFromEntry()->with('caseCategory:id,code,name')->orderByDesc('created_at');
         $todayStart = Carbon::today()->startOfDay();
         $todayEnd = Carbon::today()->endOfDay();
 
@@ -541,7 +671,75 @@ class ImportExportController extends Controller
             default => null,
         };
 
+        $this->applyDashboardCategoryFilter($query, $categoryIds);
+
+        return $query;
+    }
+
+    /**
+     * @param  list<int>  $categoryIds
+     */
+    private function dashboardRegistrationRecordCount(string $scope, array $categoryIds = []): int
+    {
+        return $this->dashboardRegistrationQuery($scope, $categoryIds)->count();
+    }
+
+    /**
+     * Full-scope category totals (not capped by PDF preview/download row limits).
+     *
+     * @param  list<int>  $categoryIds
+     * @return list<list<string>>
+     */
+    private function dashboardRegistrationCategoryTotals(string $scope, array $categoryIds = []): array
+    {
+        $counts = $this->dashboardRegistrationQuery($scope, $categoryIds)
+            ->toBase()
+            ->reorder()
+            ->selectRaw('case_category_id, COUNT(*) as total')
+            ->groupBy('case_category_id')
+            ->pluck('total', 'case_category_id');
+
+        if ($counts->isEmpty()) {
+            return [];
+        }
+
+        $categories = CaseCategory::query()
+            ->whereIn('id', $counts->keys()->filter()->all())
+            ->get(['id', 'code', 'name'])
+            ->keyBy('id');
+
+        return $counts
+            ->map(function ($total, $categoryId) use ($categories): array {
+                $category = $categories->get($categoryId);
+                $label = $category
+                    ? ($category->name ? "{$category->code} — {$category->name}" : $category->code)
+                    : 'Uncategorized';
+
+                return [
+                    'code' => $category?->code ?: '_',
+                    'label' => $label,
+                    'total' => (string) $total,
+                ];
+            })
+            ->sortBy(fn (array $row): array => [$row['code'] === '_' ? 1 : 0, $row['code']])
+            ->map(fn (array $row): array => [$row['label'], $row['total']])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $categoryIds
+     */
+    private function dashboardRegistrationRecords(string $scope, ?int $limit = null, array $categoryIds = []): Collection
+    {
+        $query = $this->dashboardRegistrationQuery($scope, $categoryIds);
+
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
         return $query->get([
+            'case_category_id',
             'reference_number',
             'purchaser',
             'vendor',
@@ -551,8 +749,74 @@ class ImportExportController extends Controller
         ]);
     }
 
+    private function dashboardCustodyQuery(string $scope)
+    {
+        $query = LegalFile::active()
+            ->with(['currentHolder:id,full_name', 'shelf.rack'])
+            ->orderBy('reference_number');
+
+        $statusMap = [
+            'registered' => LegalFile::STATUS_REGISTERED,
+            'pending' => LegalFile::STATUS_PENDING,
+            'completed' => LegalFile::STATUS_COMPLETED,
+            'stored' => LegalFile::STATUS_STORED,
+            'borrowed' => LegalFile::STATUS_BORROWED,
+            'missing' => LegalFile::STATUS_MISSING,
+        ];
+
+        if (isset($statusMap[$scope])) {
+            $query->where('status', $statusMap[$scope]);
+        }
+
+        return $query;
+    }
+
+    /**
+     * @return list<array{title: string, rows: list<list<int|string>>}>
+     */
+    private function dashboardRegistrationDetailGroups(Collection $records): array
+    {
+        if ($records->isEmpty()) {
+            return [];
+        }
+
+        return $records
+            ->groupBy(fn (LegalFile $file) => $file->caseCategory?->code ?: '_')
+            ->sortKeysUsing(fn (string $a, string $b): int => match (true) {
+                $a === '_' => 1,
+                $b === '_' => -1,
+                default => strcmp($a, $b),
+            })
+            ->map(function (Collection $files, string $code): array {
+                $category = $files->first()?->caseCategory;
+                $title = $code === '_'
+                    ? 'Uncategorized'
+                    : ($category?->name ? "{$code} — {$category->name}" : $code);
+
+                return [
+                    'title' => $title,
+                    'rows' => $files->values()->map(fn (LegalFile $file, int $index): array => [
+                        $index + 1,
+                        $file->reference_number,
+                        $file->purchaser,
+                        $file->vendor ?: '—',
+                        $file->property,
+                        $file->created_at?->format('d M Y, H:i') ?: '—',
+                        $file->statusLabel(),
+                    ])->all(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
     private function dashboardExportFormat(Request $request): string
     {
+        // Preview always renders PDF inline in a new tab.
+        if ($request->boolean('preview')) {
+            return 'pdf';
+        }
+
         return $request->string('format')->lower()->value() === 'pdf' ? 'pdf' : 'csv';
     }
 

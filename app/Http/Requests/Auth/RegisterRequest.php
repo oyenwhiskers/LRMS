@@ -25,12 +25,7 @@ class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'staff_number' => [
-                'required',
-                'string',
-                'max:50',
-                Rule::exists('staff', 'staff_number')->where('is_active', true),
-            ],
+            'full_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email:rfc', 'max:255', 'unique:users,email'],
             'requested_position_id' => [
                 'required',
@@ -48,7 +43,6 @@ class RegisterRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'staff_number.exists' => 'The staff number cannot be used for registration.',
             'requested_position_id.exists' => 'The selected position is unavailable.',
         ];
     }

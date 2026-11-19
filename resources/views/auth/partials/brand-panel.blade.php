@@ -37,7 +37,7 @@
             >
                 <p class="text-xs font-bold uppercase tracking-[0.2em] text-amber-400">Staff registration</p>
                 <h1 class="mt-5 font-display text-3xl font-semibold leading-tight text-white sm:text-4xl lg:text-[2.65rem]">Request access with clarity.</h1>
-                <p class="mt-5 max-w-md text-sm leading-7 text-stone-100/88">Use your assigned staff number and select the position you are requesting. Your submission will be reviewed before access is granted.</p>
+                <p class="mt-5 max-w-md text-sm leading-7 text-stone-100/88">Enter your details and select the position you are requesting. Your submission will be reviewed before access is granted.</p>
             </div>
         </div>
 

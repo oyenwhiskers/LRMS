@@ -10,7 +10,7 @@
         <div>
             <p class="eyebrow text-amber-700">Administration</p>
             <h1 class="mt-1 text-3xl font-semibold">Registration approvals</h1>
-            <p class="mt-2 max-w-2xl text-sm text-stone-600">Review and process account requests from the staff registry.</p>
+            <p class="mt-2 max-w-2xl text-sm text-stone-600">Review and process account access requests.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 lg:justify-end lg:gap-3">
             <span class="approval-summary-chip">{{ number_format($pendingCount) }} pending</span>
@@ -25,7 +25,7 @@
                 type="search"
                 name="search"
                 value="{{ request('search') }}"
-                placeholder="Search staff name or staff number"
+                placeholder="Search name or email"
                 data-list-filter-search
             >
         </div>

@@ -26,13 +26,12 @@ class RegistrationTest extends TestCase
             ->assertDontSee($staff->staff_number);
     }
 
-    public function test_eligible_staff_can_submit_a_pending_registration(): void
+    public function test_applicant_can_submit_a_pending_registration(): void
     {
         $position = Position::factory()->create();
-        $staff = Staff::factory()->create(['full_name' => 'Amina Counsel']);
 
         $response = $this->post(route('register'), [
-            'staff_number' => $staff->staff_number,
+            'full_name' => 'Amina Counsel',
             'email' => 'amina@example.test',
             'requested_position_id' => $position->id,
             'password' => 'Strong!Pass123',
@@ -40,41 +39,40 @@ class RegistrationTest extends TestCase
         ]);
 
         $user = User::query()->where('email', 'amina@example.test')->firstOrFail();
+        $staff = $user->staff;
 
         $response->assertRedirect(route('account.status'));
         $this->assertAuthenticatedAs($user);
         $this->assertSame(User::STATUS_PENDING, $user->status);
-        $this->assertSame($staff->id, $user->staff_id);
+        $this->assertNotNull($staff);
         $this->assertSame($position->id, $user->requested_position_id);
         $this->assertSame('Amina Counsel', $user->name);
-        $this->assertNull($staff->fresh()->position_id);
+        $this->assertSame('Amina Counsel', $staff->full_name);
+        $this->assertSame('amina@example.test', $staff->email);
+        $this->assertNull($staff->position_id);
+        $this->assertStringStartsWith('REG-', $staff->staff_number);
     }
 
-    public function test_registration_rejects_inactive_staff_and_staff_with_an_account(): void
+    public function test_registration_rejects_duplicate_email(): void
     {
         $position = Position::factory()->create();
-        $inactiveStaff = Staff::factory()->inactive()->create();
-        $linkedStaff = Staff::factory()->create();
-        User::factory()->create(['staff_id' => $linkedStaff->id]);
+        User::factory()->create(['email' => 'taken@example.test']);
 
-        foreach ([$inactiveStaff, $linkedStaff] as $staff) {
-            $this->post(route('register'), [
-                'staff_number' => $staff->staff_number,
-                'email' => fake()->unique()->safeEmail(),
-                'requested_position_id' => $position->id,
-                'password' => 'Strong!Pass123',
-                'password_confirmation' => 'Strong!Pass123',
-            ])->assertSessionHasErrors('staff_number');
-        }
+        $this->post(route('register'), [
+            'full_name' => 'Duplicate Applicant',
+            'email' => 'taken@example.test',
+            'requested_position_id' => $position->id,
+            'password' => 'Strong!Pass123',
+            'password_confirmation' => 'Strong!Pass123',
+        ])->assertSessionHasErrors('email');
     }
 
     public function test_registration_requires_a_strong_confirmed_password_and_active_position(): void
     {
-        $staff = Staff::factory()->create();
         $inactivePosition = Position::factory()->inactive()->create();
 
         $this->post(route('register'), [
-            'staff_number' => $staff->staff_number,
+            'full_name' => 'New Applicant',
             'email' => 'new@example.test',
             'requested_position_id' => $inactivePosition->id,
             'password' => 'weak',
